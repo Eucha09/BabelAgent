@@ -1,0 +1,115 @@
+# 아키텍처
+
+## 프로세스 구성
+
+```
+┌─ 렌더러 (React) ────────────┐
+│  사이드바 · 그리드 · 에이전트 패널 │
+└──────────┬──────────────────┘
+           │ window.babel.*  (preload / contextBridge)
+┌──────────▼──────────────────┐
+│ 메인 프로세스                  │
+│  ├ IPC 핸들러                 │
+│  ├ 프로젝트 저장소 (CSV I/O)     │
+│  ├ 작업 스케줄러 (배치 큐)        │
+│  └ Agent SDK + 인프로세스 MCP   │
+└──────────┬──────────────────┘
+           │ 파일 시스템 (프로젝트 폴더)
+```
+
+- 렌더러는 파일 시스템과 Agent SDK에 직접 접근하지 않는다.
+- `src/core/`는 Electron에 의존하지 않는 순수 모듈이다. 메인 프로세스가 `src/core/`를 호출하고, MCP 도구도 같은 함수를 호출한다. 같은 로직을 두 번 구현하지 않는다.
+
+## 계층 책임
+
+| 계층 | 책임 | 금지 |
+|---|---|---|
+| `src/renderer/` | 표시, 입력, 낙관적 UI 상태 | 파일 I/O, 경로 조립, 비즈니스 검증 |
+| `src/preload/` | 채널 화이트리스트 노출 | 로직 |
+| `src/main/` | IPC, 스케줄러, SDK 세션, 경로 검증 | CSV 파싱·QA 직접 구현(core 호출) |
+| `src/core/` | CSV, 해시, QA, 문법, 내보내기, 마이그레이션 | Electron·fs 경로 가정, 전역 상태 |
+| `src/shared/` | 채널 상수, zod 스키마, 타입 | 런타임 로직 |
+
+## IPC 규칙
+
+- 채널 이름은 `domain:action` 형식. 상수는 `src/shared/ipc.ts`에만 정의하고 문자열 리터럴을 직접 쓰지 않는다.
+- 요청/응답 페이로드마다 zod 스키마를 정의하고 메인에서 `parse`한 뒤 처리한다.
+- 요청·응답은 `ipcMain.handle`, 진행 상황은 `webContents.send` 이벤트로 분리한다.
+- 모든 경로 인자는 프로젝트 폴더 기준 상대 경로. 메인에서 정규화 후 프로젝트 폴더 밖이면 거부한다.
+
+### 채널 목록 (초안)
+
+호출형(`invoke`):
+
+| 채널 | 용도 |
+|---|---|
+| `project:pick` | 폴더 선택 대화상자 |
+| `project:open` | 프로젝트 로드, schemaVersion 확인·마이그레이션 |
+| `project:settings:get` / `:set` | project.json 읽기/부분 갱신 |
+| `strings:list` | 원문 + 번역 조인 결과 조회(필터·페이지) |
+| `strings:upsert` | 원문 행 추가·수정 |
+| `translation:update` | 단일 행 번역/상태 수동 수정 |
+| `translation:approve` | 상태를 approved로 전환 |
+| `glossary:list` / `:upsert` / `:remove` | 용어집 |
+| `qa:run` | 선택 범위 QA 실행 |
+| `job:start` | 배치 작업 시작(번역·컨텍스트 추정·용어 추출) |
+| `job:pause` / `:resume` / `:cancel` / `:retry` | 작업 제어 |
+| `row:reroll` | 행 단위 재번역(일회성 세션) |
+| `agent:chat:send` | 에이전트 패널 메시지 전송 |
+| `export:unity` | 템플릿 기반 CSV 내보내기 |
+| `app:settings:get` / `:set` | CLI 경로, 인증 모드 등 앱 전역 설정 |
+
+이벤트(메인 → 렌더러):
+
+| 채널 | 페이로드 |
+|---|---|
+| `job:progress` | jobId, 총/완료/실패 행 수, 현재 배치 |
+| `job:state` | idle / running / paused / waiting-limit / error |
+| `job:limit` | 재설정 시각 또는 다음 백오프 대기 초 |
+| `agent:chat:delta` | 스트리밍 텍스트 조각 |
+| `file:changed` | 변경 파일, 자동 리로드 여부 |
+| `qa:result` | 행별 진단 목록 |
+
+## MCP 도구 목록 (초안)
+
+인프로세스 MCP 서버(`createSdkMcpServer`)로 노출한다. 입력 스키마는 zod. 각 도구는 `src/core/`의 함수를 그대로 호출한다.
+
+| 도구 | 종류 | 설명 |
+|---|---|---|
+| `get_project_context` | 읽기 | 장르, 게임 소개, 톤 가이드, 스타일 규칙 |
+| `get_strings_batch` | 읽기 | 키 목록으로 원문·context·ui_type·max_len·vars 조회 |
+| `get_glossary_terms` | 읽기 | 주어진 문자열들에 등장하는 용어만 필터링해 반환 |
+| `lookup_grammar` | 읽기 | grammar_*.csv 조회(선택 기능 활성 시) |
+| `validate_translation` | 읽기 | 단일 번역안 QA 검사 결과 반환. 에이전트의 자기 점검용 |
+| `submit_translations` | 쓰기 | 번역 결과 제출. 코드가 검증 후 기록 여부를 결정 |
+| `update_project_rules` | 쓰기 | 사용자가 채팅에서 지시한 스타일 규칙을 project.json에 저장 |
+| `propose_glossary_terms` | 쓰기 | 용어 후보 제출. 사용자 승인 전까지 pending |
+
+- 쓰기 도구는 "요청"이지 "기록"이 아니다. 기록 여부는 항상 코드가 결정한다.
+- 도구 응답은 간결한 JSON으로 돌려준다. 긴 설명 문장을 담지 않는다 — 토큰 낭비.
+
+## 작업 스케줄러
+
+- 작업(job) 하나 = 대상 행 집합 + 작업 종류. 작업은 배치 큐로 쪼개진다.
+- 작업자(worker)는 기본 2개, 상한 3개. 각 작업자는 배치 하나를 새 `query()`로 처리한다.
+- 상태: `idle → running → (paused | waiting-limit | error) → running → done/cancelled`.
+- 배치 결과는 전원 검증 통과 시에만 원자적으로 기록한다. 실패 시 배치 전체를 미완료로 남기고 실패 사유를 모아 보고한다.
+- 진행 상황은 완료된 행 키 집합으로 관리한다. 재개는 "미완료 행 재계산"이며, 중간 커서를 저장하지 않는다 — 파일이 외부에서 바뀌어도 안전하다.
+- 사용량 한도: 모든 작업자를 멈추고 `waiting-limit`으로 전환한다. 재설정 시각이 응답에 있으면 그 시각까지, 없으면 1 → 2 → 5 → 10분 백오프. 10분 이후로는 자동 재시도하지 않고 사용자 조작을 기다린다.
+- 작업 종료 후 사용된 배치 수와 실패 행 수를 상태바에 남긴다.
+
+## 설정 구조
+
+앱 전역 설정(userData)과 프로젝트 설정(project.json)을 구분한다.
+
+앱 전역:
+
+```jsonc
+{
+  "cliPath": null,              // null이면 SDK 기본 탐색. 패키징 후 수동 지정 대비
+  "auth": { "mode": "claude-code" },  // 'api-key' 자리는 비워 둠
+  "theme": "dark"               // 다크 한 벌만 지원. 확장 자리
+}
+```
+
+프로젝트 설정은 `data-format.md` 참조.

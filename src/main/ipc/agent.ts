@@ -1,0 +1,72 @@
+import { app, ipcMain, type WebContents } from 'electron'
+import { IPC, IPC_EVENT } from '@shared/ipc'
+import {
+  AgentChatCancelInput,
+  AgentChatSendInput,
+  type AgentChatDelta,
+  type AgentChatEnd,
+  type AgentChatError,
+  type AgentCheckResult
+} from '@shared/schema/agent'
+import type { UsageLimits } from '@shared/schema/usage'
+import { fail, ok, type IpcResult } from '@shared/types'
+import { cancelChat, checkAgent, runChat } from '../agent/session'
+import { readUsageLimits } from '../agent/usage'
+import { loadAppSettings } from '../store/app-settings'
+import { currentProject } from './project'
+
+function send(sender: WebContents, channel: string, payload: unknown): void {
+  if (!sender.isDestroyed()) sender.send(channel, payload)
+}
+
+export function registerAgentIpc(): void {
+  ipcMain.handle(IPC.agentCheck, async (): Promise<AgentCheckResult> => {
+    const { cliPath, claudeConfigDir } = loadAppSettings()
+    // 프로젝트가 열려 있으면 그 폴더, 없으면 앱 데이터 폴더를 작업 디렉터리로 쓴다.
+    const cwd = currentProject()?.dir ?? app.getPath('userData')
+    return checkAgent(cwd, cliPath, claudeConfigDir)
+  })
+
+  ipcMain.handle(IPC.usageRead, async (): Promise<IpcResult<UsageLimits>> => {
+    const { cliPath, claudeConfigDir } = loadAppSettings()
+    const cwd = currentProject()?.dir ?? app.getPath('userData')
+    return readUsageLimits(cwd, cliPath, claudeConfigDir)
+  })
+
+  ipcMain.handle(IPC.agentChatSend, async (event, raw: unknown): Promise<IpcResult<null>> => {
+    const parsed = AgentChatSendInput.safeParse(raw)
+    if (!parsed.success) {
+      return fail('unknown', '메시지 형식이 올바르지 않습니다.', parsed.error.message)
+    }
+    const input = parsed.data
+    const project = currentProject()
+    if (!project || project.dir !== input.projectDir) {
+      return fail('not-a-project', '프로젝트를 먼저 열어야 에이전트를 쓸 수 있습니다.')
+    }
+
+    const { cliPath, claudeConfigDir } = loadAppSettings()
+    const sender = event.sender
+    // 응답은 이벤트로 흘려보내고 호출은 즉시 반환한다.
+    void runChat(input, cliPath, claudeConfigDir, {
+      delta: (text) => {
+        const payload: AgentChatDelta = { requestId: input.requestId, text }
+        send(sender, IPC_EVENT.agentChatDelta, payload)
+      },
+      end: (sessionId, durationMs) => {
+        const payload: AgentChatEnd = { requestId: input.requestId, sessionId, durationMs }
+        send(sender, IPC_EVENT.agentChatEnd, payload)
+      },
+      error: (error) => {
+        const payload: AgentChatError = { requestId: input.requestId, ...error }
+        send(sender, IPC_EVENT.agentChatError, payload)
+      }
+    })
+    return ok(null)
+  })
+
+  ipcMain.handle(IPC.agentChatCancel, (_event, raw: unknown): IpcResult<boolean> => {
+    const parsed = AgentChatCancelInput.safeParse(raw)
+    if (!parsed.success) return fail('unknown', '취소 요청이 올바르지 않습니다.')
+    return ok(cancelChat(parsed.data.requestId))
+  })
+}
