@@ -1,13 +1,16 @@
+import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { parseCsvTable, toRecords } from '@core/csv/codec'
 import { guessMapping, importMaster } from '@core/strings/import'
+import { findDeletedStillPresent, findKeyProblems } from '@core/strings/keys'
 import { IPC } from '@shared/ipc'
 import {
   ImportInput,
   SaveStringsInput,
   StringsListInput,
   type ImportPreview,
+  type SaveStringsResult,
   type ImportSummary,
   type StringsView
 } from '@shared/schema/strings'
@@ -15,7 +18,14 @@ import type { OpenProject } from '@shared/schema/project'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { describeIoError } from '../fs'
 import { readTextFile } from '../fs/text'
-import { joinRows, loadMaster, loadTranslations, saveMaster } from '../project/store'
+import {
+  MASTER_FILE,
+  joinRows,
+  loadMaster,
+  loadTranslations,
+  masterPath,
+  saveMaster
+} from '../project/store'
 import { currentProject } from './project'
 
 const SAMPLE_ROWS = 5
@@ -53,6 +63,7 @@ export function registerStringsIpc(): void {
     )
 
     return ok({
+      masterExists: master.value.exists,
       rows: joinRows(master.value.rows, translations?.ok ? translations.value.rows : []),
       language,
       languages: project.config.targetLanguages,
@@ -60,20 +71,53 @@ export function registerStringsIpc(): void {
     })
   })
 
-  ipcMain.handle(IPC.stringsSave, (_event, raw: unknown): IpcResult<{ staleMarked: number }> => {
+  ipcMain.handle(IPC.stringsSave, (_event, raw: unknown): IpcResult<SaveStringsResult> => {
     const parsed = SaveStringsInput.safeParse(raw)
     if (!parsed.success) return fail('unknown', '저장 요청 형식이 올바르지 않습니다.')
     const found = requireProject()
     if (!found.ok) return found
 
-    const result = saveMaster(
-      found.value.dir,
-      found.value.config,
-      parsed.data.rows,
-      parsed.data.force
+    const problems = findKeyProblems(parsed.data.rows.map((row) => row.key))
+    if (problems.emptyCount > 0 || problems.duplicates.length > 0) {
+      const parts = [
+        problems.emptyCount > 0 ? `빈 키 ${problems.emptyCount}개` : '',
+        problems.duplicates.length > 0 ? `중복 키: ${problems.duplicates.join(', ')}` : ''
+      ].filter((part) => part !== '')
+      return fail('invalid-input', '키에 문제가 있어 저장하지 않았습니다.', parts.join(' · '))
+    }
+
+    const { rows, deletedKeys, force } = parsed.data
+    const contradictory = findDeletedStillPresent(
+      rows.map((row) => row.key),
+      deletedKeys
     )
+    if (contradictory.length > 0) {
+      return fail(
+        'invalid-input',
+        '지울 키가 원문에 남아 있어 저장하지 않았습니다.',
+        contradictory.join(', ')
+      )
+    }
+
+    const result = saveMaster(found.value.dir, rows, force, deletedKeys)
     if (!result.ok) return result
-    return ok({ staleMarked: result.value.staleMarked })
+    return ok({
+      staleMarked: result.value.staleMarked,
+      removedRows: deletedKeys.length,
+      removedTranslations: result.value.removedTranslations
+    })
+  })
+
+  ipcMain.handle(IPC.stringsCreate, (): IpcResult<null> => {
+    const found = requireProject()
+    if (!found.ok) return found
+    if (existsSync(masterPath(found.value.dir))) {
+      return fail('invalid-input', `${MASTER_FILE} 이 이미 있습니다.`)
+    }
+    // 행이 없는 원문을 저장하면 헤더만 있는 파일이 생긴다. 번역 파일은 건드리지 않는다.
+    const result = saveMaster(found.value.dir, [], false)
+    if (!result.ok) return result
+    return ok(null)
   })
 
   ipcMain.handle(IPC.stringsImportPreview, async (event): Promise<IpcResult<ImportPreview>> => {
@@ -127,7 +171,7 @@ export function registerStringsIpc(): void {
     }
 
     const merged = importMaster(master.value.rows, incoming, mapping)
-    const saved = saveMaster(project.dir, project.config, merged.rows, force)
+    const saved = saveMaster(project.dir, merged.rows, force)
     if (!saved.ok) return saved
 
     return ok({ ...merged.summary, staleMarked: saved.value.staleMarked })

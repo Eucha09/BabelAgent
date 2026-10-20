@@ -8,6 +8,7 @@ export const IPC = {
   projectClose: 'project:close',
   stringsList: 'strings:list',
   stringsSave: 'strings:save',
+  stringsCreate: 'strings:create',
   stringsImportPreview: 'strings:import:preview',
   stringsImport: 'strings:import',
   authStatus: 'auth:status',

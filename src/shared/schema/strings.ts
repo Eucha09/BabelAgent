@@ -56,6 +56,8 @@ export type StringsRow = MasterRow & {
 export type EncodingNotice = { file: string; encoding: 'utf8' | 'cp949' }
 
 export type StringsView = {
+  /** strings_master.csv 가 디스크에 있는지. 없으면 화면이 파일 만들기를 권한다. */
+  masterExists: boolean
   rows: StringsRow[]
   /** 지금 보고 있는 대상 언어. 프로젝트에 대상 언어가 없으면 null. */
   language: string | null
@@ -68,10 +70,22 @@ export type StringsListInput = z.infer<typeof StringsListInput>
 
 export const SaveStringsInput = z.object({
   rows: z.array(MasterRow),
+  /**
+   * 지울 키. 원문과 모든 번역 파일에서 그 행을 지운다.
+   * "원문에서 빠진 키"로 추론하지 않고 명시한다 — 다른 경로의 실수가 번역 삭제로 번지지 않게.
+   */
+  deletedKeys: z.array(z.string()),
   /** 충돌을 확인하고도 덮어쓰기로 결정했는지. */
   force: z.boolean()
 })
 export type SaveStringsInput = z.infer<typeof SaveStringsInput>
+
+export type SaveStringsResult = {
+  staleMarked: number
+  removedRows: number
+  /** 번역 파일에서 함께 지운 행 수(모든 파일 합계). */
+  removedTranslations: number
+}
 
 /** 외부 CSV의 열 이름을 strings_master 열에 연결한다. 빈 문자열은 "매핑 안 함". */
 export const ColumnMapping = z.object({

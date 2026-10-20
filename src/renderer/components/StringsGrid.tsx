@@ -1,24 +1,54 @@
-import { useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
-  useReactTable
+  useReactTable,
+  type ColumnSizingState
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { z } from 'zod'
+import type { DropPosition } from '@core/strings/order'
 import type { StringsRow } from '@shared/schema/strings'
 
+/** 한 줄짜리 행의 높이. 가상 스크롤의 첫 추정값이자 행의 최소 높이다. */
 const ROW_HEIGHT = 34
+/** 본문 스크롤 영역 안에 붙어 있는 헤더 높이. 가상 스크롤의 시작 위치가 이만큼 밀린다. */
+const HEADER_HEIGHT = 30
+
+/** 사용자가 바꾼 열 너비. 화면을 오가거나 앱을 다시 켜도 유지한다. */
+const SIZING_KEY = 'babel.stringsGrid.columnSizing'
+const SizingSchema = z.record(z.string(), z.number().positive())
+
+function loadSizing(): ColumnSizingState {
+  try {
+    const raw = window.localStorage.getItem(SIZING_KEY)
+    if (!raw) return {}
+    const parsed = SizingSchema.safeParse(JSON.parse(raw))
+    return parsed.success ? parsed.data : {}
+  } catch {
+    // 저장값이 깨졌으면 기본 너비로 시작한다
+    return {}
+  }
+}
 
 export type EditableField = 'source' | 'context' | 'ui_type' | 'max_len' | 'tags'
+
+type DropTarget = { key: string; position: DropPosition }
 
 type Props = {
   rows: StringsRow[]
   language: string | null
+  /** 아직 저장하지 않은 새 행. 상태 칸에 따로 표시한다. */
+  newKeys: ReadonlySet<string>
+  selectedKey: string | null
+  onSelect: (key: string) => void
   onEdit: (key: string, field: EditableField, value: string) => void
+  onMove: (key: string, targetKey: string, position: DropPosition) => void
+  onMoveBy: (key: string, offset: -1 | 1) => void
 }
 
-const STATUS_LABEL: Record<string, string> = {
+export const STATUS_LABEL: Record<string, string> = {
   untranslated: '미번역',
   draft: '초안',
   review: '검토',
@@ -28,9 +58,24 @@ const STATUS_LABEL: Record<string, string> = {
 
 const helper = createColumnHelper<StringsRow>()
 
-export function StringsGrid({ rows, language, onEdit }: Props): React.JSX.Element {
+export function StringsGrid({
+  rows,
+  language,
+  newKeys,
+  selectedKey,
+  onSelect,
+  onEdit,
+  onMove,
+  onMoveBy
+}: Props): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const headRef = useRef<HTMLDivElement>(null)
+  const [dragKey, setDragKey] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(loadSizing)
+
+  useEffect(() => {
+    window.localStorage.setItem(SIZING_KEY, JSON.stringify(columnSizing))
+  }, [columnSizing])
 
   const columns = useMemo(() => {
     const editable = (field: EditableField, header: string, width: number, mono = false) =>
@@ -40,17 +85,42 @@ export function StringsGrid({ rows, language, onEdit }: Props): React.JSX.Elemen
         size: width,
         cell: (info) => (
           // input 은 값에서 줄바꿈을 지워 버린다. 원문에 줄바꿈이 있을 수 있어 textarea 를 쓴다.
+          // 높이는 CSS(field-sizing: content)가 내용에 맞춘다.
           <textarea
             rows={1}
             className={mono ? 'grid-input mono' : 'grid-input'}
             value={info.getValue()}
-            title={info.getValue()}
             onChange={(event) => onEdit(info.row.original.key, field, event.target.value)}
           />
         )
       })
 
     return [
+      helper.display({
+        id: 'handle',
+        header: '',
+        size: 28,
+        minSize: 28,
+        maxSize: 28,
+        enableResizing: false,
+        cell: (info) => (
+          <span
+            className="drag-handle"
+            draggable
+            title="끌어서 순서 바꾸기"
+            onDragStart={(event) => {
+              const key = info.row.original.key
+              event.dataTransfer.setData('text/plain', key)
+              event.dataTransfer.effectAllowed = 'move'
+              const rowElement = event.currentTarget.closest('.grid-row')
+              if (rowElement) event.dataTransfer.setDragImage(rowElement, 14, ROW_HEIGHT / 2)
+              setDragKey(key)
+            }}
+          >
+            ⠿
+          </span>
+        )
+      }),
       helper.accessor('key', {
         header: '키',
         size: 150,
@@ -69,69 +139,146 @@ export function StringsGrid({ rows, language, onEdit }: Props): React.JSX.Elemen
       helper.accessor('status', {
         header: '상태',
         size: 96,
-        cell: (info) => (
-          <span className={`status-badge ${info.getValue()}`}>
-            {STATUS_LABEL[info.getValue()] ?? info.getValue()}
-          </span>
-        )
+        cell: (info) =>
+          newKeys.has(info.row.original.key) ? (
+            <span className="status-badge new">새 행</span>
+          ) : (
+            <span className={`status-badge ${info.getValue()}`}>
+              {STATUS_LABEL[info.getValue()] ?? info.getValue()}
+            </span>
+          )
       })
     ]
-  }, [language, onEdit])
+  }, [language, newKeys, onEdit])
 
-  const table = useReactTable({ data: rows, columns, getCoreRowModel: getCoreRowModel() })
+  const table = useReactTable({
+    data: rows,
+    columns,
+    // 인덱스가 아니라 키를 행의 정체로 쓴다. 순서를 바꿔도 편집 중인 칸이 다른 행으로 옮겨 가지 않는다.
+    getRowId: (row) => row.key,
+    getCoreRowModel: getCoreRowModel(),
+    defaultColumn: { minSize: 60, maxSize: 900 },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    state: { columnSizing },
+    onColumnSizingChange: setColumnSizing
+  })
   const modelRows = table.getRowModel().rows
+
+  // 가상 스크롤은 이 함수의 정체를 측정 캐시의 기준으로 쓴다. 렌더마다 새로 만들면
+  // 측정 → 다시 렌더 → 새 함수 → 다시 측정이 끝없이 돈다. 행 목록이 바뀔 때만 바꾼다.
+  const getItemKey = useCallback((index: number) => rows[index]?.key ?? index, [rows])
 
   const virtualizer = useVirtualizer({
     count: modelRows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: 12
+    overscan: 12,
+    // 행 높이는 내용에 따라 다르므로 실제로 잰다. 측정값은 키로 기억해서
+    // 순서를 바꾸거나 행을 지워도 높이가 엉뚱한 행에 붙지 않게 한다.
+    getItemKey,
+    // 헤더가 같은 스크롤 영역 안에 있으므로 목록은 헤더 높이만큼 아래에서 시작한다
+    scrollMargin: HEADER_HEIGHT,
+    // 행으로 스크롤할 때 고정 헤더 밑에 가려지지 않게 한다
+    scrollPaddingStart: HEADER_HEIGHT
   })
+
+  // 선택한 행이 추가·이동으로 화면 밖에 있으면 보이는 곳까지 스크롤한다
+  const selectedIndex = selectedKey === null ? -1 : rows.findIndex((row) => row.key === selectedKey)
+  useEffect(() => {
+    if (selectedIndex >= 0) virtualizer.scrollToIndex(selectedIndex, { align: 'auto' })
+  }, [selectedIndex, virtualizer])
+
+  // 끌던 행이 가상 스크롤로 사라지면 dragend가 오지 않을 수 있어 창 전체에서 정리한다
+  useEffect(() => {
+    if (dragKey === null) return
+    const clear = (): void => {
+      setDragKey(null)
+      setDropTarget(null)
+    }
+    window.addEventListener('dragend', clear)
+    window.addEventListener('drop', clear)
+    return () => {
+      window.removeEventListener('dragend', clear)
+      window.removeEventListener('drop', clear)
+    }
+  }, [dragKey])
 
   const columnSizes = table.getVisibleLeafColumns().map((column) => column.getSize())
   const template = columnSizes.map((size) => `${size}px`).join(' ')
   const totalWidth = `${columnSizes.reduce((sum, size) => sum + size, 0)}px`
+  const resizing = table.getState().columnSizingInfo.isResizingColumn !== false
 
   return (
-    <div className="grid-wrap">
-      <div
-        className="grid-head"
-        ref={headRef}
-        style={{ gridTemplateColumns: template, minWidth: totalWidth }}
-      >
-        {table.getHeaderGroups()[0]?.headers.map((header) => (
-          <div key={header.id} className="grid-cell grid-header-cell">
-            {flexRender(header.column.columnDef.header, header.getContext())}
-          </div>
-        ))}
-      </div>
-
-      <div
-        className="grid-body"
-        ref={scrollRef}
-        onScroll={(event) => {
-          // 헤더는 따로 떠 있으므로 가로 스크롤을 맞춰 준다
-          if (headRef.current) headRef.current.scrollLeft = event.currentTarget.scrollLeft
-        }}
-      >
+    <div
+      className={resizing ? 'grid-wrap resizing' : 'grid-wrap'}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (!event.altKey || selectedKey === null) return
+        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+          event.preventDefault()
+          onMoveBy(selectedKey, event.key === 'ArrowUp' ? -1 : 1)
+        }
+      }}
+    >
+      <div className="grid-body" ref={scrollRef}>
         <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: template.split(' ').length > 0 ? totalWidth : undefined,
-            position: 'relative'
-          }}
+          className="grid-head"
+          style={{ gridTemplateColumns: template, width: totalWidth, height: HEADER_HEIGHT }}
         >
+          {table.getHeaderGroups()[0]?.headers.map((header) => (
+            <div key={header.id} className="grid-cell grid-header-cell">
+              {flexRender(header.column.columnDef.header, header.getContext())}
+              {header.column.getCanResize() ? (
+                <div
+                  className={header.column.getIsResizing() ? 'col-resizer active' : 'col-resizer'}
+                  title="끌어서 너비 조절 · 더블클릭하면 기본 너비"
+                  onMouseDown={header.getResizeHandler()}
+                  onTouchStart={header.getResizeHandler()}
+                  onDoubleClick={() => header.column.resetSize()}
+                />
+              ) : null}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ height: `${virtualizer.getTotalSize()}px`, width: totalWidth, position: 'relative' }}>
           {virtualizer.getVirtualItems().map((item) => {
             const row = modelRows[item.index]
             if (!row) return null
+            const key = row.original.key
+            const classes = ['grid-row']
+            if (key === selectedKey) classes.push('selected')
+            if (key === dragKey) classes.push('dragging')
+            if (dropTarget?.key === key) classes.push(`drop-${dropTarget.position}`)
+
             return (
               <div
                 key={row.id}
-                className="grid-row"
+                ref={virtualizer.measureElement}
+                data-index={item.index}
+                className={classes.join(' ')}
                 style={{
                   gridTemplateColumns: template,
-                  height: `${item.size}px`,
-                  transform: `translateY(${item.start}px)`
+                  transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`
+                }}
+                onMouseDown={() => onSelect(key)}
+                onDragOver={(event) => {
+                  if (dragKey === null) return
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'move'
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  const position: DropPosition =
+                    event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+                  if (dropTarget?.key !== key || dropTarget.position !== position) {
+                    setDropTarget({ key, position })
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  if (dragKey !== null && dropTarget !== null) {
+                    onMove(dragKey, dropTarget.key, dropTarget.position)
+                  }
                 }}
               >
                 {row.getVisibleCells().map((cell) => (

@@ -20,6 +20,7 @@ import type {
   ImportPreview,
   ImportSummary,
   SaveStringsInput,
+  SaveStringsResult,
   StringsView
 } from '@shared/schema/strings'
 import type { UsageLimits } from '@shared/schema/usage'
@@ -50,8 +51,9 @@ const api = {
   strings: {
     list: (language: string | null): Promise<IpcResult<StringsView>> =>
       ipcRenderer.invoke(IPC.stringsList, { language }),
-    save: (input: SaveStringsInput): Promise<IpcResult<{ staleMarked: number }>> =>
+    save: (input: SaveStringsInput): Promise<IpcResult<SaveStringsResult>> =>
       ipcRenderer.invoke(IPC.stringsSave, input),
+    create: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.stringsCreate),
     importPreview: (): Promise<IpcResult<ImportPreview>> =>
       ipcRenderer.invoke(IPC.stringsImportPreview),
     import: (input: ImportInput): Promise<IpcResult<ImportSummary>> =>

@@ -46,8 +46,11 @@
 | `project:pick` | 폴더 선택 대화상자 |
 | `project:open` | 프로젝트 로드, schemaVersion 확인·마이그레이션 |
 | `project:settings:get` / `:set` | project.json 읽기/부분 갱신 |
-| `strings:list` | 원문 + 번역 조인 결과 조회(필터·페이지) |
-| `strings:upsert` | 원문 행 추가·수정 |
+| `strings:list` | 원문 + 선택 언어 번역 조인 결과, 원문 파일 존재 여부 |
+| `strings:save` | 원문 전체 저장(편집·행 추가·순서 변경·삭제). 키 검사 후 해시 재계산, 충돌 감지, 모든 번역 파일의 stale 갱신과 `deletedKeys` 행 삭제 |
+| `strings:create` | 헤더만 있는 빈 `strings_master.csv` 생성 |
+| `strings:import:preview` | 가져올 CSV 선택, 헤더·샘플·인코딩·매핑 추측 |
+| `strings:import` | 열 매핑대로 원문에 합치고 저장 |
 | `translation:update` | 단일 행 번역/상태 수동 수정 |
 | `translation:approve` | 상태를 approved로 전환 |
 | `glossary:list` / `:upsert` / `:remove` | 용어집 |
@@ -67,7 +70,7 @@
 | `job:state` | idle / running / paused / waiting-limit / error |
 | `job:limit` | 재설정 시각 또는 다음 백오프 대기 초 |
 | `agent:chat:delta` | 스트리밍 텍스트 조각 |
-| `file:changed` | 변경 파일, 자동 리로드 여부 |
+| `file:changed` | 앱 밖에서 바뀐 파일 이름. 자동 리로드 여부는 렌더러가 미저장 변경을 보고 정한다 |
 | `qa:result` | 행별 진단 목록 |
 
 ## MCP 도구 목록 (초안)

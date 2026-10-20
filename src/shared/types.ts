@@ -16,6 +16,8 @@ export type IpcErrorKind =
   | 'schema-too-new'
   /** JSON 파싱 또는 스키마 검증 실패 */
   | 'invalid-project'
+  /** 요청 값이 규칙에 맞지 않음(빈 키, 중복 키 등) */
+  | 'invalid-input'
   /** 앱이 읽은 뒤 파일이 밖에서 바뀜 */
   | 'conflict'
   /** Claude Code CLI 실행 파일을 찾지 못함 */
