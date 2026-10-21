@@ -17,6 +17,9 @@ export const IPC = {
   authLoginCancel: 'auth:login:cancel',
   authLogout: 'auth:logout',
   usageRead: 'usage:read',
+  jobStart: 'job:start',
+  jobControl: 'job:control',
+  jobCurrent: 'job:current',
   agentCheck: 'agent:check',
   agentChatSend: 'agent:chat:send',
   agentChatCancel: 'agent:chat:cancel'
@@ -27,6 +30,9 @@ export const IPC_EVENT = {
   authLoginOutput: 'auth:login:output',
   authLoginDone: 'auth:login:done',
   fileChanged: 'file:changed',
+  jobUpdate: 'job:update',
+  jobLog: 'job:log',
+  agentChatTool: 'agent:chat:tool',
   agentChatDelta: 'agent:chat:delta',
   agentChatEnd: 'agent:chat:end',
   agentChatError: 'agent:chat:error'

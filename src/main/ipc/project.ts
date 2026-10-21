@@ -3,6 +3,7 @@ import { IPC } from '@shared/ipc'
 import { CreateProjectInput, OpenProjectInput, type OpenProject } from '@shared/schema/project'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { createProject, openProject } from '../project/open'
+import { cancelActiveJob } from '../jobs/translate-job'
 import { forgetReadHashes } from '../project/store'
 import { stopWatching, watchProject } from '../project/watcher'
 import { updateAppSettings } from '../store/app-settings'
@@ -12,6 +13,11 @@ let current: OpenProject | null = null
 
 export function currentProject(): OpenProject | null {
   return current
+}
+
+/** 메인이 project.json 을 고친 뒤 들고 있는 설정도 맞춘다. */
+export function replaceCurrentConfig(config: OpenProject['config']): void {
+  if (current) current = { ...current, config }
 }
 
 export function registerProjectIpc(): void {
@@ -61,6 +67,7 @@ export function registerProjectIpc(): void {
 
   ipcMain.handle(IPC.projectClose, (): IpcResult<null> => {
     current = null
+    cancelActiveJob()
     forgetReadHashes()
     void stopWatching()
     updateAppSettings({ lastProjectDir: null })

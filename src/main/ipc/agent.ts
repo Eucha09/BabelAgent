@@ -8,9 +8,11 @@ import {
   type AgentChatError,
   type AgentCheckResult
 } from '@shared/schema/agent'
+import type { ChatToolCall } from '@shared/schema/jobs'
 import type { UsageLimits } from '@shared/schema/usage'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { cancelChat, checkAgent, runChat } from '../agent/session'
+import { createPanelServer, mcpToolName, PANEL_TOOL_NAMES } from '../agent/tools'
 import { readUsageLimits } from '../agent/usage'
 import { loadAppSettings } from '../store/app-settings'
 import { currentProject } from './project'
@@ -60,7 +62,15 @@ export function registerAgentIpc(): void {
         const payload: AgentChatError = { requestId: input.requestId, ...error }
         send(sender, IPC_EVENT.agentChatError, payload)
       }
-    })
+    }, (sdk) => ({
+      mcpServers: {
+        babel: createPanelServer(sdk, project, (call) => {
+          const payload: ChatToolCall = { requestId: input.requestId, ...call }
+          send(sender, IPC_EVENT.agentChatTool, payload)
+        })
+      },
+      allowedTools: PANEL_TOOL_NAMES.map(mcpToolName)
+    }))
     return ok(null)
   })
 

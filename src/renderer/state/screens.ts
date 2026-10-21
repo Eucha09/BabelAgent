@@ -34,8 +34,8 @@ export const SCREENS: readonly ScreenDef[] = [
   {
     id: 'translate',
     label: '번역',
-    badge: 'M3',
-    badgeTone: 'default',
+    badge: '사용 가능',
+    badgeTone: 'ready',
     requiresProject: true,
     description: '배치 번역을 실행하고 진행 상황을 보는 화면입니다.',
     planned: ['커스텀 MCP 도구', '배치 산정(30행 / 3,000자)', '작업자 2개 동시 실행', '사용량 한도 대기와 재개']

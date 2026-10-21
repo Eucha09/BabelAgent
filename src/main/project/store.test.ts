@@ -9,11 +9,13 @@ import {
   forgetReadHashes,
   joinRows,
   listTranslationLanguages,
+  loadGlossaryTerms,
   loadMaster,
   loadTranslations,
   masterPath,
   saveMaster,
-  translationPath
+  translationPath,
+  writeBatchTranslations
 } from './store'
 
 let dir: string
@@ -245,6 +247,46 @@ describe('행 삭제', () => {
     writeFileSync(join(dir, 'translations_.csv'), header + '\n')
     writeFileSync(join(dir, 'notes.csv'), 'a\n')
     expect(listTranslationLanguages(dir)).toEqual(['en', 'ja'])
+  })
+})
+
+describe('배치 번역 기록', () => {
+  const header = 'key,text,source_hash,status,confidence,note'
+
+  it('번역 파일이 없으면 만들고 draft 로 기록한다', () => {
+    const result = writeBatchTranslations(dir, 'en', [{ key: 'k1', text: 'Hello', confidence: 0.9 }], new Map([['k1', 'h1']]))
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.value.written).toBe(1)
+
+    forgetReadHashes()
+    const loaded = loadTranslations(dir, 'en')
+    if (!loaded.ok) throw new Error('읽기 실패')
+    expect(loaded.value.rows).toEqual([{ key: 'k1', text: 'Hello', source_hash: 'h1', status: 'draft', confidence: '0.9', note: '' }])
+  })
+
+  it('approved 는 덮지 않고, 다른 행은 그대로 둔다', () => {
+    writeFileSync(translationPath(dir, 'en'), [header, 'ok,Kept,h-ok,approved,1,', 'other,Other,h-o,review,0.7,'].join('\n') + '\n')
+    const result = writeBatchTranslations(dir, 'en', [{ key: 'ok', text: 'Overwrite', confidence: 0.9 }, { key: 'new', text: 'New', confidence: 0.8 }], new Map([['ok', 'h-ok'], ['new', 'h-n']]))
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.value.skippedApproved).toEqual(['ok'])
+
+    forgetReadHashes()
+    const loaded = loadTranslations(dir, 'en')
+    if (!loaded.ok) throw new Error('읽기 실패')
+    expect(loaded.value.rows.map((row) => [row.key, row.text, row.status])).toEqual([
+      ['ok', 'Kept', 'approved'],
+      ['other', 'Other', 'review'],
+      ['new', 'New', 'draft']
+    ])
+  })
+
+  it('용어집이 없으면 빈 목록, 있으면 승인된 해당 언어 용어', () => {
+    const empty = loadGlossaryTerms(dir, 'en')
+    expect(empty.ok && empty.value).toEqual([])
+    writeFileSync(join(dir, 'glossary.csv'), ['term,translation_en,status,note,strict', '물약,Potion,approved,,', '검,Sword,pending,,'].join('\n') + '\n')
+    const loaded = loadGlossaryTerms(dir, 'en')
+    if (!loaded.ok) throw new Error('읽기 실패')
+    expect(loaded.value.map((term) => term.term)).toEqual(['물약'])
   })
 })
 

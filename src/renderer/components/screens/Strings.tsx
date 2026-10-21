@@ -100,6 +100,18 @@ export function Strings({ onMessage }: { onMessage: (text: string) => void }): R
     })
   }, [dirty, language, load, onMessage])
 
+  // 번역 작업이 배치를 기록하면 번역 칸과 상태가 바뀐다. 편집 중이 아니면 다시 읽는다.
+  // 앱이 직접 쓴 파일은 감시자가 알려 주지 않으므로 작업 이벤트를 따로 듣는다.
+  useEffect(() => {
+    let lastDone = -1
+    return api.jobs.onUpdate((view) => {
+      const done = view.snapshot.doneRows
+      if (done === lastDone) return
+      lastDone = done
+      if (!dirty && view.language === language) void load(language)
+    })
+  }, [dirty, language, load])
+
   const onEdit = useCallback((key: string, field: EditableField, value: string) => {
     setRows((prev) => prev.map((row) => (row.key === key ? { ...row, [field]: value } : row)))
     setDirty(true)

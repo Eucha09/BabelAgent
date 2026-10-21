@@ -55,8 +55,10 @@
 | `translation:approve` | 상태를 approved로 전환 |
 | `glossary:list` / `:upsert` / `:remove` | 용어집 |
 | `qa:run` | 선택 범위 QA 실행 |
-| `job:start` | 배치 작업 시작(번역·컨텍스트 추정·용어 추출) |
-| `job:pause` / `:resume` / `:cancel` / `:retry` | 작업 제어 |
+| `job:start` | 배치 번역 시작(대상 언어·범위·선택 키·모델). 한 번에 작업 하나. 고른 모델은 project.json 에 기억 |
+| `job:control` | `pause` / `resume` / `cancel` / `retry`(한도 대기 건너뛰기) |
+| `job:current` | 진행 중이거나 마지막 작업의 상태. 화면을 다시 열 때 이어 보기용 |
+| `usage:read` | 구독 사용량 한도(`/usage`) |
 | `row:reroll` | 행 단위 재번역(일회성 세션) |
 | `agent:chat:send` | 에이전트 패널 메시지 전송 |
 | `export:unity` | 템플릿 기반 CSV 내보내기 |
@@ -66,9 +68,9 @@
 
 | 채널 | 페이로드 |
 |---|---|
-| `job:progress` | jobId, 총/완료/실패 행 수, 현재 배치 |
-| `job:state` | idle / running / paused / waiting-limit / error |
-| `job:limit` | 재설정 시각 또는 다음 백오프 대기 초 |
+| `job:update` | 작업 전체 상태(`JobView`): running / paused / waiting-limit / done / cancelled, 행·배치 수, 자동 재개 시각, 실패 사유 |
+| `job:log` | 작업 로그 한 줄(배치 시작·제출 통과/실패·기록·한도·끝). 번역 화면과 에이전트 패널이 같이 쓴다 |
+| `agent:chat:tool` | 패널 채팅에서 에이전트가 부른 도구(이름·요약·성공 여부) |
 | `agent:chat:delta` | 스트리밍 텍스트 조각 |
 | `file:changed` | 앱 밖에서 바뀐 파일 이름. 자동 리로드 여부는 렌더러가 미저장 변경을 보고 정한다 |
 | `qa:result` | 행별 진단 목록 |
@@ -79,16 +81,17 @@
 
 | 도구 | 종류 | 설명 |
 |---|---|---|
-| `get_project_context` | 읽기 | 장르, 게임 소개, 톤 가이드, 스타일 규칙 |
-| `get_strings_batch` | 읽기 | 키 목록으로 원문·context·ui_type·max_len·vars 조회 |
-| `get_glossary_terms` | 읽기 | 주어진 문자열들에 등장하는 용어만 필터링해 반환 |
+| `get_project_context` | 읽기 | 장르, 게임 소개, 톤 가이드, 스타일 규칙 — **구현(패널)** |
+| `get_strings_batch` | 읽기 | 키 목록으로 원문·context·언어별 번역 조회(최대 50키) — **구현(패널)** |
+| `get_glossary_terms` | 읽기 | 주어진 문자열들에 등장하는 승인된 용어만 반환 — **구현(패널)** |
 | `lookup_grammar` | 읽기 | grammar_*.csv 조회(선택 기능 활성 시) |
 | `validate_translation` | 읽기 | 단일 번역안 QA 검사 결과 반환. 에이전트의 자기 점검용 |
-| `submit_translations` | 쓰기 | 번역 결과 제출. 코드가 검증 후 기록 여부를 결정 |
+| `submit_translations` | 쓰기 | 번역 결과 제출. 키 검사 후 보관, 세션 끝에 배치 단위로 기록. 수정 제출 1회 — **구현(배치)** |
 | `update_project_rules` | 쓰기 | 사용자가 채팅에서 지시한 스타일 규칙을 project.json에 저장 |
 | `propose_glossary_terms` | 쓰기 | 용어 후보 제출. 사용자 승인 전까지 pending |
 
 - 쓰기 도구는 "요청"이지 "기록"이 아니다. 기록 여부는 항상 코드가 결정한다.
+- 배치 세션에는 `submit_translations` 만, 패널 채팅에는 읽기 도구만 붙인다. 서버는 세션마다 새로 만들어 배치 문맥(기대 키 목록)을 클로저로 묶는다(`src/main/agent/tools.ts`).
 - 도구 응답은 간결한 JSON으로 돌려준다. 긴 설명 문장을 담지 않는다 — 토큰 낭비.
 
 ## 작업 스케줄러
@@ -99,7 +102,9 @@
 - 배치 결과는 전원 검증 통과 시에만 원자적으로 기록한다. 실패 시 배치 전체를 미완료로 남기고 실패 사유를 모아 보고한다.
 - 진행 상황은 완료된 행 키 집합으로 관리한다. 재개는 "미완료 행 재계산"이며, 중간 커서를 저장하지 않는다 — 파일이 외부에서 바뀌어도 안전하다.
 - 사용량 한도: 모든 작업자를 멈추고 `waiting-limit`으로 전환한다. 재설정 시각이 응답에 있으면 그 시각까지, 없으면 1 → 2 → 5 → 10분 백오프. 10분 이후로는 자동 재시도하지 않고 사용자 조작을 기다린다.
-- 작업 종료 후 사용된 배치 수와 실패 행 수를 상태바에 남긴다.
+- 일시정지 중에 한도에 걸리면 대기가 끝나도 일시정지로 돌아간다. 두 작업자가 같은 한도에 걸려도 대기 단계는 한 번만 센다.
+- 스케줄러(`src/main/jobs/scheduler.ts`)는 배치 실행기와 시계를 주입받는다. 가짜 실행기와 가짜 타이머로 한도·일시정지·취소를 단위 테스트한다.
+- 작업 종료 후 완료·실패·남은 행 수를 작업 로그에 남긴다.
 
 ## 설정 구조
 

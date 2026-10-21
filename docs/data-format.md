@@ -42,7 +42,8 @@ MyGame/
     "caseSensitive": true
   },
   "grammar": { "enabled": false, "tables": [] },
-  "export": { "unityTemplate": "templates/unity_sample.csv" }
+  "export": { "unityTemplate": "templates/unity_sample.csv" },
+  "translate": { "model": "default" }   // 번역 화면에서 마지막으로 고른 모델: default | opus | sonnet | haiku
 }
 ```
 

@@ -16,17 +16,25 @@
 
 ```ts
 query({
-  prompt,
+  prompt: batchPrompt,                  // 가변 부분
   options: {
-    settingSources: [],              // 사용자 PC 설정과 이 저장소의 CLAUDE.md 차단
+    settingSources: [],                 // 사용자 PC 설정과 이 저장소의 CLAUDE.md 차단
     cwd: projectDir,
-    allowedTools: [/* MCP 도구만 */],
-    disallowedTools: ['Bash', 'Write', 'Edit'],
-    mcpServers: { babel: babelMcpServer },
+    tools: [],                          // 내장 도구 전부 끔
+    disallowedTools: ['Bash', 'Write', 'Edit', 'NotebookEdit'],
+    permissionMode: 'dontAsk',         // 허용 목록에 없으면 묻지 않고 거부
+    systemPrompt: fixedPrompt,          // 고정 부분. 작업마다 한 번 만들어 모든 배치가 같은 문자열을 쓴다
+    mcpServers: { babel: submitServer },// 배치 전용 서버(아래). 배치마다 새로 만든다
+    allowedTools: ['mcp__babel__submit_translations'],
+    maxTurns: 6,                        // 제출 + 수정 한 번 + 여유
+    model,                              // 번역 화면에서 고른 모델. default 면 넣지 않아 CLI 설정을 따른다
     pathToClaudeCodeExecutable: appSettings.cliPath ?? undefined,
   },
 })
 ```
+
+- 배치 세션의 도구는 `submit_translations` 하나다. 원문·컨텍스트·용어는 프롬프트에 다 들어 있으므로 읽기 도구를 주지 않는다.
+- MCP 도구 이름은 `mcp__<서버>__<도구>` 로 허용 목록에 넣는다(서버 이름 `babel`).
 
 ## 프롬프트 조립 순서
 
@@ -61,27 +69,28 @@ query({
 
 ## 응답 규약
 
-에이전트는 다른 설명 없이 JSON 배열만 출력한다.
+에이전트는 텍스트로 답하지 않고 `submit_translations` 도구로 제출한다. 도구 입력 스키마가 곧 검증 스키마다(`src/core/translate/submission.ts`).
 
 ```ts
-const TranslationItem = z.object({
+const SubmittedTranslation = z.object({
   key: z.string().min(1),
   text: z.string(),
   confidence: z.number().min(0).max(1),
-  note: z.string().default(''),
-});
-const TranslationResponse = z.array(TranslationItem);
+  note: z.string().optional(),
+})
+// 도구 입력: { translations: SubmittedTranslation[] }
 ```
 
 검증 순서:
 
-1. JSON 파싱 → 실패 시 배치 실패
-2. zod `parse` → 실패 시 배치 실패
-3. 키 집합 일치 확인(누락·초과·중복) → 불일치 시 배치 실패
-4. 행별 QA 오류 검사 → 오류가 하나라도 있으면 배치 실패
-5. 전부 통과 → 배치 전체를 원자적으로 기록, 상태 `draft`
+1. 입력 스키마(zod) — SDK가 도구를 부르기 전에 검사한다. 어긋나면 에이전트에게 오류가 돌아간다
+2. 키 집합(누락·초과·중복)과 빈 번역 — 도구 핸들러가 검사한다. 실패하면 문제를 돌려주고, **같은 세션에서 한 번만** 다시 받는다
+3. 행별 QA(변수·태그 집합 등) — M4에서 2번 뒤에 붙는다
+4. 통과 → 보관해 두었다가 세션이 끝나면 배치 전체를 원자적으로 기록, 상태 `draft`
 
-배치 실패 시 해당 행들은 미완료로 남고, 실패 사유(파싱/키 불일치/QA 오류 + 행별 진단)를 작업 결과에 모아 사용자에게 보여준다. 자동 재시도는 하지 않는다.
+- 제출이 두 번 다 실패하거나 제출이 없으면 배치 실패로 보고한다. 배치 단위 자동 재시도는 하지 않는다.
+- 통과한 제출이 있으면, 그 뒤 한도 대기로 중단 신호가 왔더라도 기록한다. 배치가 온전하므로 버릴 이유가 없다.
+- 기록은 번역 파일을 다시 읽어 합친 뒤 원자적으로 쓴다. 동기 함수 하나라서 같은 프로세스의 다른 작업자가 사이에 끼지 못한다. `approved` 는 여기서도 한 번 더 막는다.
 
 ## 작업별 프롬프트
 
@@ -109,7 +118,11 @@ const TranslationResponse = z.array(TranslationItem);
 
 ## 사용량 한도 처리
 
-- 한도 오류를 받으면 모든 작업자를 멈추고 작업 상태를 `waiting-limit`으로 바꾼다. 진행 중이던 배치는 기록하지 않는다.
+감지 경로(구조화된 신호를 먼저 본다): `rate_limit_event` 의 `status: rejected`(재설정 시각 포함) → `assistant.error === 'rate_limit'` → 결과 메시지 `errors` 와 던져진 예외의 문장. `resetsAt` 은 단위가 문서에 없어 초·밀리초를 모두 받는다.
+
+- 한도 오류를 받으면 작업 상태를 `waiting-limit`으로 바꾸고, 진행 중인 다른 배치까지 중단 신호를 보내 큐 앞으로 되돌린다. 중단된 배치는 기록하지 않는다.
+- 일시정지 중에 한도에 걸렸다면 대기가 끝나도 일시정지로 돌아간다.
+- 화면 확인용: `BABEL_FAKE_LIMIT=1` 로 앱을 띄우면 실행당 한 번, 첫 배치가 20초짜리 가짜 한도 오류를 낸다.
 - 응답에 재설정 시각이 있으면 그 시각까지 대기한다. 없으면 1 → 2 → 5 → 10분 백오프.
 - 10분 백오프 이후에도 실패하면 자동 재시도를 멈추고 사용자 조작을 기다린다.
 - UI는 남은 대기 시간과 "지금 재시도" 버튼을 보여준다.
@@ -119,4 +132,5 @@ const TranslationResponse = z.array(TranslationItem);
 
 - 유일하게 `resume`으로 이어지는 세션. 사용자가 프로젝트를 닫으면 세션 ID를 버린다.
 - 사용자가 "앞으로 ~하게 해줘"라고 지시하면 에이전트는 `update_project_rules`를 호출해 `styleRules`에 저장한다. 저장되지 않은 지시는 다음 배치에 반영되지 않는다 — 패널에서 그 사실을 사용자에게 알린다.
-- 패널 세션에도 쓰기 도구는 `update_project_rules`, `propose_glossary_terms`만 허용한다.
+- 패널 세션의 도구(M3): 읽기 전용 `get_project_context`, `get_strings_batch`, `get_glossary_terms`. 부를 때마다 패널에 도구 줄이 남는다.
+- 쓰기 도구 `update_project_rules`, `propose_glossary_terms` 는 아직 없다(M5).

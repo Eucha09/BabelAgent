@@ -13,6 +13,8 @@ import { TitleBar } from './components/TitleBar'
 import { Placeholder } from './components/screens/Placeholder'
 import { Settings, type SettingsPatch } from './components/screens/Settings'
 import { Strings } from './components/screens/Strings'
+import { Translate } from './components/screens/Translate'
+import type { JobLogEntry, JobView } from '@shared/schema/jobs'
 import { Welcome } from './components/screens/Welcome'
 import { findScreen, type ScreenId } from './state/screens'
 
@@ -33,6 +35,9 @@ export function App(): React.JSX.Element {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null)
   const [usage, setUsage] = useState<UsageView>({ limits: null, loading: false, error: null })
+  /** 진행 중이거나 마지막으로 끝난 번역 작업. 번역 화면과 패널이 같이 본다. */
+  const [job, setJob] = useState<JobView | null>(null)
+  const [jobLog, setJobLog] = useState<readonly JobLogEntry[]>([])
   const [auth, setAuth] = useState<AuthView>({
     status: null,
     error: null,
@@ -73,10 +78,29 @@ export function App(): React.JSX.Element {
       ])
       setMessage(`에이전트 오류: ${kind}`)
     })
+    let toolCount = 0
+    const offTool = api.agent.onTool(({ requestId, name, summary, ok }) => {
+      toolCount += 1
+      setTurns((prev) => [...prev, { id: `${requestId}-tool-${toolCount}`, role: 'tool', text: `${name} → ${summary}`, ok }])
+    })
     return () => {
       offDelta()
       offEnd()
       offError()
+      offTool()
+    }
+  }, [])
+
+  // 번역 작업 상태와 로그. 화면을 오가도 이어지도록 여기서 받는다.
+  useEffect(() => {
+    void api.jobs.current().then((current) => {
+      if (current) setJob(current)
+    })
+    const offUpdate = api.jobs.onUpdate(setJob)
+    const offLog = api.jobs.onLog((entry) => setJobLog((prev) => [...prev, entry].slice(-500)))
+    return () => {
+      offUpdate()
+      offLog()
     }
   }, [])
 
@@ -338,7 +362,11 @@ export function App(): React.JSX.Element {
         ) : project && screen === 'strings' ? (
           <Strings key={project.dir} onMessage={setMessage} />
         ) : project ? (
-          <Placeholder screen={screenDef} />
+          screen === 'translate' ? (
+            <Translate key={project.dir} project={project} job={job} jobLog={jobLog} onMessage={setMessage} />
+          ) : (
+            <Placeholder screen={screenDef} />
+          )
         ) : (
           <Welcome
             lastProjectDir={settings?.lastProjectDir ?? null}
@@ -351,6 +379,8 @@ export function App(): React.JSX.Element {
       </main>
 
       <AgentPanel
+        jobLog={jobLog}
+        jobRunning={job !== null && job.snapshot.state !== 'done' && job.snapshot.state !== 'cancelled'}
         collapsed={panelCollapsed}
         onToggle={() => setPanelCollapsed((value) => !value)}
         turns={turns}

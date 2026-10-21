@@ -24,6 +24,7 @@ import type {
   StringsView
 } from '@shared/schema/strings'
 import type { UsageLimits } from '@shared/schema/usage'
+import type { ChatToolCall, JobControlInput, JobLogEntry, JobView, StartTranslateInput } from '@shared/schema/jobs'
 import type { IpcResult } from '@shared/types'
 
 function subscribe<T>(channel: string, listener: (payload: T) => void): () => void {
@@ -73,6 +74,14 @@ const api = {
     onLoginDone: (listener: (payload: AuthLoginDone) => void): (() => void) =>
       subscribe(IPC_EVENT.authLoginDone, listener)
   },
+  jobs: {
+    start: (input: StartTranslateInput): Promise<IpcResult<JobView>> => ipcRenderer.invoke(IPC.jobStart, input),
+    control: (action: JobControlInput['action']): Promise<IpcResult<null>> =>
+      ipcRenderer.invoke(IPC.jobControl, { action }),
+    current: (): Promise<JobView | null> => ipcRenderer.invoke(IPC.jobCurrent),
+    onUpdate: (listener: (view: JobView) => void): (() => void) => subscribe(IPC_EVENT.jobUpdate, listener),
+    onLog: (listener: (entry: JobLogEntry) => void): (() => void) => subscribe(IPC_EVENT.jobLog, listener)
+  },
   usage: {
     read: (): Promise<IpcResult<UsageLimits>> => ipcRenderer.invoke(IPC.usageRead)
   },
@@ -87,7 +96,9 @@ const api = {
     onEnd: (listener: (payload: AgentChatEnd) => void): (() => void) =>
       subscribe(IPC_EVENT.agentChatEnd, listener),
     onError: (listener: (payload: AgentChatError) => void): (() => void) =>
-      subscribe(IPC_EVENT.agentChatError, listener)
+      subscribe(IPC_EVENT.agentChatError, listener),
+    onTool: (listener: (payload: ChatToolCall) => void): (() => void) =>
+      subscribe(IPC_EVENT.agentChatTool, listener)
   }
 } as const
 

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DEFAULT_SMART_FORMATTERS } from '@core/qa/formatters'
+import { TranslateModel } from './jobs'
 
 export { SUPPORTED_SCHEMA_VERSION } from '@core/project/schema-version'
 
@@ -58,6 +59,10 @@ const GrammarSettings = z.object({
 })
 const DEFAULT_GRAMMAR: z.infer<typeof GrammarSettings> = { enabled: false, tables: [] }
 
+/** 배치 번역 설정. 번역 화면에서 마지막으로 고른 모델을 기억한다. */
+const TranslateSettings = z.object({ model: TranslateModel })
+const DEFAULT_TRANSLATE: z.infer<typeof TranslateSettings> = { model: 'default' }
+
 const ExportSettings = z.object({
   /** Unity에서 내보낸 샘플 CSV 경로(프로젝트 폴더 기준 상대 경로). */
   unityTemplate: z.string().nullable()
@@ -74,7 +79,8 @@ export const ProjectConfig = z.object({
   batch: BatchSettings.default(DEFAULT_BATCH),
   smartStrings: SmartStringsSettings.default(DEFAULT_SMART_STRINGS),
   grammar: GrammarSettings.default(DEFAULT_GRAMMAR),
-  export: ExportSettings.default(DEFAULT_EXPORT)
+  export: ExportSettings.default(DEFAULT_EXPORT),
+  translate: TranslateSettings.default(DEFAULT_TRANSLATE)
 })
 export type ProjectConfig = z.infer<typeof ProjectConfig>
 
@@ -95,7 +101,8 @@ export function createDefaultProjectConfig(input: {
     batch: { ...DEFAULT_BATCH },
     smartStrings: { ...DEFAULT_SMART_STRINGS, formatters: [...DEFAULT_SMART_FORMATTERS] },
     grammar: { ...DEFAULT_GRAMMAR, tables: [] },
-    export: { ...DEFAULT_EXPORT }
+    export: { ...DEFAULT_EXPORT },
+    translate: { ...DEFAULT_TRANSLATE }
   }
 }
 

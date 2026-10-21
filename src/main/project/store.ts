@@ -9,6 +9,9 @@ import {
   translationToRecords
 } from '@core/strings/master'
 import { applyStale } from '@core/strings/stale'
+import { parseGlossary, type GlossaryTerm } from '@core/translate/glossary'
+import { mergeTranslations } from '@core/translate/merge'
+import type { SubmittedTranslation } from '@core/translate/submission'
 import {
   MASTER_COLUMNS,
   TRANSLATION_COLUMNS,
@@ -245,4 +248,40 @@ export function saveMaster(
   }
 
   return ok({ staleMarked: staleKeys.length, staleKeys, removedTranslations })
+}
+
+export const GLOSSARY_FILE = 'glossary.csv'
+
+/** 용어집에서 해당 언어의 승인된 용어를 읽는다. 파일이 없으면 빈 목록. */
+export function loadGlossaryTerms(dir: string, language: string): IpcResult<GlossaryTerm[]> {
+  const loaded = loadCsv(join(dir, GLOSSARY_FILE))
+  if (!loaded.ok) return loaded
+  if (loaded.value === null) return ok([])
+  return ok(parseGlossary(loaded.value.records, language))
+}
+
+export type BatchWriteResult = { written: number; skippedApproved: string[] }
+
+/**
+ * 검증을 통과한 배치를 번역 파일에 기록한다. 다시 읽기 → 병합 → 원자적 쓰기를
+ * 동기 함수 하나로 처리하므로, 같은 프로세스의 다른 작업자가 사이에 끼어들 수 없다.
+ * 앱 밖에서 바뀐 번역은 다시 읽은 내용에 합쳐지므로 덮어쓰지 않는다.
+ */
+export function writeBatchTranslations(
+  dir: string,
+  language: string,
+  items: readonly SubmittedTranslation[],
+  hashByKey: ReadonlyMap<string, string>
+): IpcResult<BatchWriteResult> {
+  const loaded = loadTranslations(dir, language)
+  if (!loaded.ok) return loaded
+  const merged = mergeTranslations(loaded.value.rows, items, hashByKey)
+  const write = saveCsv(
+    translationPath(dir, language),
+    TRANSLATION_COLUMNS,
+    translationToRecords(merged.rows),
+    false
+  )
+  if (!write.ok) return write
+  return ok({ written: merged.written.length, skippedApproved: merged.skippedApproved })
 }

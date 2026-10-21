@@ -177,11 +177,22 @@ export function cancelChat(requestId: string): boolean {
  * 에이전트 패널 채팅. 앱에서 유일하게 resume으로 이어지는 세션이다.
  * 배치 작업은 M3에서 배치마다 새 query()로 실행한다.
  */
+/** 패널 채팅 역할. 도구 목록은 MCP 서버가 알려 주므로 여기서는 역할과 답하는 방식만 정한다. */
+const PANEL_SYSTEM_PROMPT = [
+  'You are the localization assistant inside Babel Agent, a desktop app for game localization.',
+  'Use the provided tools to look up the project: settings, source strings, translations, and glossary.',
+  'Do not guess project data you can look up. Answer in the language the user writes in.'
+].join(' ')
+
+export type ChatTools = Pick<Options, 'mcpServers' | 'allowedTools'>
+
 export async function runChat(
   input: AgentChatSendInput,
   cliPath: string | null,
   configDir: string | null,
-  emit: ChatEmitter
+  emit: ChatEmitter,
+  /** SDK 를 불러온 뒤에 도구 서버를 만든다. 서버가 SDK 의 tool() 을 쓰기 때문이다. */
+  tools?: (sdk: Awaited<ReturnType<typeof loadAgentSdk>>) => ChatTools
 ): Promise<void> {
   const startedAt = Date.now()
   let sdk: Awaited<ReturnType<typeof loadAgentSdk>>
@@ -198,6 +209,8 @@ export async function runChat(
 
   const options: Options = {
     ...agentQueryOptions(input.projectDir, cliPath, configDir),
+    systemPrompt: PANEL_SYSTEM_PROMPT,
+    ...(tools ? tools(sdk) : {}),
     abortController: controller,
     stderr: (data) => {
       stderrBuffer += data

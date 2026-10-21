@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
+import type { JobLogEntry } from '@shared/schema/jobs'
+import { JobLog } from './JobLog'
 
 export type ChatTurn = {
   id: string
-  role: 'user' | 'agent' | 'error'
+  role: 'user' | 'agent' | 'error' | 'tool'
   text: string
+  /** 도구 줄일 때 성공 여부 */
+  ok?: boolean
   /** 오류 진단 상세. 접어서 보여준다. */
   detail?: string
 }
 
 type Props = {
+  /** 배치 번역 작업 로그. 번역 화면을 보지 않아도 진행을 따라갈 수 있게 패널에도 둔다. */
+  jobLog: readonly JobLogEntry[]
+  jobRunning: boolean
   collapsed: boolean
   onToggle: () => void
   turns: readonly ChatTurn[]
@@ -20,6 +27,8 @@ type Props = {
 }
 
 export function AgentPanel({
+  jobLog,
+  jobRunning,
   collapsed,
   onToggle,
   turns,
@@ -30,6 +39,12 @@ export function AgentPanel({
   onCancel
 }: Props): React.JSX.Element {
   const [draft, setDraft] = useState('')
+  const [logOpen, setLogOpen] = useState(false)
+
+  // 작업이 시작되면 로그를 펼친다. 접는 것은 사용자에게 맡긴다.
+  useEffect(() => {
+    if (jobRunning) setLogOpen(true)
+  }, [jobRunning])
   const logRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -69,6 +84,16 @@ export function AgentPanel({
         </span>
       </div>
 
+      {jobLog.length > 0 ? (
+        <div className={logOpen ? 'panel-joblog open' : 'panel-joblog'}>
+          <button type="button" className="ghost panel-joblog-toggle" onClick={() => setLogOpen((value) => !value)}>
+            {logOpen ? '▾' : '▸'} 작업 로그 {jobRunning ? '· 진행 중' : ''}
+            <span className="hint">{jobLog.length}</span>
+          </button>
+          {logOpen ? <JobLog entries={jobLog} limit={80} /> : null}
+        </div>
+      ) : null}
+
       <div className="chat-log" ref={logRef}>
         {turns.length === 0 ? (
           <p className="hint">
@@ -77,12 +102,19 @@ export function AgentPanel({
               : '프로젝트를 열면 에이전트를 사용할 수 있습니다.'}
           </p>
         ) : null}
-        {turns.map((turn) => (
-          <div key={turn.id} className={`chat-turn ${turn.role}`}>
-            {turn.text}
-            {turn.detail ? <pre>{turn.detail}</pre> : null}
-          </div>
-        ))}
+        {turns.map((turn) =>
+          turn.role === 'tool' ? (
+            <div key={turn.id} className={turn.ok === false ? 'chat-tool failed' : 'chat-tool'}>
+              <span className="chat-tool-label">도구</span>
+              <span className="mono">{turn.text}</span>
+            </div>
+          ) : (
+            <div key={turn.id} className={`chat-turn ${turn.role}`}>
+              {turn.text}
+              {turn.detail ? <pre>{turn.detail}</pre> : null}
+            </div>
+          )
+        )}
       </div>
 
       <div className="chat-input">

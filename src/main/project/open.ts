@@ -51,6 +51,17 @@ export function createProject(input: CreateProjectInput): IpcResult<OpenProject>
   return ok({ dir: input.dir, config })
 }
 
+/** project.json 을 원자적으로 다시 쓴다. 스키마를 통과한 설정만 받는다. */
+export function saveProjectConfig(dir: string, config: ProjectConfig): IpcResult<null> {
+  const path = configPath(dir)
+  try {
+    writeJsonAtomicSync(path, config)
+    return ok(null)
+  } catch (error) {
+    return fail('io', describeIoError(error, path))
+  }
+}
+
 export function openProject(dir: string): IpcResult<OpenProject> {
   const dirCheck = checkDir(dir)
   if (!dirCheck.ok) return dirCheck
