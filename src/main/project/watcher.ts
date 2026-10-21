@@ -4,6 +4,7 @@ import type * as Chokidar from 'chokidar'
 import type { WebContents } from 'electron'
 import { IPC_EVENT } from '@shared/ipc'
 import type { FileChanged } from '@shared/schema/strings'
+import { PROJECT_FILE } from './open'
 import { isKnownContent } from './store'
 
 /** chokidar 5는 ESM 전용이라 CJS 번들에서 동적으로 가져온다. Agent SDK와 같은 이유다. */
@@ -15,7 +16,11 @@ let watcher: FSWatcher | null = null
 
 const WATCHED = new Set(['.csv', '.json'])
 
-export async function watchProject(dir: string, sender: WebContents): Promise<void> {
+/**
+ * 프로젝트 폴더를 감시한다. project.json 이 바뀌면 onConfigChanged 로 알려 메인이 설정을 다시 읽게 한다 —
+ * 그렇지 않으면 손으로 고친 smartStrings·톤 가이드가 프로젝트를 다시 열 때까지 반영되지 않는다.
+ */
+export async function watchProject(dir: string, sender: WebContents, onConfigChanged: () => void): Promise<void> {
   await stopWatching()
   const chokidar = await dynamicImport('chokidar')
 
@@ -26,6 +31,7 @@ export async function watchProject(dir: string, sender: WebContents): Promise<vo
     if (sender.isDestroyed()) return
     const payload: FileChanged = { file: basename(path) }
     sender.send(IPC_EVENT.fileChanged, payload)
+    if (payload.file === PROJECT_FILE) onConfigChanged()
   }
 
   watcher = chokidar.watch(dir, {

@@ -43,11 +43,11 @@ export const SCREENS: readonly ScreenDef[] = [
   {
     id: 'review',
     label: '검토/QA',
-    badge: 'M4',
-    badgeTone: 'default',
+    badge: '사용 가능',
+    badgeTone: 'ready',
     requiresProject: true,
     description: '번역을 검토하고 QA 진단을 확인하는 화면입니다.',
-    planned: ['Smart Strings 토크나이저', '변수·태그·용어집 검사', '인라인 편집과 상태 전환', '행 단위 리롤']
+    planned: []
   },
   {
     id: 'export',

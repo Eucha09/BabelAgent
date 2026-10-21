@@ -12,7 +12,8 @@ export type StaleResult = {
  * 원문 해시가 달라진 번역을 stale로 표시한다.
  * 번역문은 지우지 않는다 — 사용자가 옛 번역과 새 원문을 비교해야 한다.
  * 비어 있는 번역은 무효가 될 내용이 없으므로 해시만 새 원문에 맞춘다.
- * stale 행의 source_hash 는 일부러 두는데, 그 번역이 어느 원문을 보고 쓴 것인지가 남아야 하기 때문이다.
+ * stale 행의 source_hash 와 source_snapshot 은 일부러 두는데, 그 번역이 어느 원문을 보고 쓴 것인지가 남아야
+ * 하기 때문이다(검토 화면이 이전 원문과 새 원문의 차이를 보여 준다).
  */
 export function applyStale(
   rows: readonly TranslationRow[],
@@ -30,7 +31,7 @@ export function applyStale(
     if (masterHash === row.source_hash) return row
 
     if (row.text.trim() === '') {
-      return { ...row, source_hash: masterHash, status: 'untranslated' as const }
+      return { ...row, source_hash: masterHash, status: 'untranslated' as const, source_snapshot: '' }
     }
     if (row.status === 'stale') return row
 

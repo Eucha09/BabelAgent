@@ -11,6 +11,7 @@ import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { Placeholder } from './components/screens/Placeholder'
+import { Review } from './components/screens/Review'
 import { Settings, type SettingsPatch } from './components/screens/Settings'
 import { Strings } from './components/screens/Strings'
 import { Translate } from './components/screens/Translate'
@@ -89,6 +90,14 @@ export function App(): React.JSX.Element {
       offError()
       offTool()
     }
+  }, [])
+
+  // project.json 을 앱 밖에서 고치면 메인이 다시 읽어 보내 준다(검사 설정·톤 가이드 등)
+  useEffect(() => {
+    return api.project.onChanged((next) => {
+      setProject((prev) => (prev && prev.dir === next.dir ? next : prev))
+      setMessage('project.json 이 바뀌어 설정을 다시 읽었습니다.')
+    })
   }, [])
 
   // 번역 작업 상태와 로그. 화면을 오가도 이어지도록 여기서 받는다.
@@ -364,6 +373,8 @@ export function App(): React.JSX.Element {
         ) : project ? (
           screen === 'translate' ? (
             <Translate key={project.dir} project={project} job={job} jobLog={jobLog} onMessage={setMessage} />
+          ) : screen === 'review' ? (
+            <Review key={project.dir} project={project} job={job} onMessage={setMessage} />
           ) : (
             <Placeholder screen={screenDef} />
           )

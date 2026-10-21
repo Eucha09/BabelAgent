@@ -3,9 +3,9 @@ import { z } from 'zod'
 import { filterTermsForTexts } from '@core/translate/glossary'
 import { SUBMIT_TOOL } from '@core/translate/prompt'
 import {
-  checkSubmission,
-  describeProblems,
+  describeIssues,
   SUBMIT_INPUT_SHAPE,
+  type SubmissionVerdict,
   type SubmittedTranslation
 } from '@core/translate/submission'
 import type { OpenProject } from '@shared/schema/project'
@@ -32,7 +32,8 @@ function reply(value: unknown, isError = false): ToolResult {
 }
 
 export type SubmitEvent =
-  | { ok: true; attempt: number; count: number }
+  /** unresolved: 받았지만 남은 QA 오류 수(길이·strict 용어, 재번역 후보는 모든 오류) */
+  | { ok: true; attempt: number; count: number; unresolved: number }
   | { ok: false; attempt: number; problems: string; final: boolean }
 
 export type SubmitServer = {
@@ -42,13 +43,13 @@ export type SubmitServer = {
 }
 
 /**
- * 배치 하나 전용 제출 서버. 제출은 "요청"이고, 기록 여부는 코드가 정한다.
- * 키가 배치와 맞지 않으면 문제를 돌려줘서 같은 세션 안에서 한 번 고칠 기회를 준다.
- * 통과한 제출은 보관만 하고, 기록은 세션이 끝난 뒤 배치 단위로 한 번에 한다.
+ * 배치(또는 재번역 행) 하나 전용 제출 서버. 제출은 "요청"이고, 받을지는 judge 가 정한다.
+ * 키나 QA 에 문제가 있으면 돌려줘서 같은 세션 안에서 한 번 고칠 기회를 준다.
+ * 받은 제출은 보관만 하고, 기록은 세션이 끝난 뒤 호출한 쪽이 한 번에 한다.
  */
 export function createSubmitServer(
   sdk: Sdk,
-  expectedKeys: readonly string[],
+  judge: (items: SubmittedTranslation[], final: boolean) => SubmissionVerdict,
   onEvent: (event: SubmitEvent) => void
 ): SubmitServer {
   let attempts = 0
@@ -66,16 +67,18 @@ export function createSubmitServer(
       }
       attempts += 1
 
-      const check = checkSubmission(expectedKeys, translations)
-      if (!check.ok) {
-        lastProblems = describeProblems(check.problems)
-        onEvent({ ok: false, attempt: attempts, problems: lastProblems, final: attempts >= MAX_SUBMISSIONS })
+      const verdict = judge(translations, attempts >= MAX_SUBMISSIONS)
+      if (verdict.kind !== 'accept') {
+        lastProblems = verdict.problems
+        onEvent({ ok: false, attempt: attempts, problems: lastProblems, final: verdict.kind === 'reject' })
         return reply({ ok: false, problems: lastProblems, submissionsLeft: MAX_SUBMISSIONS - attempts }, true)
       }
 
       accepted = translations
-      onEvent({ ok: true, attempt: attempts, count: translations.length })
-      return reply({ ok: true, accepted: translations.length })
+      onEvent({ ok: true, attempt: attempts, count: translations.length, unresolved: verdict.unresolved.length })
+      return verdict.unresolved.length > 0
+        ? reply({ ok: true, accepted: translations.length, unresolved: describeIssues(verdict.unresolved) })
+        : reply({ ok: true, accepted: translations.length })
     }
   )
 

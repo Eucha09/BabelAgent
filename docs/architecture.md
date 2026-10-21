@@ -51,15 +51,16 @@
 | `strings:create` | 헤더만 있는 빈 `strings_master.csv` 생성 |
 | `strings:import:preview` | 가져올 CSV 선택, 헤더·샘플·인코딩·매핑 추측 |
 | `strings:import` | 열 매핑대로 원문에 합치고 저장 |
-| `translation:update` | 단일 행 번역/상태 수동 수정 |
-| `translation:approve` | 상태를 approved로 전환 |
+| `translation:update` | 검토 화면의 행 하나 저장(번역문·상태·메모, 후보 적용 시 신뢰도). 번역 파일을 다시 읽어 행 단위로 충돌을 보고, 상태 전이는 `core/status.ts`가 판정한다. 승인도 이 채널로 한다 — QA 오류가 있으면 거부. 저장한 행의 진단을 돌려준다 |
+| `translation:approve` | 초안 일괄 승인. 화면이 고른 키와 그때 본 행을 받아, 메인이 번역 파일을 다시 읽고 조건(초안·QA 진단 없음·신뢰도 기준 이상)을 행마다 다시 확인한 뒤 통과한 행만 한 번에 쓴다. 승인·건너뜀(이유) 목록을 돌려준다 |
 | `glossary:list` / `:upsert` / `:remove` | 용어집 |
-| `qa:run` | 선택 범위 QA 실행 |
+| `qa:run` | 언어 하나 전체 QA. 진단이 있는 키만 돌려준다 |
 | `job:start` | 배치 번역 시작(대상 언어·범위·선택 키·모델). 한 번에 작업 하나. 고른 모델은 project.json 에 기억 |
 | `job:control` | `pause` / `resume` / `cancel` / `retry`(한도 대기 건너뛰기) |
 | `job:current` | 진행 중이거나 마지막 작업의 상태. 화면을 다시 열 때 이어 보기용 |
 | `usage:read` | 구독 사용량 한도(`/usage`) |
-| `row:reroll` | 행 단위 재번역(일회성 세션) |
+| `row:reroll` | 행 단위 재번역(일회성 세션, 사용자 지시 포함). 결과는 쓰지 않고 후보와 그 진단을 돌려준다. 한도에 걸려도 자동으로 다시 시도하지 않는다 |
+| `row:reroll:cancel` | 진행 중인 재번역 취소 |
 | `agent:chat:send` | 에이전트 패널 메시지 전송 |
 | `export:unity` | 템플릿 기반 CSV 내보내기 |
 | `app:settings:get` / `:set` | CLI 경로, 인증 모드 등 앱 전역 설정 |
@@ -69,11 +70,11 @@
 | 채널 | 페이로드 |
 |---|---|
 | `job:update` | 작업 전체 상태(`JobView`): running / paused / waiting-limit / done / cancelled, 행·배치 수, 자동 재개 시각, 실패 사유 |
-| `job:log` | 작업 로그 한 줄(배치 시작·제출 통과/실패·기록·한도·끝). 번역 화면과 에이전트 패널이 같이 쓴다 |
+| `job:log` | 작업 로그 한 줄(배치 시작·제출 통과/실패·기록·한도·끝, 행 재번역). 번역 화면과 에이전트 패널이 같이 쓴다 |
+| `project:changed` | `project.json`이 앱 밖에서 바뀌어 메인이 다시 읽은 설정. 읽기에 실패하면 보내지 않고 이전 설정을 유지한다 |
 | `agent:chat:tool` | 패널 채팅에서 에이전트가 부른 도구(이름·요약·성공 여부) |
 | `agent:chat:delta` | 스트리밍 텍스트 조각 |
 | `file:changed` | 앱 밖에서 바뀐 파일 이름. 자동 리로드 여부는 렌더러가 미저장 변경을 보고 정한다 |
-| `qa:result` | 행별 진단 목록 |
 
 ## MCP 도구 목록 (초안)
 
@@ -86,7 +87,7 @@
 | `get_glossary_terms` | 읽기 | 주어진 문자열들에 등장하는 승인된 용어만 반환 — **구현(패널)** |
 | `lookup_grammar` | 읽기 | grammar_*.csv 조회(선택 기능 활성 시) |
 | `validate_translation` | 읽기 | 단일 번역안 QA 검사 결과 반환. 에이전트의 자기 점검용 |
-| `submit_translations` | 쓰기 | 번역 결과 제출. 키 검사 후 보관, 세션 끝에 배치 단위로 기록. 수정 제출 1회 — **구현(배치)** |
+| `submit_translations` | 쓰기 | 번역 결과 제출. 키 검사 → 행별 QA 후 보관, 세션 끝에 배치 단위로 기록. 수정 제출 1회 — **구현(배치·행 재번역)** |
 | `update_project_rules` | 쓰기 | 사용자가 채팅에서 지시한 스타일 규칙을 project.json에 저장 |
 | `propose_glossary_terms` | 쓰기 | 용어 후보 제출. 사용자 승인 전까지 pending |
 
@@ -101,6 +102,7 @@
 - 상태: `idle → running → (paused | waiting-limit | error) → running → done/cancelled`.
 - 배치 결과는 전원 검증 통과 시에만 원자적으로 기록한다. 실패 시 배치 전체를 미완료로 남기고 실패 사유를 모아 보고한다.
 - 진행 상황은 완료된 행 키 집합으로 관리한다. 재개는 "미완료 행 재계산"이며, 중간 커서를 저장하지 않는다 — 파일이 외부에서 바뀌어도 안전하다.
+- 작업을 시작할 때 대상 행의 상태(번역문·상태 지문)를 기억해 두고, 배치를 기록할 때 그 사이 사람이 검토 화면에서 고친 행은 덮지 않는다. 덮지 않은 행은 작업 로그에 남는다.
 - 사용량 한도: 모든 작업자를 멈추고 `waiting-limit`으로 전환한다. 재설정 시각이 응답에 있으면 그 시각까지, 없으면 1 → 2 → 5 → 10분 백오프. 10분 이후로는 자동 재시도하지 않고 사용자 조작을 기다린다.
 - 일시정지 중에 한도에 걸리면 대기가 끝나도 일시정지로 돌아간다. 두 작업자가 같은 한도에 걸려도 대기 단계는 한 번만 센다.
 - 스케줄러(`src/main/jobs/scheduler.ts`)는 배치 실행기와 시계를 주입받는다. 가짜 실행기와 가짜 타이머로 한도·일시정지·취소를 단위 테스트한다.

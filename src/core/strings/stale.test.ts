@@ -9,6 +9,7 @@ function row(partial: Partial<TranslationRow> & { key: string }): TranslationRow
     status: 'untranslated',
     confidence: '',
     note: '',
+    source_snapshot: '',
     ...partial
   }
 }

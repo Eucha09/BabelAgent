@@ -39,6 +39,10 @@
   --status-approved: #76b98e;
   --status-stale: #dc8178;
 
+  /* 원문 변경 비교 — 오류·통과색과 같은 색조를 어둡게 깐 배경 */
+  --diff-remove-bg: #4a2c29;
+  --diff-add-bg: #24402f;
+
   /* 코드 토큰 강조 */
   --token-key: #a9a9a9;
   --token-var: #86c9b2;

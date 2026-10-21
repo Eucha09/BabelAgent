@@ -8,10 +8,16 @@ import {
   toTranslationRows,
   translationToRecords
 } from '@core/strings/master'
+import { sourceHash } from '@core/hash'
+import { hasErrors } from '@core/qa/check'
+import { applyManualUpdate, type ManualUpdate } from '@core/status'
 import { applyStale } from '@core/strings/stale'
 import { parseGlossary, type GlossaryTerm } from '@core/translate/glossary'
-import { mergeTranslations } from '@core/translate/merge'
+import { mergeTranslations, type MasterSource } from '@core/translate/merge'
 import type { SubmittedTranslation } from '@core/translate/submission'
+import type { TranslationStatus } from '@shared/schema/project'
+import type { QaDiagnostic } from '@shared/schema/qa'
+import type { BulkApproveResult, BulkApproveSkipReason } from '@shared/schema/review'
 import {
   MASTER_COLUMNS,
   TRANSLATION_COLUMNS,
@@ -159,6 +165,15 @@ export function loadTranslations(dir: string, language: string): IpcResult<Loade
   })
 }
 
+/**
+ * 번역 행에 남은 "번역할 때 본 원문". 해시와 맞지 않으면(앱 밖에서 한쪽만 고친 경우) 믿을 수 없어 버린다.
+ * 해시는 메인에서만 계산할 수 있으므로 렌더러에 넘기기 전에 여기서 거른다.
+ */
+export function trustedSnapshot(row: Pick<TranslationRow, 'source_snapshot' | 'source_hash'> | undefined): string {
+  if (!row || row.source_snapshot === '') return ''
+  return sourceHash(row.source_snapshot) === row.source_hash ? row.source_snapshot : ''
+}
+
 /** 원문과 선택한 언어의 번역을 합쳐 그리드용 행을 만든다. */
 export function joinRows(master: readonly MasterRow[], translations: readonly TranslationRow[]): StringsRow[] {
   const byKey = new Map(translations.map((row) => [row.key, row]))
@@ -169,7 +184,8 @@ export function joinRows(master: readonly MasterRow[], translations: readonly Tr
       translation: translation?.text ?? '',
       status: translation?.status ?? 'untranslated',
       confidence: translation?.confidence ?? '',
-      note: translation?.note ?? ''
+      note: translation?.note ?? '',
+      source_snapshot: trustedSnapshot(translation)
     }
   })
 }
@@ -260,7 +276,7 @@ export function loadGlossaryTerms(dir: string, language: string): IpcResult<Glos
   return ok(parseGlossary(loaded.value.records, language))
 }
 
-export type BatchWriteResult = { written: number; skippedApproved: string[] }
+export type BatchWriteResult = { written: number; skippedApproved: string[]; skippedChanged: string[] }
 
 /**
  * 검증을 통과한 배치를 번역 파일에 기록한다. 다시 읽기 → 병합 → 원자적 쓰기를
@@ -271,11 +287,13 @@ export function writeBatchTranslations(
   dir: string,
   language: string,
   items: readonly SubmittedTranslation[],
-  hashByKey: ReadonlyMap<string, string>
+  masterByKey: ReadonlyMap<string, MasterSource>,
+  /** 작업을 시작할 때 본 행. 그 뒤 사람이 고친 행은 덮지 않는다. */
+  baseline?: ReadonlyMap<string, string>
 ): IpcResult<BatchWriteResult> {
   const loaded = loadTranslations(dir, language)
   if (!loaded.ok) return loaded
-  const merged = mergeTranslations(loaded.value.rows, items, hashByKey)
+  const merged = mergeTranslations(loaded.value.rows, items, masterByKey, baseline)
   const write = saveCsv(
     translationPath(dir, language),
     TRANSLATION_COLUMNS,
@@ -283,5 +301,122 @@ export function writeBatchTranslations(
     false
   )
   if (!write.ok) return write
-  return ok({ written: merged.written.length, skippedApproved: merged.skippedApproved })
+  return ok({
+    written: merged.written.length,
+    skippedApproved: merged.skippedApproved,
+    skippedChanged: merged.skippedChanged
+  })
+}
+
+export type RowUpdate = {
+  key: string
+  master: MasterSource
+  change: ManualUpdate
+  /** 편집을 시작할 때 본 행 */
+  expected: { text: string; status: TranslationStatus }
+  force: boolean
+}
+
+export type RowUpdateResult = { row: TranslationRow; diagnostics: QaDiagnostic[] }
+
+/** 번역 행이 없는 것과 비어 있는 미번역 행은 같은 상태로 본다. */
+function sameState(current: TranslationRow | undefined, expected: RowUpdate['expected']): boolean {
+  return (current?.text ?? '') === expected.text && (current?.status ?? 'untranslated') === expected.status
+}
+
+/**
+ * 검토 화면의 행 하나를 저장한다. 번역 파일을 다시 읽어 그 행만 바꾸고 원자적으로 쓴다.
+ * 충돌은 행 단위로 본다: 디스크의 그 행이 편집을 시작할 때 본 것과 다르면(배치 기록·앱 밖 편집)
+ * 묻지 않고 덮지 않는다. 다른 행이 밖에서 바뀐 것은 다시 읽은 내용에 그대로 남는다.
+ * QA 오류가 있는 행은 승인하지 않는다.
+ */
+export function updateTranslationRow(
+  dir: string,
+  language: string,
+  update: RowUpdate,
+  qa: (row: TranslationRow) => QaDiagnostic[]
+): IpcResult<RowUpdateResult> {
+  const loaded = loadTranslations(dir, language)
+  if (!loaded.ok) return loaded
+  const rows = loaded.value.rows
+  const index = rows.findIndex((row) => row.key === update.key)
+  const current = index === -1 ? undefined : rows[index]
+
+  if (!update.force && !sameState(current, update.expected)) {
+    const now = current ? `[${current.status}] ${current.text}` : '(번역 행 없음)'
+    return fail('conflict', `${update.key} 행이 편집하는 사이에 바뀌었습니다(번역 작업 기록 또는 앱 밖 편집).`, `지금 파일의 내용: ${now}`)
+  }
+
+  const decision = applyManualUpdate(update.key, current, update.change, update.master)
+  if (!decision.ok) return fail('invalid-input', decision.reason)
+  const diagnostics = qa(decision.row)
+  if (update.change.status === 'approved' && hasErrors(diagnostics)) {
+    const errors = diagnostics.filter((item) => item.severity === 'error').map((item) => item.message)
+    return fail('invalid-input', 'QA 오류가 있어 승인할 수 없습니다.', errors.join('\n'))
+  }
+
+  // 빈 행을 새로 만들지 않는다 — 번역 파일에 빈 행을 미리 채우지 않는 규칙과 같다
+  if (!current && decision.row.text === '') return ok({ row: decision.row, diagnostics })
+
+  const next = [...rows]
+  if (index === -1) next.push(decision.row)
+  else next[index] = decision.row
+  const write = saveCsv(translationPath(dir, language), TRANSLATION_COLUMNS, translationToRecords(next), false)
+  if (!write.ok) return write
+  return ok({ row: decision.row, diagnostics })
+}
+
+export type BulkApproveRequest = { key: string; expected: RowUpdate['expected'] }
+
+/**
+ * 여러 행을 한 번에 승인한다. 번역 파일을 다시 읽어 행마다 다시 확인하고, 통과한 행만 모아 한 번에 쓴다.
+ * - 화면이 본 뒤 바뀐 행(배치 기록·앱 밖 편집)은 건너뛴다. 묻지 않고 덮지 않는다
+ * - check 는 지금 디스크의 행으로 조건(초안·진단 없음·신뢰도)을 다시 본다
+ * 한 행도 통과하지 못하면 파일을 쓰지 않는다.
+ */
+export function approveTranslationRows(
+  dir: string,
+  language: string,
+  requests: readonly BulkApproveRequest[],
+  masterByKey: ReadonlyMap<string, MasterSource>,
+  check: (row: TranslationRow) => BulkApproveSkipReason | null
+): IpcResult<BulkApproveResult> {
+  const loaded = loadTranslations(dir, language)
+  if (!loaded.ok) return loaded
+  const rows = [...loaded.value.rows]
+  const indexByKey = new Map(rows.map((row, index) => [row.key, index]))
+  const approved: string[] = []
+  const skipped: BulkApproveResult['skipped'] = []
+
+  for (const request of requests) {
+    const master = masterByKey.get(request.key)
+    const index = indexByKey.get(request.key)
+    const current = index === undefined ? undefined : rows[index]
+    if (!master || index === undefined || !current) {
+      skipped.push({ key: request.key, reason: 'missing' })
+      continue
+    }
+    if (!sameState(current, request.expected)) {
+      skipped.push({ key: request.key, reason: 'changed' })
+      continue
+    }
+    const blocker = check(current)
+    if (blocker) {
+      skipped.push({ key: request.key, reason: blocker })
+      continue
+    }
+    const decision = applyManualUpdate(request.key, current, { text: current.text, status: 'approved' }, master)
+    if (!decision.ok) {
+      skipped.push({ key: request.key, reason: 'not-draft' })
+      continue
+    }
+    rows[index] = decision.row
+    approved.push(request.key)
+  }
+
+  if (approved.length > 0) {
+    const write = saveCsv(translationPath(dir, language), TRANSLATION_COLUMNS, translationToRecords(rows), false)
+    if (!write.ok) return write
+  }
+  return ok({ approved, skipped })
 }

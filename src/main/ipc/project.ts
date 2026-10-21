@@ -1,5 +1,5 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
-import { IPC } from '@shared/ipc'
+import { BrowserWindow, dialog, ipcMain, type WebContents } from 'electron'
+import { IPC, IPC_EVENT } from '@shared/ipc'
 import { CreateProjectInput, OpenProjectInput, type OpenProject } from '@shared/schema/project'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { createProject, openProject } from '../project/open'
@@ -18,6 +18,18 @@ export function currentProject(): OpenProject | null {
 /** 메인이 project.json 을 고친 뒤 들고 있는 설정도 맞춘다. */
 export function replaceCurrentConfig(config: OpenProject['config']): void {
   if (current) current = { ...current, config }
+}
+
+/**
+ * project.json 이 앱 밖에서 바뀌면 다시 읽어 메인 설정과 화면을 맞춘다.
+ * 읽기에 실패하면(저장 도중이거나 잘못 고친 경우) 이전 설정을 그대로 둔다.
+ */
+function reloadConfig(dir: string, sender: WebContents): void {
+  if (!current || current.dir !== dir) return
+  const result = openProject(dir)
+  if (!result.ok) return
+  current = result.value
+  if (!sender.isDestroyed()) sender.send(IPC_EVENT.projectChanged, result.value)
 }
 
 export function registerProjectIpc(): void {
@@ -44,7 +56,8 @@ export function registerProjectIpc(): void {
     if (result.ok) {
       current = result.value
       forgetReadHashes()
-      void watchProject(result.value.dir, event.sender)
+      const { dir } = result.value
+      void watchProject(dir, event.sender, () => reloadConfig(dir, event.sender))
       updateAppSettings({ lastProjectDir: result.value.dir })
     }
     return result
@@ -59,7 +72,8 @@ export function registerProjectIpc(): void {
     if (result.ok) {
       current = result.value
       forgetReadHashes()
-      void watchProject(result.value.dir, event.sender)
+      const { dir } = result.value
+      void watchProject(dir, event.sender, () => reloadConfig(dir, event.sender))
       updateAppSettings({ lastProjectDir: result.value.dir })
     }
     return result

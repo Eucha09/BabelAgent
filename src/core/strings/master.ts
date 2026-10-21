@@ -124,7 +124,8 @@ export function toTranslationRows(
       source_hash: record['source_hash'] ?? '',
       status,
       confidence: record['confidence'] ?? '',
-      note: record['note'] ?? ''
+      note: record['note'] ?? '',
+      source_snapshot: record['source_snapshot'] ?? ''
     })
   }
 

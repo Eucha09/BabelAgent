@@ -24,6 +24,15 @@ import type {
   StringsView
 } from '@shared/schema/strings'
 import type { UsageLimits } from '@shared/schema/usage'
+import type { QaReport } from '@shared/schema/qa'
+import type {
+  BulkApproveInput,
+  BulkApproveResult,
+  RerollCandidate,
+  RerollInput,
+  UpdateTranslationInput,
+  UpdateTranslationResult
+} from '@shared/schema/review'
 import type { ChatToolCall, JobControlInput, JobLogEntry, JobView, StartTranslateInput } from '@shared/schema/jobs'
 import type { IpcResult } from '@shared/types'
 
@@ -47,7 +56,10 @@ const api = {
       ipcRenderer.invoke(IPC.projectCreate, input),
     open: (dir: string): Promise<IpcResult<OpenProject>> =>
       ipcRenderer.invoke(IPC.projectOpen, { dir }),
-    close: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.projectClose)
+    close: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.projectClose),
+    /** project.json 이 앱 밖에서 바뀌어 메인이 다시 읽었을 때 */
+    onChanged: (listener: (project: OpenProject) => void): (() => void) =>
+      subscribe(IPC_EVENT.projectChanged, listener)
   },
   strings: {
     list: (language: string | null): Promise<IpcResult<StringsView>> =>
@@ -81,6 +93,16 @@ const api = {
     current: (): Promise<JobView | null> => ipcRenderer.invoke(IPC.jobCurrent),
     onUpdate: (listener: (view: JobView) => void): (() => void) => subscribe(IPC_EVENT.jobUpdate, listener),
     onLog: (listener: (entry: JobLogEntry) => void): (() => void) => subscribe(IPC_EVENT.jobLog, listener)
+  },
+  review: {
+    runQa: (language: string): Promise<IpcResult<QaReport>> => ipcRenderer.invoke(IPC.qaRun, { language }),
+    update: (input: UpdateTranslationInput): Promise<IpcResult<UpdateTranslationResult>> =>
+      ipcRenderer.invoke(IPC.translationUpdate, input),
+    approveMany: (input: BulkApproveInput): Promise<IpcResult<BulkApproveResult>> =>
+      ipcRenderer.invoke(IPC.translationApprove, input),
+    reroll: (input: RerollInput): Promise<IpcResult<RerollCandidate>> => ipcRenderer.invoke(IPC.rowReroll, input),
+    cancelReroll: (requestId: string): Promise<IpcResult<boolean>> =>
+      ipcRenderer.invoke(IPC.rowRerollCancel, { requestId })
   },
   usage: {
     read: (): Promise<IpcResult<UsageLimits>> => ipcRenderer.invoke(IPC.usageRead)

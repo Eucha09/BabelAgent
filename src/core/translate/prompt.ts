@@ -38,6 +38,8 @@ export function buildSystemPrompt(config: ProjectConfig, language: string): stri
     '- When a glossary term appears, use its fixed translation.',
     '- Follow the tone guide and style rules below.',
     '- If you are unsure, still translate, lower confidence, and explain why in note.',
+    // 메모는 검토자가 읽는다. 검토자는 원문을 쓰는 사람이므로 원문 언어로 받는다
+    `- Write every note in ${languageLabel(config.sourceLanguage)}, the language of the source text, so the reviewer can read it.`,
     '- confidence is a number from 0 to 1.',
     '',
     'Output:',
@@ -82,4 +84,34 @@ export function buildBatchPrompt(rows: readonly MasterRow[], terms: readonly Glo
     `# Strings (${rows.length})`,
     JSON.stringify(strings, null, 1)
   ].join('\n')
+}
+
+export type RerollCurrent = {
+  text: string
+  /** 원문이 바뀐 뒤라면 그 번역이 보고 쓴 원문. 바뀌지 않았으면 null. */
+  previousSource: string | null
+}
+
+/**
+ * 행 하나 재번역의 가변 부분. 시스템 프롬프트(고정 부분)는 배치와 같은 문자열을 쓴다 — 캐시가 그대로 걸린다.
+ * 검토자의 지시는 사용자가 쓴 그대로 넣는다.
+ */
+export function buildRerollPrompt(
+  row: MasterRow,
+  terms: readonly GlossaryTerm[],
+  current: RerollCurrent | null,
+  instruction: string
+): string {
+  const parts = [buildBatchPrompt([row], terms), '', '# Current translation', current?.text.trim() ? current.text : '(none)']
+  if (current && current.previousSource !== null) {
+    parts.push('', '# Source text the current translation was made from (the source has changed since)', current.previousSource)
+  }
+  parts.push(
+    '',
+    '# Reviewer request',
+    instruction.trim() === '' ? 'Offer a better alternative to the current translation.' : instruction.trim(),
+    '',
+    `Submit exactly one entry for this key with ${SUBMIT_TOOL}. Follow the reviewer request, but never break placeholders or tags.`
+  )
+  return parts.join('\n')
 }

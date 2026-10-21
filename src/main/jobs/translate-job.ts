@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { buildBatches, clampConcurrency, type TranslateBatch } from '@core/translate/batches'
+import { rowFingerprint } from '@core/translate/merge'
 import { buildSystemPrompt } from '@core/translate/prompt'
 import { selectRows } from '@core/translate/scope'
 import type { JobLogEntry, JobView, StartTranslateInput } from '@shared/schema/jobs'
 import type { OpenProject } from '@shared/schema/project'
 import { fail, ok, type IpcResult } from '@shared/types'
+import { qaContext } from '../project/qa'
 import { loadGlossaryTerms, loadMaster, loadTranslations } from '../project/store'
 import { JobScheduler } from './scheduler'
 import { runTranslateBatch } from './translate-batch'
@@ -80,6 +82,10 @@ export function startTranslateJob(
   const glossary = loadGlossaryTerms(dir, input.language)
   if (!glossary.ok) log({ level: 'warn', batchId: null, message: '용어집을 읽지 못해 용어 없이 번역합니다.', detail: glossary.error.message })
 
+  // 작업을 시작할 때 본 행. 작업 중 검토 화면에서 고친 행은 배치 결과로 덮지 않는다.
+  const existing = new Map(translations.value.rows.map((row) => [row.key, row]))
+  const baseline = new Map(scoped.rows.map((row) => [row.key, rowFingerprint(existing.get(row.key))]))
+
   const batches: JobBatch[] = buildBatches(scoped.rows, config.batch).map((batch) => ({ ...batch, size: batch.rows.length }))
   const concurrency = clampConcurrency(config.batch.concurrency)
   const view: Omit<JobView, 'snapshot'> = {
@@ -99,6 +105,8 @@ export function startTranslateJob(
     configDir: auth.configDir,
     systemPrompt: buildSystemPrompt(config, input.language),
     glossary: glossary.ok ? glossary.value : [],
+    qa: qaContext(config, input.language, glossary.ok ? glossary.value : []),
+    baseline,
     log
   }
 

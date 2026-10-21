@@ -63,6 +63,10 @@ const DEFAULT_GRAMMAR: z.infer<typeof GrammarSettings> = { enabled: false, table
 const TranslateSettings = z.object({ model: TranslateModel })
 const DEFAULT_TRANSLATE: z.infer<typeof TranslateSettings> = { model: 'default' }
 
+/** 검토 화면 설정. 신뢰도가 이 값보다 낮은 행을 "신뢰도 낮음" 필터로 모은다. */
+const ReviewSettings = z.object({ lowConfidence: z.number().min(0).max(1) })
+const DEFAULT_REVIEW: z.infer<typeof ReviewSettings> = { lowConfidence: 0.7 }
+
 const ExportSettings = z.object({
   /** Unity에서 내보낸 샘플 CSV 경로(프로젝트 폴더 기준 상대 경로). */
   unityTemplate: z.string().nullable()
@@ -80,7 +84,8 @@ export const ProjectConfig = z.object({
   smartStrings: SmartStringsSettings.default(DEFAULT_SMART_STRINGS),
   grammar: GrammarSettings.default(DEFAULT_GRAMMAR),
   export: ExportSettings.default(DEFAULT_EXPORT),
-  translate: TranslateSettings.default(DEFAULT_TRANSLATE)
+  translate: TranslateSettings.default(DEFAULT_TRANSLATE),
+  review: ReviewSettings.default(DEFAULT_REVIEW)
 })
 export type ProjectConfig = z.infer<typeof ProjectConfig>
 
@@ -102,7 +107,8 @@ export function createDefaultProjectConfig(input: {
     smartStrings: { ...DEFAULT_SMART_STRINGS, formatters: [...DEFAULT_SMART_FORMATTERS] },
     grammar: { ...DEFAULT_GRAMMAR, tables: [] },
     export: { ...DEFAULT_EXPORT },
-    translate: { ...DEFAULT_TRANSLATE }
+    translate: { ...DEFAULT_TRANSLATE },
+    review: { ...DEFAULT_REVIEW }
   }
 }
 

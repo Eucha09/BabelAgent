@@ -24,6 +24,10 @@ export type IpcErrorKind =
   | 'cli-not-found'
   /** 읽기/쓰기 실패(권한, 파일 잠금 등) */
   | 'io'
+  /** 구독 사용량 한도. 자동으로 다시 시도하지 않는다 */
+  | 'limit'
+  /** 에이전트 실행 실패 */
+  | 'agent'
   | 'cancelled'
   | 'unknown'
 

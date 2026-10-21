@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { sourceHash } from '@core/hash'
 import type { MasterRow } from '@shared/schema/strings'
 import {
+  approveTranslationRows,
   forgetReadHashes,
   joinRows,
   listTranslationLanguages,
@@ -15,7 +16,9 @@ import {
   masterPath,
   saveMaster,
   translationPath,
-  writeBatchTranslations
+  updateTranslationRow,
+  writeBatchTranslations,
+  type RowUpdate
 } from './store'
 
 let dir: string
@@ -226,7 +229,7 @@ describe('행 삭제', () => {
     const loaded = loadTranslations(dir, 'en')
     if (!loaded.ok) throw new Error('읽기 실패')
     expect(loaded.value.rows).toEqual([
-      { key: 'k2', text: 'Bye', source_hash: sourceHash('잘가'), status: 'approved', confidence: '', note: '' }
+      { key: 'k2', text: 'Bye', source_hash: sourceHash('잘가'), status: 'approved', confidence: '', note: '', source_snapshot: '' }
     ])
   })
 
@@ -254,19 +257,19 @@ describe('배치 번역 기록', () => {
   const header = 'key,text,source_hash,status,confidence,note'
 
   it('번역 파일이 없으면 만들고 draft 로 기록한다', () => {
-    const result = writeBatchTranslations(dir, 'en', [{ key: 'k1', text: 'Hello', confidence: 0.9 }], new Map([['k1', 'h1']]))
+    const result = writeBatchTranslations(dir, 'en', [{ key: 'k1', text: 'Hello', confidence: 0.9 }], new Map([['k1', { source: '안녕', source_hash: 'h1' }]]))
     if (!result.ok) throw new Error(result.error.message)
     expect(result.value.written).toBe(1)
 
     forgetReadHashes()
     const loaded = loadTranslations(dir, 'en')
     if (!loaded.ok) throw new Error('읽기 실패')
-    expect(loaded.value.rows).toEqual([{ key: 'k1', text: 'Hello', source_hash: 'h1', status: 'draft', confidence: '0.9', note: '' }])
+    expect(loaded.value.rows).toEqual([{ key: 'k1', text: 'Hello', source_hash: 'h1', status: 'draft', confidence: '0.9', note: '', source_snapshot: '안녕' }])
   })
 
   it('approved 는 덮지 않고, 다른 행은 그대로 둔다', () => {
     writeFileSync(translationPath(dir, 'en'), [header, 'ok,Kept,h-ok,approved,1,', 'other,Other,h-o,review,0.7,'].join('\n') + '\n')
-    const result = writeBatchTranslations(dir, 'en', [{ key: 'ok', text: 'Overwrite', confidence: 0.9 }, { key: 'new', text: 'New', confidence: 0.8 }], new Map([['ok', 'h-ok'], ['new', 'h-n']]))
+    const result = writeBatchTranslations(dir, 'en', [{ key: 'ok', text: 'Overwrite', confidence: 0.9 }, { key: 'new', text: 'New', confidence: 0.8 }], new Map([['ok', { source: 'OK', source_hash: 'h-ok' }], ['new', { source: 'N', source_hash: 'h-n' }]]))
     if (!result.ok) throw new Error(result.error.message)
     expect(result.value.skippedApproved).toEqual(['ok'])
 
@@ -294,5 +297,164 @@ describe('joinRows', () => {
   it('번역이 없으면 미번역으로 본다', () => {
     const joined = joinRows([master('k1', '안녕')], [])
     expect(joined[0]).toMatchObject({ translation: '', status: 'untranslated' })
+  })
+})
+
+describe('joinRows 의 이전 원문', () => {
+  it('해시와 맞는 스냅숏만 넘긴다', () => {
+    const translation = (snapshot: string, hash: string) => ({
+      key: 'k1', text: 'Hi', source_hash: hash, status: 'stale' as const, confidence: '', note: '', source_snapshot: snapshot
+    })
+    expect(joinRows([master('k1', '새 원문')], [translation('옛 원문', sourceHash('옛 원문'))])[0]?.source_snapshot).toBe('옛 원문')
+    expect(joinRows([master('k1', '새 원문')], [translation('밖에서 고침', sourceHash('옛 원문'))])[0]?.source_snapshot).toBe('')
+  })
+
+  it('번역 → 원문 수정 → stale 이 되어도 번역할 때 본 원문이 남는다', () => {
+    saveMaster(dir, [master('k1', '슬라임 3마리')], false)
+    writeBatchTranslations(dir, 'en', [{ key: 'k1', text: 'Slay 3 slimes', confidence: 0.9 }], new Map([['k1', master('k1', '슬라임 3마리')]]))
+    saveMaster(dir, [master('k1', '슬라임 5마리')], false)
+
+    const masterLoaded = loadMaster(dir)
+    const loaded = loadTranslations(dir, 'en')
+    if (!masterLoaded.ok || !loaded.ok) throw new Error('읽기 실패')
+    const [row] = joinRows(masterLoaded.value.rows, loaded.value.rows)
+    expect(row).toMatchObject({ status: 'stale', source: '슬라임 5마리', source_snapshot: '슬라임 3마리', translation: 'Slay 3 slimes' })
+  })
+})
+
+describe('행 단위 저장', () => {
+  const noQa = () => []
+  const update = (partial: Partial<RowUpdate> & Pick<RowUpdate, 'change'>): RowUpdate => ({
+    key: 'k1',
+    master: master('k1', '안녕'),
+    expected: { text: '', status: 'untranslated' },
+    force: false,
+    ...partial
+  })
+
+  it('번역 파일이 없으면 만들고, 지금 원문을 함께 남긴다', () => {
+    const result = updateTranslationRow(dir, 'en', update({ change: { text: 'Hello', status: 'draft' } }), noQa)
+    if (!result.ok) throw new Error(result.error.message)
+    forgetReadHashes()
+    const loaded = loadTranslations(dir, 'en')
+    if (!loaded.ok) throw new Error('읽기 실패')
+    expect(loaded.value.rows).toEqual([
+      { key: 'k1', text: 'Hello', source_hash: sourceHash('안녕'), status: 'draft', confidence: '', note: '', source_snapshot: '안녕' }
+    ])
+  })
+
+  it('빈 미번역 행은 파일을 만들지 않는다', () => {
+    const result = updateTranslationRow(dir, 'en', update({ change: { text: '', status: 'untranslated' } }), noQa)
+    expect(result.ok).toBe(true)
+    expect(listTranslationLanguages(dir)).toEqual([])
+  })
+
+  it('편집하는 사이 디스크의 그 행이 바뀌면 충돌, force 면 덮는다', () => {
+    writeFileSync(translationPath(dir, 'en'), ['key,text,source_hash,status,confidence,note', `k1,From job,${sourceHash('안녕')},draft,0.8,`].join('\n') + '\n')
+    const stale = update({ change: { text: 'Mine', status: 'draft' }, expected: { text: 'Before', status: 'draft' } })
+    const conflict = updateTranslationRow(dir, 'en', stale, noQa)
+    expect(!conflict.ok && conflict.error.kind).toBe('conflict')
+
+    const forced = updateTranslationRow(dir, 'en', { ...stale, force: true }, noQa)
+    expect(forced.ok && forced.value.row.text).toBe('Mine')
+  })
+
+  it('다른 행이 밖에서 바뀐 것은 그대로 남긴다', () => {
+    writeFileSync(translationPath(dir, 'en'), ['key,text,source_hash,status,confidence,note', 'k1,Old,h,draft,,', 'k2,Other,h,draft,,'].join('\n') + '\n')
+    loadTranslations(dir, 'en')
+    writeFileSync(translationPath(dir, 'en'), ['key,text,source_hash,status,confidence,note', 'k1,Old,h,draft,,', 'k2,Changed outside,h,review,,'].join('\n') + '\n')
+
+    const result = updateTranslationRow(dir, 'en', update({ change: { text: 'New', status: 'draft' }, expected: { text: 'Old', status: 'draft' } }), noQa)
+    if (!result.ok) throw new Error(result.error.message)
+    forgetReadHashes()
+    const loaded = loadTranslations(dir, 'en')
+    if (!loaded.ok) throw new Error('읽기 실패')
+    expect(loaded.value.rows.map((row) => [row.key, row.text, row.status])).toEqual([
+      ['k1', 'New', 'draft'],
+      ['k2', 'Changed outside', 'review']
+    ])
+  })
+
+  it('QA 오류가 있으면 승인하지 않는다', () => {
+    const qa = () => [{ ruleId: 'var.missing' as const, severity: 'error' as const, key: 'k1', message: '변수 없음', items: [] }]
+    const result = updateTranslationRow(dir, 'en', update({ change: { text: 'Hello', status: 'approved' } }), qa)
+    expect(!result.ok && result.error.message).toBe('QA 오류가 있어 승인할 수 없습니다.')
+    expect(updateTranslationRow(dir, 'en', update({ change: { text: 'Hello', status: 'draft' } }), qa).ok).toBe(true)
+  })
+
+  it('상태 규칙을 어기면 거부한다', () => {
+    const result = updateTranslationRow(dir, 'en', update({ change: { text: '', status: 'approved' } }), noQa)
+    expect(!result.ok && result.error.kind).toBe('invalid-input')
+  })
+})
+
+describe('일괄 승인', () => {
+  const header = 'key,text,source_hash,status,confidence,note,source_snapshot'
+  const masterByKey = new Map([
+    ['a', master('a', '가')],
+    ['b', master('b', '나')],
+    ['c', master('c', '다')]
+  ])
+  const line = (key: string, text: string, status: string, source: string) => `${key},${text},${sourceHash(source)},${status},0.9,,${source}`
+
+  beforeEach(() => {
+    writeFileSync(
+      translationPath(dir, 'en'),
+      [header, line('a', 'A', 'draft', '가'), line('b', 'B', 'draft', '나'), line('c', 'C', 'draft', '다')].join('\n') + '\n'
+    )
+  })
+
+  const statuses = (): string[][] => {
+    forgetReadHashes()
+    const loaded = loadTranslations(dir, 'en')
+    if (!loaded.ok) throw new Error('읽기 실패')
+    return loaded.value.rows.map((row) => [row.key, row.status])
+  }
+
+  it('조건을 통과한 행만 한 번에 승인한다', () => {
+    const result = approveTranslationRows(
+      dir,
+      'en',
+      [
+        { key: 'a', expected: { text: 'A', status: 'draft' } },
+        { key: 'b', expected: { text: 'B', status: 'draft' } }
+      ],
+      masterByKey,
+      (row) => (row.key === 'b' ? 'has-diagnostics' : null)
+    )
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.value).toEqual({ approved: ['a'], skipped: [{ key: 'b', reason: 'has-diagnostics' }] })
+    expect(statuses()).toEqual([
+      ['a', 'approved'],
+      ['b', 'draft'],
+      ['c', 'draft']
+    ])
+  })
+
+  it('화면이 본 뒤 바뀐 행과 없는 키는 건너뛴다', () => {
+    const result = approveTranslationRows(
+      dir,
+      'en',
+      [
+        { key: 'a', expected: { text: 'Old A', status: 'draft' } },
+        { key: 'zzz', expected: { text: 'Z', status: 'draft' } },
+        { key: 'c', expected: { text: 'C', status: 'draft' } }
+      ],
+      masterByKey,
+      () => null
+    )
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.value.approved).toEqual(['c'])
+    expect(result.value.skipped).toEqual([
+      { key: 'a', reason: 'changed' },
+      { key: 'zzz', reason: 'missing' }
+    ])
+  })
+
+  it('통과한 행이 없으면 파일을 쓰지 않는다', () => {
+    const before = readFileSync(translationPath(dir, 'en'), 'utf8')
+    const result = approveTranslationRows(dir, 'en', [{ key: 'a', expected: { text: 'A', status: 'draft' } }], masterByKey, () => 'low-confidence')
+    expect(result.ok && result.value.approved).toEqual([])
+    expect(readFileSync(translationPath(dir, 'en'), 'utf8')).toBe(before)
   })
 })

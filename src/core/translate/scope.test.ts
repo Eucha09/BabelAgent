@@ -17,6 +17,7 @@ const t = (key: string, status: TranslationStatus, text = 'x'): TranslationRow =
   key,
   text,
   source_hash: '',
+  source_snapshot: '',
   status,
   confidence: '',
   note: ''

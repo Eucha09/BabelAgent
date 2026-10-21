@@ -39,7 +39,15 @@ function toMaster(row: StringsRow): MasterRow {
 }
 
 function toTranslation(row: StringsRow): TranslationRow {
-  return { key: row.key, text: row.translation, source_hash: '', status: row.status, confidence: row.confidence, note: row.note }
+  return {
+    key: row.key,
+    text: row.translation,
+    source_hash: '',
+    status: row.status,
+    confidence: row.confidence,
+    note: row.note,
+    source_snapshot: row.source_snapshot
+  }
 }
 
 type Props = {

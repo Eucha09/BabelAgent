@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultProjectConfig, type ProjectConfig } from '@shared/schema/project'
 import type { MasterRow } from '@shared/schema/strings'
-import { buildBatchPrompt, buildSystemPrompt, SUBMIT_TOOL } from './prompt'
+import { buildBatchPrompt, buildRerollPrompt, buildSystemPrompt, SUBMIT_TOOL } from './prompt'
 
 function config(overrides: Partial<ProjectConfig> = {}): ProjectConfig {
   return {
@@ -31,6 +31,12 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(config(), 'ja')
     expect(prompt).toContain('ko (Korean)')
     expect(prompt).toContain('ja (Japanese)')
+  })
+
+  it('메모(note)는 원문 언어로 쓰라고 지시한다', () => {
+    expect(buildSystemPrompt(config(), 'en')).toContain('Write every note in ko (Korean)')
+    const japanese = { ...config(), sourceLanguage: 'ja' }
+    expect(buildSystemPrompt(japanese, 'en')).toContain('Write every note in ja (Japanese)')
   })
 
   it('제출 도구 이름을 쓴다', () => {
@@ -75,5 +81,25 @@ describe('buildBatchPrompt', () => {
   it('넘겨 받은 용어만 넣는다', () => {
     const prompt = buildBatchPrompt([row('a')], [{ term: '물약', translation: 'Potion', note: '', strict: false }])
     expect(prompt).toContain('- 물약 → Potion')
+  })
+})
+
+describe('buildRerollPrompt', () => {
+  it('배치 프롬프트 형식에 현재 번역과 검토자 지시를 붙인다', () => {
+    const prompt = buildRerollPrompt(row('k1'), [], { text: 'Old', previousSource: null }, '  더 짧게  ')
+    expect(prompt.startsWith(buildBatchPrompt([row('k1')], []))).toBe(true)
+    expect(prompt).toContain('# Current translation\nOld')
+    expect(prompt).toContain('# Reviewer request\n더 짧게')
+    expect(prompt).not.toContain('has changed since')
+  })
+
+  it('원문이 바뀐 행은 번역이 보고 쓴 원문을 함께 준다', () => {
+    const prompt = buildRerollPrompt(row('k1'), [], { text: 'Old', previousSource: '옛 원문' }, '')
+    expect(prompt).toContain('has changed since)\n옛 원문')
+    expect(prompt).toContain('Offer a better alternative')
+  })
+
+  it('번역이 없으면 (none)', () => {
+    expect(buildRerollPrompt(row('k1'), [], null, '')).toContain('# Current translation\n(none)')
   })
 })

@@ -20,6 +20,11 @@ export const IPC = {
   jobStart: 'job:start',
   jobControl: 'job:control',
   jobCurrent: 'job:current',
+  qaRun: 'qa:run',
+  translationUpdate: 'translation:update',
+  translationApprove: 'translation:approve',
+  rowReroll: 'row:reroll',
+  rowRerollCancel: 'row:reroll:cancel',
   agentCheck: 'agent:check',
   agentChatSend: 'agent:chat:send',
   agentChatCancel: 'agent:chat:cancel'
@@ -27,6 +32,7 @@ export const IPC = {
 
 /** 메인 → 렌더러 단방향 이벤트. */
 export const IPC_EVENT = {
+  projectChanged: 'project:changed',
   authLoginOutput: 'auth:login:output',
   authLoginDone: 'auth:login:done',
   fileChanged: 'file:changed',

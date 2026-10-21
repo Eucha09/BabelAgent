@@ -26,13 +26,27 @@ export const MasterRow = z.object({
 })
 export type MasterRow = z.infer<typeof MasterRow>
 
+/**
+ * vars 열의 한 항목. 변수 이름의 기준은 원문에서 재추출한 집합이고, 이 값은 의미를 알려 주는 메타데이터다.
+ * example 은 숫자로 적혀 있어도 받는다(엑셀이 숫자로 바꿔 저장하는 경우).
+ */
+export const VarMeta = z.object({
+  name: z.string().min(1),
+  type: z.string().optional(),
+  meaning: z.string().optional(),
+  example: z.union([z.string(), z.number()]).transform(String).optional()
+})
+export type VarMeta = z.infer<typeof VarMeta>
+export const VarsColumn = z.array(VarMeta)
+
 export const TRANSLATION_COLUMNS = [
   'key',
   'text',
   'source_hash',
   'status',
   'confidence',
-  'note'
+  'note',
+  'source_snapshot'
 ] as const
 
 export const TranslationRow = z.object({
@@ -41,7 +55,12 @@ export const TranslationRow = z.object({
   source_hash: z.string(),
   status: TranslationStatus,
   confidence: z.string(),
-  note: z.string()
+  note: z.string(),
+  /**
+   * 번역할 때 본 원문. 원문이 바뀌어 stale 이 되면 이전 원문과 새 원문을 비교해 보여 준다.
+   * 이 열이 생기기 전에 쓴 번역은 비어 있다.
+   */
+  source_snapshot: z.string()
 })
 export type TranslationRow = z.infer<typeof TranslationRow>
 
@@ -51,6 +70,8 @@ export type StringsRow = MasterRow & {
   status: TranslationStatus
   confidence: string
   note: string
+  /** 번역할 때 본 원문. 번역 행의 해시와 맞지 않으면(밖에서 고친 경우) 믿을 수 없어 비운다. */
+  source_snapshot: string
 }
 
 export type EncodingNotice = { file: string; encoding: 'utf8' | 'cp949' }

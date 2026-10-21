@@ -136,7 +136,8 @@ export function Strings({ onMessage }: { onMessage: (text: string) => void }): R
         translation: '',
         status: 'untranslated',
         confidence: '',
-        note: ''
+        note: '',
+        source_snapshot: ''
       }
       setRows(insertAfter(rows, row, selectedIndex >= 0 ? selectedKey : null))
       setNewKeys(new Set([...newKeys, input.key]))

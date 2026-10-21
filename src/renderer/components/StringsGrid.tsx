@@ -1,36 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-  type ColumnSizingState
-} from '@tanstack/react-table'
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { z } from 'zod'
 import type { DropPosition } from '@core/strings/order'
 import type { StringsRow } from '@shared/schema/strings'
+import { useColumnSizing } from '../state/column-sizing'
 
 /** 한 줄짜리 행의 높이. 가상 스크롤의 첫 추정값이자 행의 최소 높이다. */
 const ROW_HEIGHT = 34
 /** 본문 스크롤 영역 안에 붙어 있는 헤더 높이. 가상 스크롤의 시작 위치가 이만큼 밀린다. */
 const HEADER_HEIGHT = 30
 
-/** 사용자가 바꾼 열 너비. 화면을 오가거나 앱을 다시 켜도 유지한다. */
+/** 사용자가 바꾼 열 너비의 저장 키 */
 const SIZING_KEY = 'babel.stringsGrid.columnSizing'
-const SizingSchema = z.record(z.string(), z.number().positive())
-
-function loadSizing(): ColumnSizingState {
-  try {
-    const raw = window.localStorage.getItem(SIZING_KEY)
-    if (!raw) return {}
-    const parsed = SizingSchema.safeParse(JSON.parse(raw))
-    return parsed.success ? parsed.data : {}
-  } catch {
-    // 저장값이 깨졌으면 기본 너비로 시작한다
-    return {}
-  }
-}
 
 export type EditableField = 'source' | 'context' | 'ui_type' | 'max_len' | 'tags'
 
@@ -71,11 +52,7 @@ export function StringsGrid({
   const scrollRef = useRef<HTMLDivElement>(null)
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(loadSizing)
-
-  useEffect(() => {
-    window.localStorage.setItem(SIZING_KEY, JSON.stringify(columnSizing))
-  }, [columnSizing])
+  const [columnSizing, setColumnSizing] = useColumnSizing(SIZING_KEY)
 
   const columns = useMemo(() => {
     const editable = (field: EditableField, header: string, width: number, mono = false) =>
