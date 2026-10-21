@@ -1,0 +1,10 @@
+# 줄바꿈은 LF로 통일한다. PC마다 다른 core.autocrlf 설정과 무관하게 같은 결과가 나오게 한다.
+* text=auto eol=lf
+
+# cmd.exe 배치 파일은 CRLF여야 안전하다 — LF면 goto·레이블이 어긋날 수 있다
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 바이너리는 줄바꿈 변환을 하지 않는다
+*.png binary
+*.ico binary
