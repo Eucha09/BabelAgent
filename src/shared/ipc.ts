@@ -6,6 +6,7 @@ export const IPC = {
   projectCreate: 'project:create',
   projectOpen: 'project:open',
   projectClose: 'project:close',
+  projectSettingsSet: 'project:settings:set',
   stringsList: 'strings:list',
   stringsSave: 'strings:save',
   stringsCreate: 'strings:create',

@@ -43,7 +43,7 @@ MyGame/
   },
   "grammar": { "enabled": false, "tables": [] },
   "export": { "unityTemplate": "templates/unity_sample.csv" },
-  "translate": { "model": "default" },  // 번역 화면에서 마지막으로 고른 모델: default | opus | sonnet | haiku
+  "translate": { "model": "opus", "effort": "medium" },  // 번역 모델(opus | sonnet | haiku | default=CLI 설정)과 사고 수준(low | medium | high | xhigh | max). 번역 화면·설정 화면에서 고친다
   "review": { "lowConfidence": 0.7 }    // 검토 화면 "신뢰도 낮음" 필터 기준(이 값 미만)
 }
 ```

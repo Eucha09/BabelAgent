@@ -1,8 +1,15 @@
 import { BrowserWindow, dialog, ipcMain, type WebContents } from 'electron'
 import { IPC, IPC_EVENT } from '@shared/ipc'
-import { CreateProjectInput, OpenProjectInput, type OpenProject } from '@shared/schema/project'
+import { applySettingsPatch, settingsChanged } from '@core/project/settings'
+import {
+  CreateProjectInput,
+  OpenProjectInput,
+  ProjectConfig,
+  ProjectSettingsPatch,
+  type OpenProject
+} from '@shared/schema/project'
 import { fail, ok, type IpcResult } from '@shared/types'
-import { createProject, openProject } from '../project/open'
+import { createProject, openProject, saveProjectConfig } from '../project/open'
 import { cancelActiveJob } from '../jobs/translate-job'
 import { forgetReadHashes } from '../project/store'
 import { stopWatching, watchProject } from '../project/watcher'
@@ -21,15 +28,19 @@ export function replaceCurrentConfig(config: OpenProject['config']): void {
 }
 
 /**
- * project.json 이 앱 밖에서 바뀌면 다시 읽어 메인 설정과 화면을 맞춘다.
+ * project.json 이 앱 밖에서 바뀌면 다시 읽어 메인 설정과 화면을 맞춘다. 바뀌었으면 true.
  * 읽기에 실패하면(저장 도중이거나 잘못 고친 경우) 이전 설정을 그대로 둔다.
+ * 앱이 방금 쓴 내용(번역 설정 저장 등)은 지금 설정과 같으므로 바뀐 것으로 보지 않는다.
  */
-function reloadConfig(dir: string, sender: WebContents): void {
-  if (!current || current.dir !== dir) return
+function reloadConfig(dir: string, sender: WebContents): boolean {
+  if (!current || current.dir !== dir) return false
   const result = openProject(dir)
-  if (!result.ok) return
+  if (!result.ok) return false
+  // 스키마로 한 번 더 통과시켜 키 순서를 맞춘 뒤 비교한다
+  if (JSON.stringify(ProjectConfig.parse(current.config)) === JSON.stringify(result.value.config)) return false
   current = result.value
   if (!sender.isDestroyed()) sender.send(IPC_EVENT.projectChanged, result.value)
+  return true
 }
 
 export function registerProjectIpc(): void {
@@ -77,6 +88,22 @@ export function registerProjectIpc(): void {
       updateAppSettings({ lastProjectDir: result.value.dir })
     }
     return result
+  })
+
+  /** 화면(번역·설정)에서 고친 project.json 항목을 저장한다. 같은 값이면 쓰지 않는다. */
+  ipcMain.handle(IPC.projectSettingsSet, (_event, raw: unknown): IpcResult<OpenProject> => {
+    const parsed = ProjectSettingsPatch.safeParse(raw)
+    if (!parsed.success) return fail('invalid-input', '설정 형식이 올바르지 않습니다.', parsed.error.message)
+    if (!current) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+
+    const next = ProjectConfig.safeParse(applySettingsPatch(current.config, parsed.data))
+    if (!next.success) return fail('invalid-input', '설정 값이 올바르지 않습니다.', next.error.message)
+    if (!settingsChanged(current.config, next.data)) return ok(current)
+
+    const saved = saveProjectConfig(current.dir, next.data)
+    if (!saved.ok) return saved
+    current = { ...current, config: next.data }
+    return ok(current)
   })
 
   ipcMain.handle(IPC.projectClose, (): IpcResult<null> => {

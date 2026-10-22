@@ -27,7 +27,8 @@ query({
     mcpServers: { babel: submitServer },// 배치 전용 서버(아래). 배치마다 새로 만든다
     allowedTools: ['mcp__babel__submit_translations'],
     maxTurns: 6,                        // 제출 + 수정 한 번 + 여유
-    model,                              // 번역 화면에서 고른 모델. default 면 넣지 않아 CLI 설정을 따른다
+    model,                              // translate.model. default 면 넣지 않아 CLI 설정을 따른다
+    effort,                             // translate.effort(사고 수준). 모델이 지원하지 않는 수준은 CLI 가 낮춘다
     pathToClaudeCodeExecutable: appSettings.cliPath ?? undefined,
   },
 })

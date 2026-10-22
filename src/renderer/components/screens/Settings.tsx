@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import type { AgentCheckResult } from '@shared/schema/agent'
 import type { AppSettings } from '@shared/schema/app-settings'
+import { TranslateEffort, TranslateModel } from '@shared/schema/jobs'
+import type { OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
+import { EFFORT_HINT, EFFORT_OPTIONS, MODEL_OPTIONS } from '../../state/translate-options'
 import { AccountCard, type AuthView } from '../AccountCard'
 import type { UsageView } from '../UsageMeters'
 
@@ -20,6 +23,9 @@ type Props = {
   onLoginInput: (text: string) => void
   onLoginCancel: () => void
   onLogout: () => void
+  /** 열린 프로젝트. 번역 모델·사고 수준은 프로젝트(project.json)마다 저장한다. */
+  project: OpenProject | null
+  onProjectSettings: (patch: ProjectSettingsPatch) => void
 }
 
 function toValue(input: string): string | null {
@@ -41,7 +47,9 @@ export function Settings({
   onLoginStart,
   onLoginInput,
   onLoginCancel,
-  onLogout
+  onLogout,
+  project,
+  onProjectSettings
 }: Props): React.JSX.Element {
   const [cliPath, setCliPath] = useState(settings.cliPath ?? '')
   const [configDir, setConfigDir] = useState(settings.claudeConfigDir ?? '')
@@ -64,6 +72,60 @@ export function Settings({
         onLoginCancel={onLoginCancel}
         onLogout={onLogout}
       />
+
+      <div className="card">
+        <h3>번역 모델</h3>
+        {project ? (
+          <>
+            <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
+              배치 번역과 행 재번역에 씁니다. 이 프로젝트({project.config.name})의 project.json 에 저장되며, 번역
+              화면에서 고르는 값과 같습니다. 고르면 바로 저장되고 다음 작업부터 적용됩니다.
+            </p>
+            <div className="translate-form">
+              <label className="field">
+                <span className="field-label">모델</span>
+                <select
+                  value={project.config.translate.model}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const next = TranslateModel.safeParse(event.target.value)
+                    if (next.success) onProjectSettings({ translate: { model: next.data } })
+                  }}
+                >
+                  {MODEL_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">사고 수준</span>
+                <select
+                  value={project.config.translate.effort}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const next = TranslateEffort.safeParse(event.target.value)
+                    if (next.success) onProjectSettings({ translate: { effort: next.data } })
+                  }}
+                >
+                  {EFFORT_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="hint">{EFFORT_HINT}</p>
+          </>
+        ) : (
+          <p className="hint">
+            프로젝트를 열면 그 프로젝트의 번역 모델과 사고 수준을 고를 수 있습니다. 값이 없는 프로젝트는 Opus · 중간을
+            씁니다.
+          </p>
+        )}
+      </div>
 
       <div className="card">
         <h3>Claude Code 연결</h3>

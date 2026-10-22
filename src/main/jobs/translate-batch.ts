@@ -4,7 +4,7 @@ import type { TranslateBatch } from '@core/translate/batches'
 import { filterTermsForTexts, type GlossaryTerm } from '@core/translate/glossary'
 import { buildBatchPrompt, SUBMIT_TOOL } from '@core/translate/prompt'
 import { judgeSubmission } from '@core/translate/submission'
-import type { JobLogEntry, TranslateModel } from '@shared/schema/jobs'
+import type { JobLogEntry, TranslateEffort, TranslateModel } from '@shared/schema/jobs'
 import { loadAgentSdk } from '../agent/sdk'
 import { agentQueryOptions } from '../agent/session'
 import { runSubmitSession } from '../agent/submit-session'
@@ -17,6 +17,7 @@ export type BatchContext = {
   dir: string
   language: string
   model: TranslateModel
+  effort: TranslateEffort
   cliPath: string | null
   configDir: string | null
   /** 작업마다 한 번 만든다. 배치마다 같은 문자열이어야 프롬프트 캐싱이 걸린다. */
@@ -106,7 +107,8 @@ export async function runTranslateBatch(
     systemPrompt: ctx.systemPrompt,
     mcpServers: { babel: submit.server },
     allowedTools: [mcpToolName(SUBMIT_TOOL)],
-    maxTurns: MAX_TURNS
+    maxTurns: MAX_TURNS,
+    effort: ctx.effort
   }
   if (ctx.model !== 'default') options.model = ctx.model
 

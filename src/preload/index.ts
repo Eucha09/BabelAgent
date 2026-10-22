@@ -13,7 +13,7 @@ import type {
   AgentCheckResult
 } from '@shared/schema/agent'
 import type { AppSettings, AppSettingsPatch } from '@shared/schema/app-settings'
-import type { CreateProjectInput, OpenProject } from '@shared/schema/project'
+import type { CreateProjectInput, OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
 import type {
   FileChanged,
   ImportInput,
@@ -57,6 +57,9 @@ const api = {
     open: (dir: string): Promise<IpcResult<OpenProject>> =>
       ipcRenderer.invoke(IPC.projectOpen, { dir }),
     close: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.projectClose),
+    /** project.json 의 화면 설정(번역 모델·사고 수준)을 고친다 */
+    setSettings: (patch: ProjectSettingsPatch): Promise<IpcResult<OpenProject>> =>
+      ipcRenderer.invoke(IPC.projectSettingsSet, patch),
     /** project.json 이 앱 밖에서 바뀌어 메인이 다시 읽었을 때 */
     onChanged: (listener: (project: OpenProject) => void): (() => void) =>
       subscribe(IPC_EVENT.projectChanged, listener)

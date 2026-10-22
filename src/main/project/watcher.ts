@@ -19,8 +19,9 @@ const WATCHED = new Set(['.csv', '.json'])
 /**
  * 프로젝트 폴더를 감시한다. project.json 이 바뀌면 onConfigChanged 로 알려 메인이 설정을 다시 읽게 한다 —
  * 그렇지 않으면 손으로 고친 smartStrings·톤 가이드가 프로젝트를 다시 열 때까지 반영되지 않는다.
+ * onConfigChanged 는 설정이 실제로 달라졌는지 돌려준다. 앱이 직접 저장한 경우(내용이 같음)는 알리지 않는다.
  */
-export async function watchProject(dir: string, sender: WebContents, onConfigChanged: () => void): Promise<void> {
+export async function watchProject(dir: string, sender: WebContents, onConfigChanged: () => boolean): Promise<void> {
   await stopWatching()
   const chokidar = await dynamicImport('chokidar')
 
@@ -30,8 +31,8 @@ export async function watchProject(dir: string, sender: WebContents, onConfigCha
     if (isKnownContent(path)) return
     if (sender.isDestroyed()) return
     const payload: FileChanged = { file: basename(path) }
+    if (payload.file === PROJECT_FILE && !onConfigChanged()) return
     sender.send(IPC_EVENT.fileChanged, payload)
-    if (payload.file === PROJECT_FILE) onConfigChanged()
   }
 
   watcher = chokidar.watch(dir, {

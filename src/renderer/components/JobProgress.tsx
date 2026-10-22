@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { JobControlInput, JobState, JobView } from '@shared/schema/jobs'
+import { effortLabel, modelLabel } from '../state/translate-options'
 
 const STATE_LABEL: Record<JobState, string> = {
   running: '진행 중',
@@ -52,7 +53,7 @@ export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element 
         <span className={`job-state ${snapshot.state}`}>{STATE_LABEL[snapshot.state]}</span>
       </div>
       <p className="hint">
-        {job.language} · {SCOPE_LABEL[job.scope]} · 모델 {job.model === 'default' ? '기본' : job.model}
+        {job.language} · {SCOPE_LABEL[job.scope]} · 모델 {modelLabel(job.model)} · 사고 {effortLabel(job.effort)}
         {job.skippedApproved > 0 ? ` · 승인 ${job.skippedApproved}행 제외` : ''}
       </p>
 

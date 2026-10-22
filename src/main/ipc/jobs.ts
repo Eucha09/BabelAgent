@@ -18,9 +18,10 @@ export function registerJobsIpc(): void {
     const project = currentProject()
     if (!project) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
 
-    // 고른 모델을 기억한다. 저장에 실패해도 번역은 진행한다.
-    if (project.config.translate.model !== parsed.data.model) {
-      const config = { ...project.config, translate: { model: parsed.data.model } }
+    // 고른 모델과 사고 수준을 기억한다. 저장에 실패해도 번역은 진행한다.
+    const { model, effort } = parsed.data
+    if (project.config.translate.model !== model || project.config.translate.effort !== effort) {
+      const config = { ...project.config, translate: { model, effort } }
       if (saveProjectConfig(project.dir, config).ok) replaceCurrentConfig(config)
     }
 

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildBatches, clampConcurrency } from '@core/translate/batches'
 import { selectRows } from '@core/translate/scope'
-import type { JobControlInput, JobLogEntry, JobView, TranslateModel, TranslateScope } from '@shared/schema/jobs'
-import type { OpenProject } from '@shared/schema/project'
+import { TranslateEffort, TranslateModel, type JobControlInput, type JobLogEntry, type JobView, type TranslateScope } from '@shared/schema/jobs'
+import type { OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
 import type { MasterRow, StringsRow, StringsView, TranslationRow } from '@shared/schema/strings'
 import type { IpcError } from '@shared/types'
 import { JobLog } from '../JobLog'
 import { JobProgress } from '../JobProgress'
 import { KeyChecklist, type ChecklistItem } from '../KeyChecklist'
+import { EFFORT_HINT, EFFORT_OPTIONS, MODEL_OPTIONS } from '../../state/translate-options'
 
 const api = window.babel
 
@@ -16,13 +17,6 @@ const SCOPES: { value: TranslateScope; label: string; hint: string }[] = [
   { value: 'stale', label: 'stale', hint: '원문이 바뀐 행' },
   { value: 'all', label: '전체', hint: '승인되지 않은 모든 행. 초안·검토 번역도 다시 씁니다' },
   { value: 'selected', label: '선택 행', hint: '아래 목록에서 고른 행' }
-]
-
-const MODELS: { value: TranslateModel; label: string }[] = [
-  { value: 'default', label: '기본 (CLI 설정)' },
-  { value: 'opus', label: 'Opus' },
-  { value: 'sonnet', label: 'Sonnet' },
-  { value: 'haiku', label: 'Haiku' }
 ]
 
 function toMaster(row: StringsRow): MasterRow {
@@ -55,13 +49,15 @@ type Props = {
   job: JobView | null
   jobLog: readonly JobLogEntry[]
   onMessage: (text: string) => void
+  /** 모델·사고 수준을 고르면 바로 project.json 에 저장한다. 설정 화면과 같은 값이다. */
+  onSettings: (patch: ProjectSettingsPatch) => void
 }
 
-export function Translate({ project, job, jobLog, onMessage }: Props): React.JSX.Element {
+export function Translate({ project, job, jobLog, onMessage, onSettings }: Props): React.JSX.Element {
   const { config } = project
+  const { model, effort } = config.translate
   const [language, setLanguage] = useState(config.targetLanguages[0] ?? '')
   const [scope, setScope] = useState<TranslateScope>('untranslated')
-  const [model, setModel] = useState<TranslateModel>(config.translate.model)
   const [view, setView] = useState<StringsView | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -127,7 +123,7 @@ export function Translate({ project, job, jobLog, onMessage }: Props): React.JSX
   const start = async (): Promise<void> => {
     setBusy(true)
     try {
-      const result = await api.jobs.start({ language, scope, keys: scope === 'selected' ? [...selected] : [], model })
+      const result = await api.jobs.start({ language, scope, keys: scope === 'selected' ? [...selected] : [], model, effort })
       if (!result.ok) {
         setError(result.error)
         return
@@ -187,11 +183,28 @@ export function Translate({ project, job, jobLog, onMessage }: Props): React.JSX
               value={model}
               disabled={running || busy}
               onChange={(event) => {
-                const next = MODELS.find((item) => item.value === event.target.value)
-                if (next) setModel(next.value)
+                const next = TranslateModel.safeParse(event.target.value)
+                if (next.success) onSettings({ translate: { model: next.data } })
               }}
             >
-              {MODELS.map((item) => (
+              {MODEL_OPTIONS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" title={EFFORT_HINT}>
+            <span className="field-label">사고 수준</span>
+            <select
+              value={effort}
+              disabled={running || busy}
+              onChange={(event) => {
+                const next = TranslateEffort.safeParse(event.target.value)
+                if (next.success) onSettings({ translate: { effort: next.data } })
+              }}
+            >
+              {EFFORT_OPTIONS.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
                 </option>

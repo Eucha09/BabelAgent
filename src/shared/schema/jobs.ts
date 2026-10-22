@@ -8,12 +8,20 @@ export type TranslateScope = z.infer<typeof TranslateScope>
 export const TranslateModel = z.enum(['default', 'opus', 'sonnet', 'haiku'])
 export type TranslateModel = z.infer<typeof TranslateModel>
 
+/**
+ * 사고 수준. Agent SDK 의 effort 값을 그대로 쓴다(EffortLevel).
+ * 모델이 지원하지 않는 수준은 CLI 가 그 모델이 지원하는 수준으로 낮춘다.
+ */
+export const TranslateEffort = z.enum(['low', 'medium', 'high', 'xhigh', 'max'])
+export type TranslateEffort = z.infer<typeof TranslateEffort>
+
 export const StartTranslateInput = z.object({
   language: z.string().min(1),
   scope: TranslateScope,
   /** scope 가 selected 일 때만 쓴다. */
   keys: z.array(z.string()),
-  model: TranslateModel
+  model: TranslateModel,
+  effort: TranslateEffort
 })
 export type StartTranslateInput = z.infer<typeof StartTranslateInput>
 
@@ -44,6 +52,7 @@ export type JobView = {
   language: string
   scope: TranslateScope
   model: TranslateModel
+  effort: TranslateEffort
   startedAt: string
   /** 범위에 들었지만 approved 라서 뺀 행 수 */
   skippedApproved: number

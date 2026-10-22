@@ -45,7 +45,7 @@
 |---|---|
 | `project:pick` | 폴더 선택 대화상자 |
 | `project:open` | 프로젝트 로드, schemaVersion 확인·마이그레이션 |
-| `project:settings:get` / `:set` | project.json 읽기/부분 갱신 |
+| `project:settings:set` | project.json 부분 갱신. 지금은 번역 모델·사고 수준(`translate`)만 받는다. 번역 화면과 설정 화면이 같이 쓰고, 같은 값이면 쓰지 않는다 |
 | `strings:list` | 원문 + 선택 언어 번역 조인 결과, 원문 파일 존재 여부 |
 | `strings:save` | 원문 전체 저장(편집·행 추가·순서 변경·삭제). 키 검사 후 해시 재계산, 충돌 감지, 모든 번역 파일의 stale 갱신과 `deletedKeys` 행 삭제 |
 | `strings:create` | 헤더만 있는 빈 `strings_master.csv` 생성 |

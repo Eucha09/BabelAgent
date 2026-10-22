@@ -83,7 +83,8 @@ export async function runReroll(
     systemPrompt: buildSystemPrompt(config, language),
     mcpServers: { babel: submit.server },
     allowedTools: [mcpToolName(SUBMIT_TOOL)],
-    maxTurns: MAX_TURNS
+    maxTurns: MAX_TURNS,
+    effort: config.translate.effort
   }
   if (config.translate.model !== 'default') options.model = config.translate.model
 

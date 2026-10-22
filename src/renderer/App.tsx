@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AgentCheckResult } from '@shared/schema/agent'
 import type { AppSettings } from '@shared/schema/app-settings'
-import type { CreateProjectInput, OpenProject } from '@shared/schema/project'
+import type { CreateProjectInput, OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
 import type { IpcError, IpcResult } from '@shared/types'
 import type { AuthView } from './components/AccountCard'
 import type { UsageView } from './components/UsageMeters'
@@ -18,6 +18,7 @@ import { Translate } from './components/screens/Translate'
 import type { JobLogEntry, JobView } from '@shared/schema/jobs'
 import { Welcome } from './components/screens/Welcome'
 import { findScreen, type ScreenId } from './state/screens'
+import { effortLabel, modelLabel } from './state/translate-options'
 
 const api = window.babel
 
@@ -296,6 +297,18 @@ export function App(): React.JSX.Element {
     }
   }, [refreshAuth])
 
+  /** 번역 화면과 설정 화면이 같이 쓰는 project.json 설정(번역 모델·사고 수준) 저장 */
+  const saveProjectSettings = useCallback(async (patch: ProjectSettingsPatch) => {
+    const result = await api.project.setSettings(patch)
+    if (!result.ok) {
+      setMessage(result.error.message)
+      return
+    }
+    setProject(result.value)
+    const { model, effort } = result.value.config.translate
+    setMessage(`번역 설정을 저장했습니다: ${modelLabel(model)} · 사고 ${effortLabel(effort)}`)
+  }, [])
+
   const checkAgent = useCallback(async () => {
     setChecking(true)
     try {
@@ -367,12 +380,21 @@ export function App(): React.JSX.Element {
             onLoginInput={sendLoginInput}
             onLoginCancel={cancelLogin}
             onLogout={logout}
+            project={project}
+            onProjectSettings={(patch) => void saveProjectSettings(patch)}
           />
         ) : project && screen === 'strings' ? (
           <Strings key={project.dir} onMessage={setMessage} />
         ) : project ? (
           screen === 'translate' ? (
-            <Translate key={project.dir} project={project} job={job} jobLog={jobLog} onMessage={setMessage} />
+            <Translate
+              key={project.dir}
+              project={project}
+              job={job}
+              jobLog={jobLog}
+              onMessage={setMessage}
+              onSettings={(patch) => void saveProjectSettings(patch)}
+            />
           ) : screen === 'review' ? (
             <Review key={project.dir} project={project} job={job} onMessage={setMessage} />
           ) : (

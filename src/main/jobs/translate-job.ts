@@ -93,6 +93,7 @@ export function startTranslateJob(
     language: input.language,
     scope: input.scope,
     model: input.model,
+    effort: input.effort,
     startedAt: new Date().toISOString(),
     skippedApproved: scoped.skippedApproved.length
   }
@@ -101,6 +102,7 @@ export function startTranslateJob(
     dir,
     language: input.language,
     model: input.model,
+    effort: input.effort,
     cliPath: auth.cliPath,
     configDir: auth.configDir,
     systemPrompt: buildSystemPrompt(config, input.language),
@@ -119,7 +121,7 @@ export function startTranslateJob(
   log({
     level: 'info',
     batchId: null,
-    message: `번역 시작: ${input.language} · ${SCOPE_LABEL[input.scope]} · ${scoped.rows.length}행 · 배치 ${batches.length}개 · 작업자 ${concurrency}`
+    message: `번역 시작: ${input.language} · ${SCOPE_LABEL[input.scope]} · ${scoped.rows.length}행 · 배치 ${batches.length}개 · 작업자 ${concurrency} · 모델 ${input.model} · 사고 ${input.effort}`
   })
   if (scoped.skippedApproved.length > 0) {
     log({ level: 'info', batchId: null, message: `승인된 ${scoped.skippedApproved.length}행은 건너뜁니다.` })

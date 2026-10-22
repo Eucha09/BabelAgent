@@ -1046,7 +1046,7 @@ button.danger:hover:not(:disabled) {
 /* 번역 화면 */
 .translate-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 220px));
+  grid-template-columns: repeat(3, minmax(0, 200px));
   gap: var(--space-3);
 }
 
