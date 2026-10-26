@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { app, ipcMain, type WebContents } from 'electron'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import {
@@ -6,9 +7,10 @@ import {
   type AgentChatDelta,
   type AgentChatEnd,
   type AgentChatError,
-  type AgentCheckResult
+  type AgentCheckResult,
+  type ChatRuleProposal
 } from '@shared/schema/agent'
-import type { ChatToolCall } from '@shared/schema/jobs'
+import type { ChatToolCall, DataWritten } from '@shared/schema/jobs'
 import type { UsageLimits } from '@shared/schema/usage'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { cancelChat, checkAgent, runChat } from '../agent/session'
@@ -64,10 +66,28 @@ export function registerAgentIpc(): void {
       }
     }, (sdk) => ({
       mcpServers: {
-        babel: createPanelServer(sdk, project, (call) => {
-          const payload: ChatToolCall = { requestId: input.requestId, ...call }
-          send(sender, IPC_EVENT.agentChatTool, payload)
-        })
+        // 도구는 부를 때마다 지금 열린 프로젝트를 읽는다. 다른 프로젝트로 바뀌었으면 쓰지 않는다.
+        babel: createPanelServer(
+          sdk,
+          () => {
+            const now = currentProject()
+            return now && now.dir === input.projectDir ? now : null
+          },
+          {
+            onCall: (call) => {
+              const payload: ChatToolCall = { requestId: input.requestId, ...call }
+              send(sender, IPC_EVENT.agentChatTool, payload)
+            },
+            onRuleProposal: (change, currentText) => {
+              const payload: ChatRuleProposal = { requestId: input.requestId, proposalId: randomUUID(), change, currentText }
+              send(sender, IPC_EVENT.agentChatRule, payload)
+            },
+            onDataWritten: (file) => {
+              const payload: DataWritten = { file }
+              send(sender, IPC_EVENT.dataWritten, payload)
+            }
+          }
+        )
       },
       allowedTools: PANEL_TOOL_NAMES.map(mcpToolName)
     }))

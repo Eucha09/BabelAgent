@@ -13,7 +13,7 @@ const HEADER_HEIGHT = 30
 /** 사용자가 바꾼 열 너비의 저장 키 */
 const SIZING_KEY = 'babel.stringsGrid.columnSizing'
 
-export type EditableField = 'source' | 'context' | 'ui_type' | 'max_len' | 'tags'
+export type EditableField = 'source' | 'context' | 'ui_type' | 'max_len' | 'vars' | 'tags'
 
 type DropTarget = { key: string; position: DropPosition }
 
@@ -107,6 +107,8 @@ export function StringsGrid({
       editable('context', '컨텍스트', 170),
       editable('ui_type', 'UI 유형', 90, true),
       editable('max_len', '최대 길이', 70, true),
+      // 변수 메타데이터(JSON 배열). 형식이 틀리면 검토 화면이 경고한다
+      editable('vars', '변수', 150, true),
       editable('tags', '태그', 100, true),
       helper.accessor('translation', {
         header: language ? `번역 (${language})` : '번역',

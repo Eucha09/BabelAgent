@@ -987,6 +987,13 @@ button.danger:hover:not(:disabled) {
   border-color: var(--error);
 }
 
+/* 경고색도 "누를 수 있음"의 신호라 비활성일 때는 끈다 */
+button.danger:disabled {
+  border-color: var(--border);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
 .confirm-body p {
   margin: 0 0 var(--space-2);
   line-height: 1.6;
@@ -1619,4 +1626,234 @@ button.danger:hover:not(:disabled) {
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
   line-height: 1.8;
+}
+
+/* 프로젝트 화면 */
+.project-screen .card {
+  max-width: 760px;
+}
+
+/* 길게 내려가는 폼이라 저장 버튼이 있는 머리를 위에 붙여 둔다. 메인 영역의 위 여백만큼 끌어올려 덮는다 */
+.project-header {
+  position: sticky;
+  top: calc(var(--space-5) * -1);
+  z-index: 5;
+  max-width: 760px;
+  margin-top: calc(var(--space-5) * -1);
+  padding-top: var(--space-5);
+  background: var(--bg-app);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-3);
+}
+
+.form-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.form-grid label.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.language-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.language-chips .chip {
+  height: 20px;
+  gap: var(--space-1);
+}
+
+.chip.invalid {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.style-rules {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.style-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.style-rule-index {
+  flex: none;
+  width: 20px;
+  padding-top: 8px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.style-rule textarea {
+  resize: none;
+  field-sizing: content;
+  min-height: 32px;
+  line-height: 1.5;
+}
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+details > summary {
+  cursor: pointer;
+}
+
+.summary-title {
+  display: inline;
+}
+
+/*
+ * 컨텍스트·용어집 화면: 위에 작업 카드, 아래에 그리드.
+ * 화면 높이를 메인 영역에 고정해야 그리드가 남은 높이만 차지하고 그 안에서 스크롤한다 —
+ * 높이가 열려 있으면 그리드가 행 수만큼 늘어나 가상 스크롤이 모든 행을 그리고 세로 스크롤바도 생기지 않는다.
+ * 위 카드가 길어 남은 높이가 모자라면 그리드는 360px 를 지키고 메인 영역이 스크롤한다.
+ */
+.workbench-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.workbench-screen > * {
+  flex: none;
+}
+
+.workbench-screen > .grid-wrap {
+  flex: 1 0 360px;
+}
+
+.check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.job-log-card summary {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.job-log-card .job-log {
+  margin-top: var(--space-2);
+}
+
+/* 그리드 안의 체크박스. 한 줄 행의 글자 높이에 맞춘다 */
+.cell-check {
+  margin: 8px auto 0;
+}
+
+.cell-badge {
+  display: inline-block;
+  margin-left: var(--space-1);
+}
+
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+}
+
+.grid-input.invalid,
+.grid-input.invalid:hover,
+.grid-input.invalid:focus {
+  border-color: var(--error);
+}
+
+/* 고쳤지만 아직 저장·적용하지 않은 행 */
+.grid-row.edited {
+  box-shadow: inset 2px 0 0 var(--warn);
+}
+
+/* 에이전트 패널의 스타일 규칙 제안 카드 */
+.rule-card {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.rule-card.saved {
+  border-color: var(--ok);
+}
+
+.rule-card.dismissed {
+  opacity: 0.6;
+}
+
+.rule-card.failed {
+  border-color: var(--error);
+}
+
+.rule-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.rule-card p {
+  margin: 0;
+}
+
+.rule-card-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.rule-card-before {
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.rule-card .row button {
+  padding: 3px 12px;
+}
+
+/* 확인을 기다리는 규칙 카드. 채팅 아래·입력창 위에 붙는다 */
+.panel-rules {
+  flex: none;
+  max-height: 45%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
+  border-top: 1px solid var(--border);
 }

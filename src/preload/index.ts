@@ -10,10 +10,28 @@ import type {
   AgentChatEnd,
   AgentChatError,
   AgentChatSendInput,
-  AgentCheckResult
+  AgentCheckResult,
+  ChatRuleProposal
 } from '@shared/schema/agent'
 import type { AppSettings, AppSettingsPatch } from '@shared/schema/app-settings'
-import type { CreateProjectInput, OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
+import type {
+  ApplyStyleRuleResult,
+  CreateProjectInput,
+  OpenProject,
+  ProjectSettingsPatch,
+  StyleRuleChange
+} from '@shared/schema/project'
+import type { ApplyContextInput, ApplyContextResult, ContextView, StartContextInput } from '@shared/schema/context'
+import type {
+  AddTermInput,
+  AddTermResult,
+  RetranslateTermInput,
+  RetranslateTermResult,
+  GlossaryView,
+  StartTermsInput,
+  UpdateGlossaryInput,
+  UpdateGlossaryResult
+} from '@shared/schema/glossary'
 import type {
   FileChanged,
   ImportInput,
@@ -33,7 +51,14 @@ import type {
   UpdateTranslationInput,
   UpdateTranslationResult
 } from '@shared/schema/review'
-import type { ChatToolCall, JobControlInput, JobLogEntry, JobView, StartTranslateInput } from '@shared/schema/jobs'
+import type {
+  ChatToolCall,
+  DataWritten,
+  JobControlInput,
+  JobLogEntry,
+  JobView,
+  StartTranslateInput
+} from '@shared/schema/jobs'
 import type { IpcResult } from '@shared/types'
 
 function subscribe<T>(channel: string, listener: (payload: T) => void): () => void {
@@ -57,9 +82,15 @@ const api = {
     open: (dir: string): Promise<IpcResult<OpenProject>> =>
       ipcRenderer.invoke(IPC.projectOpen, { dir }),
     close: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.projectClose),
-    /** project.json 의 화면 설정(번역 모델·사고 수준)을 고친다 */
+    /** project.json 의 화면 설정(프로젝트·번역·설정 화면)을 고친다 */
     setSettings: (patch: ProjectSettingsPatch): Promise<IpcResult<OpenProject>> =>
       ipcRenderer.invoke(IPC.projectSettingsSet, patch),
+    /** 에이전트 패널의 규칙 카드에서 [저장]을 눌렀을 때 */
+    applyRule: (change: StyleRuleChange): Promise<IpcResult<ApplyStyleRuleResult>> =>
+      ipcRenderer.invoke(IPC.projectRuleApply, { change }),
+    /** 작업이나 패널 도구가 프로젝트 파일(용어집·컨텍스트 제안)을 썼을 때 */
+    onDataWritten: (listener: (payload: DataWritten) => void): (() => void) =>
+      subscribe(IPC_EVENT.dataWritten, listener),
     /** project.json 이 앱 밖에서 바뀌어 메인이 다시 읽었을 때 */
     onChanged: (listener: (project: OpenProject) => void): (() => void) =>
       subscribe(IPC_EVENT.projectChanged, listener)
@@ -76,6 +107,25 @@ const api = {
       ipcRenderer.invoke(IPC.stringsImport, input),
     onFileChanged: (listener: (payload: FileChanged) => void): (() => void) =>
       subscribe(IPC_EVENT.fileChanged, listener)
+  },
+  glossary: {
+    list: (): Promise<IpcResult<GlossaryView>> => ipcRenderer.invoke(IPC.glossaryList),
+    update: (input: UpdateGlossaryInput): Promise<IpcResult<UpdateGlossaryResult>> =>
+      ipcRenderer.invoke(IPC.glossaryUpdate, input),
+    extract: (input: StartTermsInput): Promise<IpcResult<JobView>> => ipcRenderer.invoke(IPC.glossaryExtract, input),
+    /** 용어 하나를 에이전트로 채워 승인 대기로 추가한다 */
+    add: (input: AddTermInput): Promise<IpcResult<AddTermResult>> => ipcRenderer.invoke(IPC.glossaryAdd, input),
+    /** 용어 하나를 다시 번역한다. 결과는 쓰지 않고 돌려준다 */
+    retranslate: (input: RetranslateTermInput): Promise<IpcResult<RetranslateTermResult>> =>
+      ipcRenderer.invoke(IPC.glossaryRetranslate, input),
+    /** 용어 추가·재번역 세션 취소 */
+    cancelAgent: (requestId: string): Promise<IpcResult<boolean>> => ipcRenderer.invoke(IPC.glossaryAgentCancel, { requestId })
+  },
+  context: {
+    list: (): Promise<IpcResult<ContextView>> => ipcRenderer.invoke(IPC.contextList),
+    estimate: (input: StartContextInput): Promise<IpcResult<JobView>> => ipcRenderer.invoke(IPC.contextEstimate, input),
+    apply: (input: ApplyContextInput): Promise<IpcResult<ApplyContextResult>> => ipcRenderer.invoke(IPC.contextApply, input),
+    discard: (keys: string[]): Promise<IpcResult<number>> => ipcRenderer.invoke(IPC.contextDiscard, { keys })
   },
   auth: {
     status: (): Promise<IpcResult<AuthStatus>> => ipcRenderer.invoke(IPC.authStatus),
@@ -123,7 +173,9 @@ const api = {
     onError: (listener: (payload: AgentChatError) => void): (() => void) =>
       subscribe(IPC_EVENT.agentChatError, listener),
     onTool: (listener: (payload: ChatToolCall) => void): (() => void) =>
-      subscribe(IPC_EVENT.agentChatTool, listener)
+      subscribe(IPC_EVENT.agentChatTool, listener),
+    onRule: (listener: (payload: ChatRuleProposal) => void): (() => void) =>
+      subscribe(IPC_EVENT.agentChatRule, listener)
   }
 } as const
 

@@ -2,7 +2,7 @@ import type { Options } from '@anthropic-ai/claude-agent-sdk'
 import { checkRow } from '@core/qa/check'
 import { filterTermsForTexts } from '@core/translate/glossary'
 import { buildRerollPrompt, buildSystemPrompt, SUBMIT_TOOL } from '@core/translate/prompt'
-import { judgeSubmission } from '@core/translate/submission'
+import { judgeSubmission, SUBMIT_INPUT_SHAPE, toSubmitVerdict } from '@core/translate/submission'
 import type { JobLogEntry } from '@shared/schema/jobs'
 import type { OpenProject } from '@shared/schema/project'
 import type { RerollCandidate, RerollInput } from '@shared/schema/review'
@@ -13,7 +13,7 @@ import { runSubmitSession } from '../agent/submit-session'
 import { createSubmitServer, mcpToolName } from '../agent/tools'
 import { qaContext, toQaInput } from '../project/qa'
 import { loadGlossaryTerms, loadMaster, loadTranslations, trustedSnapshot } from '../project/store'
-import { MAX_TURNS } from './translate-batch'
+import { MAX_TURNS } from './agent-batch'
 
 const running = new Map<string, AbortController>()
 
@@ -68,8 +68,17 @@ export async function runReroll(
   log({ level: 'info', batchId: null, message: `재번역 ${key} (${language}) 시작${instruction.trim() ? ` — 지시: ${instruction.trim()}` : ''}` })
   const submit = createSubmitServer(
     sdk,
-    (items, final) =>
-      judgeSubmission({ expectedKeys: [key], items, final, mode: 'candidate', qa: (item) => check(item.text) }),
+    {
+      tool: SUBMIT_TOOL,
+      description: 'Submit the translation of this key. Call once; if problems are reported, fix them and call once more.',
+      shape: SUBMIT_INPUT_SHAPE,
+      read: (args) => args.translations,
+      judge: (items, final) =>
+        toSubmitVerdict(
+          judgeSubmission({ expectedKeys: [key], items, final, mode: 'candidate', qa: (item) => check(item.text) }),
+          items
+        )
+    },
     (event) => {
       if (!event.ok) {
         log({ level: 'warn', batchId: null, message: `재번역 ${key} · ${SUBMIT_TOOL} → 검증 실패 (${event.attempt}번째)`, detail: event.problems })
@@ -93,7 +102,7 @@ export async function runReroll(
   const previousSource = current && current.source_hash !== row.source_hash && snapshot !== '' ? snapshot : null
   const prompt = buildRerollPrompt(
     row,
-    filterTermsForTexts(terms, [row.source]),
+    filterTermsForTexts(terms, [row.source], config.sourceLanguage),
     current ? { text: current.text, previousSource } : null,
     instruction
   )

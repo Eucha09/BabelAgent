@@ -3,27 +3,15 @@ import { buildBatches, clampConcurrency, type TranslateBatch } from '@core/trans
 import { rowFingerprint } from '@core/translate/merge'
 import { buildSystemPrompt } from '@core/translate/prompt'
 import { selectRows } from '@core/translate/scope'
-import type { JobLogEntry, JobView, StartTranslateInput } from '@shared/schema/jobs'
+import type { JobView, StartTranslateInput } from '@shared/schema/jobs'
 import type { OpenProject } from '@shared/schema/project'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { qaContext } from '../project/qa'
 import { loadGlossaryTerms, loadMaster, loadTranslations } from '../project/store'
-import { JobScheduler } from './scheduler'
+import { ensureNoRunningJob, launchJob, makeLog, type JobSink } from './runner'
 import { runTranslateBatch } from './translate-batch'
 
 type JobBatch = TranslateBatch & { size: number }
-
-type ActiveJob = {
-  view: Omit<JobView, 'snapshot'>
-  scheduler: JobScheduler<JobBatch>
-}
-
-export type JobSink = {
-  update: (view: JobView) => void
-  log: (entry: JobLogEntry) => void
-}
-
-export type JobAction = 'pause' | 'resume' | 'cancel' | 'retry'
 
 const SCOPE_LABEL: Record<StartTranslateInput['scope'], string> = {
   all: '전체',
@@ -32,26 +20,14 @@ const SCOPE_LABEL: Record<StartTranslateInput['scope'], string> = {
   selected: '선택 행'
 }
 
-let active: ActiveJob | null = null
-
-function isRunning(job: ActiveJob | null): job is ActiveJob {
-  if (!job) return false
-  const state = job.scheduler.snapshot().state
-  return state !== 'done' && state !== 'cancelled'
-}
-
-export function currentJob(): JobView | null {
-  return active ? { ...active.view, snapshot: active.scheduler.snapshot() } : null
-}
-
-/** 한 번에 작업 하나만 돈다. 같은 번역 파일을 두 작업이 동시에 고치지 않게. */
 export function startTranslateJob(
   project: OpenProject,
   input: StartTranslateInput,
   auth: { cliPath: string | null; configDir: string | null },
   sink: JobSink
 ): IpcResult<JobView> {
-  if (isRunning(active)) return fail('invalid-input', '이미 진행 중인 번역 작업이 있습니다.')
+  const idle = ensureNoRunningJob()
+  if (!idle.ok) return idle
 
   const { dir, config } = project
   if (!config.targetLanguages.includes(input.language)) {
@@ -77,10 +53,10 @@ export function startTranslateJob(
     )
   }
 
-  const log = (entry: Omit<JobLogEntry, 'at'>): void => sink.log({ at: new Date().toISOString(), ...entry })
-
+  const log = makeLog(sink)
   const glossary = loadGlossaryTerms(dir, input.language)
   if (!glossary.ok) log({ level: 'warn', batchId: null, message: '용어집을 읽지 못해 용어 없이 번역합니다.', detail: glossary.error.message })
+  const terms = glossary.ok ? glossary.value : []
 
   // 작업을 시작할 때 본 행. 작업 중 검토 화면에서 고친 행은 배치 결과로 덮지 않는다.
   const existing = new Map(translations.value.rows.map((row) => [row.key, row]))
@@ -88,69 +64,47 @@ export function startTranslateJob(
 
   const batches: JobBatch[] = buildBatches(scoped.rows, config.batch).map((batch) => ({ ...batch, size: batch.rows.length }))
   const concurrency = clampConcurrency(config.batch.concurrency)
+  const skipped = scoped.skippedApproved.length
   const view: Omit<JobView, 'snapshot'> = {
     id: randomUUID(),
+    kind: 'translate',
     language: input.language,
-    scope: input.scope,
+    summary: `${input.language} · ${SCOPE_LABEL[input.scope]}`,
     model: input.model,
     effort: input.effort,
     startedAt: new Date().toISOString(),
-    skippedApproved: scoped.skippedApproved.length
+    notes: skipped > 0 ? [`승인 ${skipped}행 제외`] : []
   }
 
   const context = {
     dir,
     language: input.language,
+    sourceLanguage: config.sourceLanguage,
     model: input.model,
     effort: input.effort,
     cliPath: auth.cliPath,
     configDir: auth.configDir,
     systemPrompt: buildSystemPrompt(config, input.language),
-    glossary: glossary.ok ? glossary.value : [],
-    qa: qaContext(config, input.language, glossary.ok ? glossary.value : []),
+    glossary: terms,
+    qa: qaContext(config, input.language, terms),
     baseline,
     log
   }
 
-  const scheduler = new JobScheduler<JobBatch>(batches, (batch, signal) => runTranslateBatch(context, batch, signal), {
-    concurrency,
-    onChange: (snapshot) => sink.update({ ...view, snapshot })
-  })
-  active = { view, scheduler }
-
   log({
     level: 'info',
     batchId: null,
-    message: `번역 시작: ${input.language} · ${SCOPE_LABEL[input.scope]} · ${scoped.rows.length}행 · 배치 ${batches.length}개 · 작업자 ${concurrency} · 모델 ${input.model} · 사고 ${input.effort}`
+    message: `번역 시작: ${input.language} · ${SCOPE_LABEL[input.scope]} · ${scoped.rows.length}행 · 배치 ${batches.length}개 · 작업자 ${concurrency} · 모델 ${input.model} · 사고 ${input.effort} · 승인된 용어 ${terms.length}개 중 배치마다 나오는 것만 넣음`
   })
-  if (scoped.skippedApproved.length > 0) {
-    log({ level: 'info', batchId: null, message: `승인된 ${scoped.skippedApproved.length}행은 건너뜁니다.` })
-  }
+  if (skipped > 0) log({ level: 'info', batchId: null, message: `승인된 ${skipped}행은 건너뜁니다.` })
 
-  void scheduler.whenSettled().then((final) => {
-    const verb = final.state === 'cancelled' ? '취소됨' : '끝'
-    log({
-      level: final.failedRows > 0 ? 'warn' : 'ok',
-      batchId: null,
-      message: `번역 ${verb}: 완료 ${final.doneRows}행 · 실패 ${final.failedRows}행 · 남음 ${final.totalRows - final.doneRows - final.failedRows}행`
+  return ok(
+    launchJob({
+      view,
+      batches,
+      run: (batch, signal) => runTranslateBatch(context, batch, signal),
+      concurrency,
+      sink
     })
-  })
-
-  scheduler.start()
-  return ok({ ...view, snapshot: scheduler.snapshot() })
-}
-
-export function controlJob(action: JobAction): IpcResult<null> {
-  if (!active) return fail('invalid-input', '진행 중인 번역 작업이 없습니다.')
-  const { scheduler } = active
-  if (action === 'pause') scheduler.pause()
-  else if (action === 'resume') scheduler.resume()
-  else if (action === 'retry') scheduler.retryNow()
-  else scheduler.cancel()
-  return ok(null)
-}
-
-/** 프로젝트를 닫으면 그 프로젝트의 작업도 멈춘다. */
-export function cancelActiveJob(): void {
-  if (isRunning(active)) active.scheduler.cancel()
+  )
 }

@@ -1,14 +1,33 @@
 import { ipcMain, type WebContents } from 'electron'
 import { IPC, IPC_EVENT } from '@shared/ipc'
-import { JobControlInput, StartTranslateInput, type JobView } from '@shared/schema/jobs'
+import { JobControlInput, StartTranslateInput, type DataWritten, type JobView } from '@shared/schema/jobs'
 import { fail, type IpcResult } from '@shared/types'
-import { controlJob, currentJob, startTranslateJob } from '../jobs/translate-job'
+import { controlJob, currentJob, type JobSink } from '../jobs/runner'
+import { startTranslateJob } from '../jobs/translate-job'
 import { saveProjectConfig } from '../project/open'
 import { loadAppSettings } from '../store/app-settings'
 import { currentProject, replaceCurrentConfig } from './project'
 
-function send(sender: WebContents, channel: string, payload: unknown): void {
+export function send(sender: WebContents, channel: string, payload: unknown): void {
   if (!sender.isDestroyed()) sender.send(channel, payload)
+}
+
+/** 작업의 진행·로그·파일 기록을 요청한 창으로 보낸다. 번역·컨텍스트 추정·용어 추출이 같이 쓴다. */
+export function jobSink(sender: WebContents): JobSink {
+  return {
+    update: (view) => send(sender, IPC_EVENT.jobUpdate, view),
+    log: (entry) => send(sender, IPC_EVENT.jobLog, entry),
+    written: (file) => {
+      const payload: DataWritten = { file }
+      send(sender, IPC_EVENT.dataWritten, payload)
+    }
+  }
+}
+
+/** 배치 작업의 CLI 실행 정보. 앱 설정에서 읽는다. */
+export function agentAuth(): { cliPath: string | null; configDir: string | null } {
+  const { cliPath, claudeConfigDir } = loadAppSettings()
+  return { cliPath, configDir: claudeConfigDir }
 }
 
 export function registerJobsIpc(): void {
@@ -25,17 +44,7 @@ export function registerJobsIpc(): void {
       if (saveProjectConfig(project.dir, config).ok) replaceCurrentConfig(config)
     }
 
-    const { cliPath, claudeConfigDir } = loadAppSettings()
-    const sender = event.sender
-    return startTranslateJob(
-      currentProject() ?? project,
-      parsed.data,
-      { cliPath, configDir: claudeConfigDir },
-      {
-        update: (view) => send(sender, IPC_EVENT.jobUpdate, view),
-        log: (entry) => send(sender, IPC_EVENT.jobLog, entry)
-      }
-    )
+    return startTranslateJob(currentProject() ?? project, parsed.data, agentAuth(), jobSink(event.sender))
   })
 
   ipcMain.handle(IPC.jobControl, (_event, raw: unknown): IpcResult<null> => {

@@ -1,4 +1,4 @@
-export type ScreenId = 'strings' | 'glossary' | 'translate' | 'review' | 'export' | 'settings'
+export type ScreenId = 'project' | 'strings' | 'context' | 'glossary' | 'translate' | 'review' | 'export' | 'settings'
 
 export type ScreenDef = {
   id: ScreenId
@@ -14,6 +14,15 @@ export type ScreenDef = {
 
 export const SCREENS: readonly ScreenDef[] = [
   {
+    id: 'project',
+    label: '프로젝트',
+    badge: '사용 가능',
+    badgeTone: 'ready',
+    requiresProject: true,
+    description: 'project.json 의 게임 소개·톤 가이드·언어·스타일 규칙·배치 설정을 정하는 화면입니다.',
+    planned: []
+  },
+  {
     id: 'strings',
     label: '원문',
     badge: '사용 가능',
@@ -23,13 +32,22 @@ export const SCREENS: readonly ScreenDef[] = [
     planned: ['CSV 가져오기와 열 매핑', '그리드 표시(가상 스크롤)', '원문 해시 계산과 stale 표시']
   },
   {
+    id: 'context',
+    label: '컨텍스트',
+    badge: '사용 가능',
+    badgeTone: 'ready',
+    requiresProject: true,
+    description: '에이전트가 원문의 컨텍스트·UI 유형·최대 길이·변수 설명을 제안하고, 고쳐서 승인하는 화면입니다.',
+    planned: []
+  },
+  {
     id: 'glossary',
     label: '용어집',
-    badge: 'M5',
-    badgeTone: 'default',
+    badge: '사용 가능',
+    badgeTone: 'ready',
     requiresProject: true,
-    description: 'glossary.csv의 용어와 언어별 확정 번역을 관리하는 화면입니다.',
-    planned: ['용어 편집과 strict 토글', '에이전트 용어 추출 결과 승인', '컨텍스트 추정']
+    description: 'glossary.csv의 용어와 언어별 확정 번역을 관리하고, 에이전트가 찾은 용어 후보를 승인하는 화면입니다.',
+    planned: []
   },
   {
     id: 'translate',

@@ -9,12 +9,34 @@ import {
   translationToRecords
 } from '@core/strings/master'
 import { sourceHash } from '@core/hash'
+import {
+  applySuggestionValues,
+  mergeSuggestions,
+  removeSuggestions,
+  suggestionsToRecords,
+  toSuggestions
+} from '@core/context/suggestions'
+import {
+  appendCandidates,
+  applyGlossaryChanges,
+  glossaryHeader,
+  toGlossaryEntries,
+  type GlossaryCandidate,
+  type GlossaryChangeInput
+} from '@core/glossary/entries'
 import { hasErrors } from '@core/qa/check'
 import { applyManualUpdate, type ManualUpdate } from '@core/status'
 import { applyStale } from '@core/strings/stale'
 import { parseGlossary, type GlossaryTerm } from '@core/translate/glossary'
 import { mergeTranslations, type MasterSource } from '@core/translate/merge'
 import type { SubmittedTranslation } from '@core/translate/submission'
+import {
+  SUGGESTION_COLUMNS,
+  type ApplyContextItem,
+  type ApplyContextResult,
+  type ContextSuggestion
+} from '@shared/schema/context'
+import type { GlossaryView, UpdateGlossaryResult } from '@shared/schema/glossary'
 import type { TranslationStatus } from '@shared/schema/project'
 import type { QaDiagnostic } from '@shared/schema/qa'
 import type { BulkApproveResult, BulkApproveSkipReason } from '@shared/schema/review'
@@ -268,12 +290,159 @@ export function saveMaster(
 
 export const GLOSSARY_FILE = 'glossary.csv'
 
+function glossaryPath(dir: string): string {
+  return join(dir, GLOSSARY_FILE)
+}
+
 /** 용어집에서 해당 언어의 승인된 용어를 읽는다. 파일이 없으면 빈 목록. */
 export function loadGlossaryTerms(dir: string, language: string): IpcResult<GlossaryTerm[]> {
-  const loaded = loadCsv(join(dir, GLOSSARY_FILE))
+  const loaded = loadCsv(glossaryPath(dir))
   if (!loaded.ok) return loaded
   if (loaded.value === null) return ok([])
   return ok(parseGlossary(loaded.value.records, language))
+}
+
+type LoadedGlossary = { view: GlossaryView; records: Record<string, string>[]; header: string[] }
+
+function readGlossary(dir: string, languages: readonly string[]): IpcResult<LoadedGlossary> {
+  const loaded = loadCsv(glossaryPath(dir))
+  if (!loaded.ok) return loaded
+  const records = loaded.value?.records ?? []
+  const { entries, duplicates } = toGlossaryEntries(records, languages)
+  return ok({
+    records,
+    header: loaded.value?.header ?? [],
+    view: {
+      exists: loaded.value !== null,
+      entries,
+      languages: [...languages],
+      duplicates,
+      notices: loaded.value?.encoding === 'cp949' ? [{ file: GLOSSARY_FILE, encoding: 'cp949' }] : []
+    }
+  })
+}
+
+/** 용어집 화면용. 승인 대기 후보까지 모두 담는다. */
+export function loadGlossary(dir: string, languages: readonly string[]): IpcResult<GlossaryView> {
+  const loaded = readGlossary(dir, languages)
+  return loaded.ok ? ok(loaded.value.view) : loaded
+}
+
+function writeGlossary(
+  dir: string,
+  header: readonly string[],
+  records: readonly Record<string, string>[],
+  languages: readonly string[]
+): IpcResult<null> {
+  return saveCsv(glossaryPath(dir), glossaryHeader(header, languages), records, false)
+}
+
+/**
+ * 용어집 화면의 변경을 적용한다. 파일을 다시 읽어 행마다 화면이 본 값과 비교하고, 통과한 변경만 모아 한 번에 쓴다.
+ * 추출 작업이 그 사이 붙인 후보는 다시 읽은 내용에 그대로 남는다.
+ */
+export function updateGlossary(
+  dir: string,
+  changes: readonly GlossaryChangeInput[],
+  languages: readonly string[]
+): IpcResult<UpdateGlossaryResult> {
+  const loaded = readGlossary(dir, languages)
+  if (!loaded.ok) return loaded
+  const result = applyGlossaryChanges(loaded.value.records, changes, languages)
+  if (result.applied.length === 0) return ok({ view: loaded.value.view, applied: [], skipped: result.skipped })
+
+  const write = writeGlossary(dir, loaded.value.header, result.records, languages)
+  if (!write.ok) return write
+  const view = readGlossary(dir, languages)
+  if (!view.ok) return view
+  return ok({ view: view.value.view, applied: result.applied, skipped: result.skipped })
+}
+
+/**
+ * 용어 후보를 승인 대기로 붙인다(추출 배치·패널 제안). 다시 읽기 → 합치기 → 원자적 쓰기가 동기 함수 하나라
+ * 병렬 배치가 같은 용어를 내도 먼저 기록한 쪽만 남는다.
+ */
+export function appendGlossaryCandidates(
+  dir: string,
+  candidates: readonly GlossaryCandidate[],
+  languages: readonly string[]
+): IpcResult<{ added: string[]; existing: string[] }> {
+  const loaded = readGlossary(dir, languages)
+  if (!loaded.ok) return loaded
+  const result = appendCandidates(loaded.value.records, candidates, languages)
+  if (result.added.length > 0) {
+    const write = writeGlossary(dir, loaded.value.header, result.records, languages)
+    if (!write.ok) return write
+  }
+  return ok({ added: result.added, existing: result.existing })
+}
+
+/** 용어집에 있는 모든 용어(승인 대기 포함). 추출 배치가 이미 있는 용어를 다시 내지 않게 쓴다. */
+export function loadAllGlossaryTerms(dir: string): IpcResult<string[]> {
+  const loaded = readGlossary(dir, [])
+  return loaded.ok ? ok(loaded.value.view.entries.map((entry) => entry.term)) : loaded
+}
+
+export const CONTEXT_SUGGESTIONS_FILE = 'context_suggestions.csv'
+
+function suggestionsPath(dir: string): string {
+  return join(dir, CONTEXT_SUGGESTIONS_FILE)
+}
+
+export type LoadedSuggestions = { rows: ContextSuggestion[]; notice: EncodingNotice | null }
+
+/** 승인을 기다리는 메타데이터 제안. 파일이 없으면 빈 목록. */
+export function loadContextSuggestions(dir: string): IpcResult<LoadedSuggestions> {
+  const loaded = loadCsv(suggestionsPath(dir))
+  if (!loaded.ok) return loaded
+  if (loaded.value === null) return ok({ rows: [], notice: null })
+  return ok({
+    rows: toSuggestions(loaded.value.records),
+    notice: loaded.value.encoding === 'cp949' ? { file: CONTEXT_SUGGESTIONS_FILE, encoding: 'cp949' } : null
+  })
+}
+
+function saveSuggestions(dir: string, rows: readonly ContextSuggestion[]): IpcResult<null> {
+  return saveCsv(suggestionsPath(dir), SUGGESTION_COLUMNS, suggestionsToRecords(rows), false)
+}
+
+/** 추정 배치의 제안을 합쳐 쓴다. 같은 키의 옛 제안은 새 제안으로 바뀐다. */
+export function writeContextSuggestions(dir: string, incoming: readonly ContextSuggestion[]): IpcResult<null> {
+  const loaded = loadContextSuggestions(dir)
+  if (!loaded.ok) return loaded
+  return saveSuggestions(dir, mergeSuggestions(loaded.value.rows, incoming))
+}
+
+/** 제안을 버린다. 파일에 없는 키는 무시한다. */
+export function discardContextSuggestions(dir: string, keys: readonly string[]): IpcResult<number> {
+  const loaded = loadContextSuggestions(dir)
+  if (!loaded.ok) return loaded
+  const kept = removeSuggestions(loaded.value.rows, keys)
+  const removed = loaded.value.rows.length - kept.length
+  if (removed === 0) return ok(0)
+  const write = saveSuggestions(dir, kept)
+  return write.ok ? ok(removed) : write
+}
+
+/**
+ * 승인한 제안을 strings_master.csv 에 넣고, 넣은 키의 제안을 지운다.
+ * 원문은 다시 읽어서 고친다 — 화면이 본 뒤 그 칸이 바뀐 행은 덮지 않고 건너뛴다.
+ * 메타데이터만 바꾸므로 원문 해시와 번역 상태는 그대로다.
+ */
+export function applyContextSuggestions(dir: string, items: readonly ApplyContextItem[]): IpcResult<ApplyContextResult> {
+  const master = loadMaster(dir)
+  if (!master.ok) return master
+  if (!master.value.exists) return fail('invalid-input', `${MASTER_FILE} 이 없습니다.`)
+  const result = applySuggestionValues(master.value.rows, items)
+  if (result.applied.length > 0) {
+    const saved = saveMaster(dir, result.rows, false)
+    if (!saved.ok) return saved
+    const removed = discardContextSuggestions(dir, result.applied)
+    if (!removed.ok) {
+      return fail('io', `원문에는 넣었지만 ${CONTEXT_SUGGESTIONS_FILE} 에서 적용한 제안을 지우지 못했습니다.`, removed.error.message)
+    }
+  }
+  return ok({ applied: result.applied, skipped: result.skipped })
 }
 
 export type BatchWriteResult = { written: number; skippedApproved: string[]; skippedChanged: string[] }

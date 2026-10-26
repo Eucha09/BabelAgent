@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { StyleRuleChange } from './project'
 
 /**
  * 에이전트 오류 분류. 사용자가 원인을 알 수 있어야 하므로 종류를 좁게 나눈다.
@@ -49,6 +50,18 @@ export type AgentChatSendInput = z.infer<typeof AgentChatSendInput>
 
 export const AgentChatCancelInput = z.object({ requestId: z.string().min(1) })
 export type AgentChatCancelInput = z.infer<typeof AgentChatCancelInput>
+
+/**
+ * 패널 에이전트가 낸 스타일 규칙 제안. 도구는 저장하지 않고 이 카드를 띄운다 —
+ * 사용자가 [저장]을 눌러야 project.json 에 들어간다(사용자 결정, 2026-10-22).
+ */
+export type ChatRuleProposal = {
+  requestId: string
+  proposalId: string
+  change: StyleRuleChange
+  /** 수정·삭제할 규칙의 지금 글. 추가면 null */
+  currentText: string | null
+}
 
 export type AgentChatDelta = { requestId: string; text: string }
 export type AgentChatEnd = { requestId: string; sessionId: string | null; durationMs: number }

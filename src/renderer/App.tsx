@@ -5,12 +5,16 @@ import type { CreateProjectInput, OpenProject, ProjectSettingsPatch } from '@sha
 import type { IpcError, IpcResult } from '@shared/types'
 import type { AuthView } from './components/AccountCard'
 import type { UsageView } from './components/UsageMeters'
-import { AgentPanel, type ChatTurn } from './components/AgentPanel'
+import { AgentPanel, type ChatTurn, type RuleCard } from './components/AgentPanel'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { NewProjectDialog } from './components/NewProjectDialog'
 import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
+import { Context } from './components/screens/Context'
+import { Glossary } from './components/screens/Glossary'
 import { Placeholder } from './components/screens/Placeholder'
+import { Project } from './components/screens/Project'
 import { Review } from './components/screens/Review'
 import { Settings, type SettingsPatch } from './components/screens/Settings'
 import { Strings } from './components/screens/Strings'
@@ -26,6 +30,9 @@ export function App(): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [project, setProject] = useState<OpenProject | null>(null)
   const [screen, setScreen] = useState<ScreenId>('strings')
+  /** 지금 화면에 저장하지 않은 편집이 있는지(프로젝트·원문 화면이 알려 준다). 다른 화면으로 갈 때 확인을 받는다. */
+  const [unsaved, setUnsaved] = useState(false)
+  const [pendingLeave, setPendingLeave] = useState<{ kind: 'screen'; id: ScreenId } | { kind: 'close' } | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [checkResult, setCheckResult] = useState<AgentCheckResult | null>(null)
@@ -85,11 +92,19 @@ export function App(): React.JSX.Element {
       toolCount += 1
       setTurns((prev) => [...prev, { id: `${requestId}-tool-${toolCount}`, role: 'tool', text: `${name} → ${summary}`, ok }])
     })
+    // 에이전트가 낸 스타일 규칙 제안. 사용자가 카드에서 [저장]을 눌러야 저장된다.
+    const offRule = api.agent.onRule(({ requestId, proposalId, change, currentText }) => {
+      setTurns((prev) => [
+        ...prev,
+        { id: `${requestId}-rule-${proposalId}`, role: 'rule', text: '', rule: { change, currentText, state: 'pending' } }
+      ])
+    })
     return () => {
       offDelta()
       offEnd()
       offError()
       offTool()
+      offRule()
     }
   }, [])
 
@@ -260,6 +275,8 @@ export function App(): React.JSX.Element {
         const result = await api.project.create(input)
         if (result.ok) setNewProjectDir(null)
         applyProject(result)
+        // 새 프로젝트는 게임 소개·톤 가이드부터 채우도록 프로젝트 화면에서 시작한다
+        if (result.ok) setScreen('project')
       } finally {
         setBusy(false)
       }
@@ -297,17 +314,41 @@ export function App(): React.JSX.Element {
     }
   }, [refreshAuth])
 
-  /** 번역 화면과 설정 화면이 같이 쓰는 project.json 설정(번역 모델·사고 수준) 저장 */
-  const saveProjectSettings = useCallback(async (patch: ProjectSettingsPatch) => {
+  /** project.json 부분 갱신. 프로젝트·번역·설정 화면이 같이 쓴다. 저장되면 열린 프로젝트 상태도 맞춘다. */
+  const updateProject = useCallback(async (patch: ProjectSettingsPatch): Promise<IpcResult<OpenProject>> => {
     const result = await api.project.setSettings(patch)
-    if (!result.ok) {
-      setMessage(result.error.message)
-      return
-    }
-    setProject(result.value)
-    const { model, effort } = result.value.config.translate
-    setMessage(`번역 설정을 저장했습니다: ${modelLabel(model)} · 사고 ${effortLabel(effort)}`)
+    if (result.ok) setProject(result.value)
+    return result
   }, [])
+
+  /** 번역 화면과 설정 화면의 번역 모델·사고 수준 저장 */
+  const saveTranslateSettings = useCallback(
+    async (patch: ProjectSettingsPatch) => {
+      const result = await updateProject(patch)
+      if (!result.ok) {
+        setMessage(result.error.message)
+        return
+      }
+      const { model, effort } = result.value.config.translate
+      setMessage(`번역 설정을 저장했습니다: ${modelLabel(model)} · 사고 ${effortLabel(effort)}`)
+    },
+    [updateProject]
+  )
+
+  /** 저장하지 않은 편집이 있으면 먼저 확인을 받는다. */
+  const selectScreen = useCallback(
+    (id: ScreenId) => {
+      if (id === screen) return
+      if (unsaved) setPendingLeave({ kind: 'screen', id })
+      else setScreen(id)
+    },
+    [screen, unsaved]
+  )
+
+  const requestClose = useCallback(() => {
+    if (unsaved) setPendingLeave({ kind: 'close' })
+    else void closeProject()
+  }, [closeProject, unsaved])
 
   const checkAgent = useCallback(async () => {
     setChecking(true)
@@ -338,6 +379,37 @@ export function App(): React.JSX.Element {
     [project, sessionId]
   )
 
+  const updateRuleCard = useCallback((turnId: string, patch: Partial<RuleCard>) => {
+    setTurns((prev) =>
+      prev.map((turn) => (turn.id === turnId && turn.rule ? { ...turn, rule: { ...turn.rule, ...patch } } : turn))
+    )
+  }, [])
+
+  /** 규칙 카드의 [저장]. 메인이 지금 규칙에 다시 적용해 보고 검증을 거쳐 project.json 에 쓴다. */
+  const saveRule = useCallback(
+    async (turnId: string) => {
+      const card = turns.find((turn) => turn.id === turnId)?.rule
+      if (!card || card.state === 'saving' || card.state === 'saved') return
+      updateRuleCard(turnId, { state: 'saving' })
+      const result = await api.project.applyRule(card.change)
+      if (!result.ok) {
+        updateRuleCard(turnId, { state: 'failed', error: result.error.message })
+        return
+      }
+      setProject(result.value.project)
+      updateRuleCard(turnId, { state: 'saved', ruleId: result.value.ruleId })
+      setMessage(`스타일 규칙을 저장했습니다 (${result.value.ruleId}). 다음 번역 배치부터 반영됩니다.`)
+    },
+    [turns, updateRuleCard]
+  )
+
+  const dismissRule = useCallback(
+    (turnId: string) => {
+      updateRuleCard(turnId, { state: 'dismissed' })
+    },
+    [updateRuleCard]
+  )
+
   const cancelMessage = useCallback(async () => {
     if (!activeRequestId) return
     await api.agent.cancel({ requestId: activeRequestId })
@@ -354,10 +426,10 @@ export function App(): React.JSX.Element {
       <Sidebar
         project={project}
         current={screen}
-        onSelect={setScreen}
+        onSelect={selectScreen}
         onOpen={pickAndOpen}
         onCreate={pickAndCreate}
-        onClose={closeProject}
+        onClose={requestClose}
         busy={busy}
       />
 
@@ -381,10 +453,16 @@ export function App(): React.JSX.Element {
             onLoginCancel={cancelLogin}
             onLogout={logout}
             project={project}
-            onProjectSettings={(patch) => void saveProjectSettings(patch)}
+            onProjectSettings={(patch) => void saveTranslateSettings(patch)}
           />
+        ) : project && screen === 'project' ? (
+          <Project key={project.dir} project={project} onSave={updateProject} onDirtyChange={setUnsaved} onMessage={setMessage} />
         ) : project && screen === 'strings' ? (
-          <Strings key={project.dir} onMessage={setMessage} />
+          <Strings key={project.dir} onMessage={setMessage} onDirtyChange={setUnsaved} />
+        ) : project && screen === 'context' ? (
+          <Context key={project.dir} project={project} job={job} jobLog={jobLog} onMessage={setMessage} onDirtyChange={setUnsaved} />
+        ) : project && screen === 'glossary' ? (
+          <Glossary key={project.dir} project={project} job={job} jobLog={jobLog} onMessage={setMessage} onDirtyChange={setUnsaved} />
         ) : project ? (
           screen === 'translate' ? (
             <Translate
@@ -393,7 +471,7 @@ export function App(): React.JSX.Element {
               job={job}
               jobLog={jobLog}
               onMessage={setMessage}
-              onSettings={(patch) => void saveProjectSettings(patch)}
+              onSettings={(patch) => void saveTranslateSettings(patch)}
             />
           ) : screen === 'review' ? (
             <Review key={project.dir} project={project} job={job} onMessage={setMessage} />
@@ -422,6 +500,8 @@ export function App(): React.JSX.Element {
         sessionId={sessionId}
         onSend={sendMessage}
         onCancel={cancelMessage}
+        onRuleSave={(turnId) => void saveRule(turnId)}
+        onRuleDismiss={dismissRule}
       />
 
       <StatusBar
@@ -432,6 +512,27 @@ export function App(): React.JSX.Element {
         sessionId={sessionId}
         message={message}
       />
+
+      {pendingLeave ? (
+        <ConfirmDialog
+          title="저장하지 않은 변경"
+          confirmLabel={pendingLeave.kind === 'close' ? '버리고 닫기' : '버리고 이동'}
+          danger
+          onCancel={() => setPendingLeave(null)}
+          onConfirm={() => {
+            const leave = pendingLeave
+            setPendingLeave(null)
+            setUnsaved(false)
+            if (leave.kind === 'close') void closeProject()
+            else setScreen(leave.id)
+          }}
+        >
+          <p className="hint">
+            {findScreen(screen).label} 화면에 저장하지 않은 변경이 있습니다. {pendingLeave.kind === 'close' ? '프로젝트를 닫으면' : '다른 화면으로 가면'} 그
+            변경은 사라집니다.
+          </p>
+        </ConfirmDialog>
+      ) : null}
 
       {newProjectDir ? (
         <NewProjectDialog

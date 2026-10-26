@@ -40,7 +40,13 @@ type Conflict = {
   retry: (force: boolean) => Promise<void>
 }
 
-export function Strings({ onMessage }: { onMessage: (text: string) => void }): React.JSX.Element {
+type Props = {
+  onMessage: (text: string) => void
+  /** 저장하지 않은 변경이 있는지. 다른 화면으로 갈 때 확인을 받는다. */
+  onDirtyChange: (dirty: boolean) => void
+}
+
+export function Strings({ onMessage, onDirtyChange }: Props): React.JSX.Element {
   const [view, setView] = useState<StringsView | null>(null)
   const [rows, setRows] = useState<StringsRow[]>([])
   const [language, setLanguage] = useState<string | null>(null)
@@ -59,6 +65,11 @@ export function Strings({ onMessage }: { onMessage: (text: string) => void }): R
   const [deletedKeys, setDeletedKeys] = useState<ReadonlySet<string>>(new Set())
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+
+  useEffect(() => {
+    onDirtyChange(dirty)
+  }, [dirty, onDirtyChange])
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
   const load = useCallback(
     async (requested: string | null) => {

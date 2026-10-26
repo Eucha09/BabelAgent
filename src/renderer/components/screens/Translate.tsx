@@ -6,7 +6,7 @@ import type { OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
 import type { MasterRow, StringsRow, StringsView, TranslationRow } from '@shared/schema/strings'
 import type { IpcError } from '@shared/types'
 import { JobLog } from '../JobLog'
-import { JobProgress } from '../JobProgress'
+import { JOB_TITLE, JobProgress } from '../JobProgress'
 import { KeyChecklist, type ChecklistItem } from '../KeyChecklist'
 import { EFFORT_HINT, EFFORT_OPTIONS, MODEL_OPTIONS } from '../../state/translate-options'
 
@@ -245,6 +245,7 @@ export function Translate({ project, job, jobLog, onMessage, onSettings }: Props
           </button>
           <span className="hint">
             {plan.rows}행 · 배치 {plan.batches}개{plan.skipped > 0 ? ` · 승인 ${plan.skipped}행 제외` : ''}
+            {running && job.kind !== 'translate' ? ` — ${JOB_TITLE[job.kind]}이 끝나면 시작할 수 있습니다` : ''}
           </span>
         </div>
 

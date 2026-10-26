@@ -4,9 +4,18 @@ import { join } from 'node:path'
 import iconv from 'iconv-lite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { sourceHash } from '@core/hash'
+import type { ContextSuggestion } from '@shared/schema/context'
 import type { MasterRow } from '@shared/schema/strings'
 import {
+  appendGlossaryCandidates,
+  applyContextSuggestions,
   approveTranslationRows,
+  discardContextSuggestions,
+  GLOSSARY_FILE,
+  loadContextSuggestions,
+  loadGlossary,
+  updateGlossary,
+  writeContextSuggestions,
   forgetReadHashes,
   joinRows,
   listTranslationLanguages,
@@ -456,5 +465,122 @@ describe('일괄 승인', () => {
     const result = approveTranslationRows(dir, 'en', [{ key: 'a', expected: { text: 'A', status: 'draft' } }], masterByKey, () => 'low-confidence')
     expect(result.ok && result.value.approved).toEqual([])
     expect(readFileSync(translationPath(dir, 'en'), 'utf8')).toBe(before)
+  })
+})
+
+describe('용어집 화면 저장', () => {
+  const languages = ['en', 'ja']
+  const write = (text: string): void => writeFileSync(join(dir, GLOSSARY_FILE), text)
+
+  it('파일이 없으면 표준 열로 만들고, 사람이 추가한 용어는 승인 상태다', () => {
+    const result = updateGlossary(
+      dir,
+      [
+        {
+          original: null,
+          next: { term: '바벨탑', translations: { en: 'Tower of Babel', ja: '' }, pos: '', note: '', strict: true, status: 'approved', reason: '', confidence: '' },
+          expected: null
+        }
+      ],
+      languages
+    )
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.value.applied).toEqual(['바벨탑'])
+    expect(readFileSync(join(dir, GLOSSARY_FILE), 'utf8').split('\n')[0]).toBe(
+      'term,translation_en,translation_ja,pos,note,strict,status,reason,confidence'
+    )
+    const terms = loadGlossaryTerms(dir, 'en')
+    expect(terms.ok && terms.value).toEqual([{ term: '바벨탑', translation: 'Tower of Babel', note: '', strict: true }])
+  })
+
+  it('사용자 열과 다른 행을 지키고, 화면이 본 뒤 바뀐 행은 건너뛴다', () => {
+    write('term,translation_en,memo\n물약,Potion,메모\n마나,Mana,\n')
+    const view = loadGlossary(dir, languages)
+    if (!view.ok) throw new Error('읽기 실패')
+    const [potion, mana] = view.value.entries
+    if (!potion || !mana) throw new Error('항목 없음')
+    // 화면이 읽은 뒤 밖에서 마나 행을 고쳤다
+    write('term,translation_en,memo\n물약,Potion,메모\n마나,MP,\n')
+    const result = updateGlossary(
+      dir,
+      [
+        { original: '물약', next: { ...potion, strict: true }, expected: potion },
+        { original: '마나', next: { ...mana, note: '능력치' }, expected: mana }
+      ],
+      languages
+    )
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.value.applied).toEqual(['물약'])
+    expect(result.value.skipped).toEqual([{ term: '마나', reason: 'changed' }])
+    const text = readFileSync(join(dir, GLOSSARY_FILE), 'utf8')
+    expect(text).toContain('물약,Potion,,메모,,,true,')
+    expect(text).toContain('마나,MP,,,,,,')
+  })
+
+  it('후보는 승인 대기로 붙고, 이미 있는 용어는 다시 넣지 않으며, 번역 프롬프트에는 들어가지 않는다', () => {
+    write('term,translation_en\n물약,Potion\n')
+    const first = appendGlossaryCandidates(
+      dir,
+      [
+        { term: '마나', pos: '능력치', note: '', translations: { en: 'Mana' }, reason: '반복 등장', confidence: 0.9 },
+        { term: '물약', pos: '', note: '', translations: { en: 'Potion' }, reason: '', confidence: 0.9 }
+      ],
+      languages
+    )
+    expect(first.ok && first.value).toEqual({ added: ['마나'], existing: ['물약'] })
+    const again = appendGlossaryCandidates(dir, [{ term: ' 마나 ', pos: '', note: '', translations: {}, reason: '', confidence: 1 }], languages)
+    expect(again.ok && again.value.added).toEqual([])
+    const view = loadGlossary(dir, languages)
+    expect(view.ok && view.value.entries.map((entry) => `${entry.term}:${entry.status}`)).toEqual(['물약:approved', '마나:pending'])
+    const terms = loadGlossaryTerms(dir, 'en')
+    expect(terms.ok && terms.value.map((term) => term.term)).toEqual(['물약'])
+  })
+})
+
+describe('컨텍스트 제안', () => {
+  const suggestion = (key: string, patch: Partial<ContextSuggestion> = {}): ContextSuggestion => ({
+    key,
+    source_hash: '',
+    context: '',
+    ui_type: '',
+    max_len: '',
+    vars: '',
+    confidence: '0.9',
+    note: '',
+    ...patch
+  })
+
+  it('제안을 합쳐 쓰고, 적용하면 원문 메타데이터에 넣고 그 제안을 지운다(번역은 stale 이 되지 않는다)', () => {
+    expect(saveMaster(dir, [master('a', '시작'), master('b', '{name} 획득')], false).ok).toBe(true)
+    writeFileSync(
+      translationPath(dir, 'en'),
+      `key,text,source_hash,status\na,Start,${sourceHash('시작')},approved\n`
+    )
+    expect(writeContextSuggestions(dir, [suggestion('a', { context: '메뉴' }), suggestion('b', { context: '보상' })]).ok).toBe(true)
+    expect(writeContextSuggestions(dir, [suggestion('a', { context: '메인 메뉴', ui_type: 'button' })]).ok).toBe(true)
+
+    const loaded = loadContextSuggestions(dir)
+    expect(loaded.ok && loaded.value.rows.map((row) => `${row.key}:${row.context}`)).toEqual(['a:메인 메뉴', 'b:보상'])
+
+    const applied = applyContextSuggestions(dir, [
+      { key: 'a', values: { context: '메인 메뉴', ui_type: 'button' }, expected: { context: '', ui_type: '' } }
+    ])
+    expect(applied.ok && applied.value).toEqual({ applied: ['a'], skipped: [] })
+
+    forgetReadHashes()
+    const rows = loadMaster(dir)
+    expect(rows.ok && rows.value.rows[0]).toMatchObject({ key: 'a', source: '시작', context: '메인 메뉴', ui_type: 'button' })
+    const after = loadContextSuggestions(dir)
+    expect(after.ok && after.value.rows.map((row) => row.key)).toEqual(['b'])
+    const translations = loadTranslations(dir, 'en')
+    expect(translations.ok && translations.value.rows[0]?.status).toBe('approved')
+  })
+
+  it('버리기는 고른 키만 지운다', () => {
+    expect(writeContextSuggestions(dir, [suggestion('a', { context: 'x' }), suggestion('b', { context: 'y' })]).ok).toBe(true)
+    const removed = discardContextSuggestions(dir, ['b', 'zz'])
+    expect(removed.ok && removed.value).toBe(1)
+    const loaded = loadContextSuggestions(dir)
+    expect(loaded.ok && loaded.value.rows.map((row) => row.key)).toEqual(['a'])
   })
 })

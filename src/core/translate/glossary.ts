@@ -1,3 +1,6 @@
+import { glossaryStatusOf, isStrict, translationColumn } from '../glossary/entries'
+import { findTermsInSource } from '../qa/glossary'
+
 /** 번역 프롬프트에 넣을 용어 하나. */
 export type GlossaryTerm = {
   term: string
@@ -16,22 +19,45 @@ export function parseGlossary(records: readonly Record<string, string>[], langua
   for (const record of records) {
     const term = (record['term'] ?? '').trim()
     if (term === '') continue
-    const status = (record['status'] ?? '').trim().toLowerCase()
-    if (status !== '' && status !== 'approved') continue
-    const translation = (record[`translation_${language}`] ?? '').trim()
+    if (glossaryStatusOf(record['status'] ?? '') !== 'approved') continue
+    const translation = (record[translationColumn(language)] ?? '').trim()
     const note = (record['note'] ?? '').trim()
     // 확정 번역도 지침도 없으면 프롬프트에 넣어 봐야 쓸 정보가 없다
     if (translation === '' && note === '') continue
-    terms.push({ term, translation, note, strict: (record['strict'] ?? '').trim().toLowerCase() === 'true' })
+    terms.push({ term, translation, note, strict: isStrict(record['strict'] ?? '') })
   }
   return terms
 }
 
 /**
  * 배치 문자열에 실제로 나오는 용어만 고른다. 전체 용어집을 매번 넣지 않기 위해서다.
- * M3는 대소문자 무시 부분 일치만 본다. 단어 경계·활용형 매칭은 QA(M4)·용어집(M5)에서 다룬다.
+ * 찾는 방식은 QA 의 용어 탐지와 같다(findTermsInSource) — 띄어 쓰는 언어는 단어 경계로, 한·중·일은
+ * 부분 문자열로 찾고, 긴 용어를 먼저 맞춘다. 그래야 QA 가 검사하는 용어와 프롬프트에 넣은 용어가 같다.
+ * 문자열마다 찾아 합치며, 순서는 용어집 순서를 따른다.
  */
-export function filterTermsForTexts(terms: readonly GlossaryTerm[], texts: readonly string[]): GlossaryTerm[] {
-  const haystack = texts.join('\n').toLowerCase()
-  return terms.filter((term) => haystack.includes(term.term.toLowerCase()))
+export function filterTermsForTexts<T extends Pick<GlossaryTerm, 'term'>>(
+  terms: readonly T[],
+  texts: readonly string[],
+  sourceLanguage: string
+): T[] {
+  const found = new Set<T>()
+  for (const text of texts) {
+    for (const term of findTermsInSource(text, terms, sourceLanguage)) found.add(term)
+  }
+  return terms.filter((term) => found.has(term))
+}
+
+/** 로그에 용어를 몇 개까지 이름으로 보여 줄지. 전체 목록은 상세에 둔다. */
+const TERMS_IN_MESSAGE = 6
+
+/** 배치에 넣은 용어를 작업 로그 한 줄로. 이 줄로 "배치에 그 배치의 용어만 들어갔는지"를 확인한다. */
+export function describeInjectedTerms(terms: readonly GlossaryTerm[]): { text: string; detail?: string } {
+  if (terms.length === 0) return { text: '용어 0개' }
+  const names = terms.map((term) => term.term)
+  const shown = names.slice(0, TERMS_IN_MESSAGE).join(', ')
+  const text = `용어 ${terms.length}개: ${shown}${names.length > TERMS_IN_MESSAGE ? ' …' : ''}`
+  const detail = terms
+    .map((term) => `${term.term}${term.translation ? ` → ${term.translation}` : ''}${term.strict ? ' (strict)' : ''}`)
+    .join('\n')
+  return { text, detail }
 }

@@ -45,7 +45,8 @@
 |---|---|
 | `project:pick` | 폴더 선택 대화상자 |
 | `project:open` | 프로젝트 로드, schemaVersion 확인·마이그레이션 |
-| `project:settings:set` | project.json 부분 갱신. 지금은 번역 모델·사고 수준(`translate`)만 받는다. 번역 화면과 설정 화면이 같이 쓰고, 같은 값이면 쓰지 않는다 |
+| `project:rules:apply` | 에이전트 패널의 스타일 규칙 카드에서 [저장]. 메인이 지금 규칙에 다시 적용해 보고(`core/project/rules.ts`) 설정 검증을 통과하면 project.json 에 쓴다. 저장한 규칙 id 와 새 설정을 돌려준다 |
+| `project:settings:set` | project.json 부분 갱신. 프로젝트·번역·설정 화면이 바뀐 묶음(name, sourceLanguage, targetLanguages, game, styleRules, batch, translate, review, context, smartStrings)만 보내면, 메인이 지금 설정에 합치고 `core/project/settings.ts`의 검증을 통과해야 쓴다. schemaVersion·grammar·export 는 받지 않는다. 같은 값이면 쓰지 않는다 |
 | `strings:list` | 원문 + 선택 언어 번역 조인 결과, 원문 파일 존재 여부 |
 | `strings:save` | 원문 전체 저장(편집·행 추가·순서 변경·삭제). 키 검사 후 해시 재계산, 충돌 감지, 모든 번역 파일의 stale 갱신과 `deletedKeys` 행 삭제 |
 | `strings:create` | 헤더만 있는 빈 `strings_master.csv` 생성 |
@@ -53,10 +54,19 @@
 | `strings:import` | 열 매핑대로 원문에 합치고 저장 |
 | `translation:update` | 검토 화면의 행 하나 저장(번역문·상태·메모, 후보 적용 시 신뢰도). 번역 파일을 다시 읽어 행 단위로 충돌을 보고, 상태 전이는 `core/status.ts`가 판정한다. 승인도 이 채널로 한다 — QA 오류가 있으면 거부. 저장한 행의 진단을 돌려준다 |
 | `translation:approve` | 초안 일괄 승인. 화면이 고른 키와 그때 본 행을 받아, 메인이 번역 파일을 다시 읽고 조건(초안·QA 진단 없음·신뢰도 기준 이상)을 행마다 다시 확인한 뒤 통과한 행만 한 번에 쓴다. 승인·건너뜀(이유) 목록을 돌려준다 |
-| `glossary:list` / `:upsert` / `:remove` | 용어집 |
+| `glossary:list` | 용어집 화면용 항목(승인 대기 포함). 같은 용어(대소문자 무시)가 여러 행이면 첫 행만 담고 알린다 |
+| `glossary:update` | 용어 추가·수정·삭제·승인을 한 번에. 행마다 화면이 본 값(`expected`)을 받아, 메인이 파일을 다시 읽어 그 행이 바뀌었으면 건너뛰고 나머지만 원자적으로 쓴다 |
+| `glossary:extract` | 용어 추출 작업 시작(전체 원문 / 선택 행) |
+| `glossary:add` | 용어 하나를 에이전트로 채워 승인 대기로 추가(일회성 세션). 원문에 없거나 이미 있는 용어는 거부. 추가한 항목, 원문에서 찾은 행 수, 기존 번역과 어긋나는 행을 돌려준다 |
+| `glossary:retranslate` | 용어 하나 재번역(일회성 세션, 지시 포함). 결과는 쓰지 않고 새 번역·근거·신뢰도와 기존 번역과 어긋나는 행을 돌려준다 — 화면이 그 행의 칸에 미저장 편집으로 채운다 |
+| `glossary:agent:cancel` | 진행 중인 용어 추가·재번역 취소 |
+| `context:list` | 승인을 기다리는 메타데이터 제안과 지금 원문 행(원문 변경·원문 없음 표시) |
+| `context:estimate` | 컨텍스트 추정 작업 시작(채울 필드, 빈 칸 있는 행 / 선택 행) |
+| `context:apply` | 사람이 고친 제안을 strings_master.csv 에 넣고 그 제안을 지운다. 화면이 본 뒤 원문 칸이 바뀐 행은 건너뛴다 |
+| `context:discard` | 제안 버리기 |
 | `qa:run` | 언어 하나 전체 QA. 진단이 있는 키만 돌려준다 |
-| `job:start` | 배치 번역 시작(대상 언어·범위·선택 키·모델). 한 번에 작업 하나. 고른 모델은 project.json 에 기억 |
-| `job:control` | `pause` / `resume` / `cancel` / `retry`(한도 대기 건너뛰기) |
+| `job:start` | 배치 번역 시작(대상 언어·범위·선택 키·모델). 고른 모델은 project.json 에 기억 |
+| `job:control` | `pause` / `resume` / `cancel` / `retry`(한도 대기 건너뛰기). 번역·컨텍스트 추정·용어 추출 공통 |
 | `job:current` | 진행 중이거나 마지막 작업의 상태. 화면을 다시 열 때 이어 보기용 |
 | `usage:read` | 구독 사용량 한도(`/usage`) |
 | `row:reroll` | 행 단위 재번역(일회성 세션, 사용자 지시 포함). 결과는 쓰지 않고 후보와 그 진단을 돌려준다. 한도에 걸려도 자동으로 다시 시도하지 않는다 |
@@ -69,10 +79,12 @@
 
 | 채널 | 페이로드 |
 |---|---|
-| `job:update` | 작업 전체 상태(`JobView`): running / paused / waiting-limit / done / cancelled, 행·배치 수, 자동 재개 시각, 실패 사유 |
+| `job:update` | 작업 전체 상태(`JobView`): 종류(`kind`: translate / context / terms), running / paused / waiting-limit / done / cancelled, 행·배치 수, 자동 재개 시각, 실패 사유 |
 | `job:log` | 작업 로그 한 줄(배치 시작·제출 통과/실패·기록·한도·끝, 행 재번역). 번역 화면과 에이전트 패널이 같이 쓴다 |
 | `project:changed` | `project.json`이 앱 밖에서 바뀌어 메인이 다시 읽은 설정. 읽기에 실패하면 보내지 않고 이전 설정을 유지한다 |
+| `data:written` | 작업이나 패널 도구가 프로젝트 파일(glossary.csv, context_suggestions.csv)을 썼다. 앱이 쓴 파일은 감시자가 알려 주지 않으므로 그 파일을 보는 화면이 이 이벤트로 다시 읽는다 |
 | `agent:chat:tool` | 패널 채팅에서 에이전트가 부른 도구(이름·요약·성공 여부) |
+| `agent:chat:rule` | 패널 에이전트가 낸 스타일 규칙 제안(추가·수정·삭제). 패널이 확인 카드로 띄운다 |
 | `agent:chat:delta` | 스트리밍 텍스트 조각 |
 | `file:changed` | 앱 밖에서 바뀐 파일 이름. 자동 리로드 여부는 렌더러가 미저장 변경을 보고 정한다 |
 
@@ -84,20 +96,25 @@
 |---|---|---|
 | `get_project_context` | 읽기 | 장르, 게임 소개, 톤 가이드, 스타일 규칙 — **구현(패널)** |
 | `get_strings_batch` | 읽기 | 키 목록으로 원문·context·언어별 번역 조회(최대 50키) — **구현(패널)** |
-| `get_glossary_terms` | 읽기 | 주어진 문자열들에 등장하는 승인된 용어만 반환 — **구현(패널)** |
+| `get_glossary_terms` | 읽기 | 주어진 문자열들에 등장하는 승인된 용어만 반환. 찾는 방식은 번역 배치·QA 와 같다 — **구현(패널)** |
 | `lookup_grammar` | 읽기 | grammar_*.csv 조회(선택 기능 활성 시) |
 | `validate_translation` | 읽기 | 단일 번역안 QA 검사 결과 반환. 에이전트의 자기 점검용 |
 | `submit_translations` | 쓰기 | 번역 결과 제출. 키 검사 → 행별 QA 후 보관, 세션 끝에 배치 단위로 기록. 수정 제출 1회 — **구현(배치·행 재번역)** |
-| `update_project_rules` | 쓰기 | 사용자가 채팅에서 지시한 스타일 규칙을 project.json에 저장 |
-| `propose_glossary_terms` | 쓰기 | 용어 후보 제출. 사용자 승인 전까지 pending |
+| `submit_context` | 쓰기 | 메타데이터 제안 제출. 키·요청 필드·vars 이름 집합(원문 재추출과 같아야 함) 검사, 수정 제출 1회, 마지막 제출은 문제없는 행만 받아 context_suggestions.csv 에 쌓는다 — **구현(컨텍스트 추정 배치)** |
+| `submit_terms` | 쓰기 | 용어 후보 제출. 배치 원문에 실제로 나오는지·겹침·언어 코드 검사, 이미 있는 용어는 조용히 뺀다. glossary.csv 에 pending 으로 붙는다 — **구현(용어 추출 배치)** |
+| `submit_glossary_entry` | 쓰기 | 용어집 화면 [용어 추가]·[선택 재번역]의 항목 하나 제출. 같은 용어인지·대상 언어마다 번역이 있는지 검사, 수정 제출 1회. 추가는 사용자가 준 품사·지침·strict 가 앞서고 결과는 pending 으로 붙는다. 재번역은 번역과 지침을 다시 받아 화면에 돌려준다(품사는 그대로) — **구현(용어 추가·재번역)** |
+| `update_project_rules` | 쓰기 | 스타일 규칙 추가·수정·삭제 제안. 저장하지 않고 패널에 확인 카드를 띄운다 — 사용자가 [저장]을 눌러야 `project:rules:apply` 로 저장된다(사용자 결정, 2026-10-22) — **구현(패널)** |
+| `propose_glossary_terms` | 쓰기 | 용어 후보 제출(대상 언어별 번역 포함). glossary.csv 에 pending 으로 붙고, 용어집 화면에서 승인해야 쓰인다 — **구현(패널)** |
 
 - 쓰기 도구는 "요청"이지 "기록"이 아니다. 기록 여부는 항상 코드가 결정한다.
-- 배치 세션에는 `submit_translations` 만, 패널 채팅에는 읽기 도구만 붙인다. 서버는 세션마다 새로 만들어 배치 문맥(기대 키 목록)을 클로저로 묶는다(`src/main/agent/tools.ts`).
+- 배치 세션에는 그 작업의 제출 도구 하나만(`submit_translations` / `submit_context` / `submit_terms`), 패널 채팅에는 읽기 도구 셋과 쓰기 요청 도구 둘을 붙인다. 제출 서버는 도구 이름·입력 스키마·판정 함수를 받는 하나의 구현(`createSubmitServer`)이고, 세션마다 새로 만들어 배치 문맥(기대 키 목록 등)을 클로저로 묶는다(`src/main/agent/tools.ts`).
+- 패널 도구는 부를 때마다 지금 열린 프로젝트 설정을 읽는다. 같은 세션 안에서 규칙이 바뀔 수 있다.
 - 도구 응답은 간결한 JSON으로 돌려준다. 긴 설명 문장을 담지 않는다 — 토큰 낭비.
 
 ## 작업 스케줄러
 
-- 작업(job) 하나 = 대상 행 집합 + 작업 종류. 작업은 배치 큐로 쪼개진다.
+- 작업(job) 하나 = 대상 행 집합 + 작업 종류(번역 · 컨텍스트 추정 · 용어 추출). 작업은 배치 큐로 쪼개진다.
+- 작업은 종류와 상관없이 **한 번에 하나**만 돈다(`src/main/jobs/runner.ts`). 같은 사용량 한도를 나눠 쓰고, 진행 카드·로그·제어를 같이 쓴다. 배치 세션 공통 부분(SDK 로드·옵션·한도·중단 판정)은 `src/main/jobs/agent-batch.ts` 하나다.
 - 작업자(worker)는 기본 2개, 상한 3개. 각 작업자는 배치 하나를 새 `query()`로 처리한다.
 - 상태: `idle → running → (paused | waiting-limit | error) → running → done/cancelled`.
 - 배치 결과는 전원 검증 통과 시에만 원자적으로 기록한다. 실패 시 배치 전체를 미완료로 남기고 실패 사유를 모아 보고한다.

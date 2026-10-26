@@ -10,7 +10,7 @@ const devUrl = process.env['ELECTRON_RENDERER_URL']
  * tokens.css의 --bg-panel / --text-secondary 와 값을 맞춰 둔다.
  */
 const CHROME_BG = '#181818'
-const CHROME_SYMBOL = '#9d9d9d'
+const CHROME_SYMBOL = '#b8b8b8'
 const TITLEBAR_HEIGHT = 36
 
 /** 창과 작업 표시줄 아이콘. 개발·패키징 모두 같은 상대 경로로 읽힌다. */

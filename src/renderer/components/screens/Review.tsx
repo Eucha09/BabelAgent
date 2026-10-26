@@ -506,7 +506,7 @@ export function Review({ project, job, onMessage }: Props): React.JSX.Element {
             title={`지금 목록에 보이는 초안 중 QA 오류·경고가 없고 신뢰도가 ${lowConfidence} 이상인 행(신뢰도가 없는 행 포함)을 승인합니다`}
             onClick={() => setConfirmBulk(true)}
           >
-            조건 맞는 초안 승인 ({bulkTargets.length})
+            초안 일괄 승인 ({bulkTargets.length})
           </button>
         </div>
       </div>

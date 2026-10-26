@@ -5,7 +5,8 @@ import type { GlossaryTerm } from './glossary'
 /** 제출 도구 이름. MCP 서버에 붙일 때와 프롬프트에서 같은 값을 쓴다. */
 export const SUBMIT_TOOL = 'submit_translations'
 
-function languageLabel(code: string): string {
+/** 프롬프트에 쓰는 언어 표기. 예: `ko (Korean)`. 이름을 모르는 코드는 코드만 쓴다. */
+export function languageLabel(code: string): string {
   try {
     const name = new Intl.DisplayNames(['en'], { type: 'language' }).of(code)
     return name && name !== code ? `${code} (${name})` : code
@@ -14,8 +15,13 @@ function languageLabel(code: string): string {
   }
 }
 
-function section(title: string, body: string): string {
+export function section(title: string, body: string): string {
   return `# ${title}\n${body.trim() === '' ? '(not provided)' : body.trim()}`
+}
+
+/** 게임 소개와 장르. 번역·컨텍스트 추정·용어 추출의 고정 부분이 같이 쓴다. */
+export function gameSection(config: ProjectConfig): string {
+  return section('Game', [config.game.intro, config.game.genre ? `Genre: ${config.game.genre}` : ''].filter(Boolean).join('\n'))
 }
 
 /**
@@ -46,7 +52,7 @@ export function buildSystemPrompt(config: ProjectConfig, language: string): stri
     `- Call the ${SUBMIT_TOOL} tool exactly once with one entry for every key in the batch. Do not answer with text.`,
     '- If the tool reports problems, fix them and call it one more time.',
     '',
-    section('Game', [config.game.intro, config.game.genre ? `Genre: ${config.game.genre}` : ''].filter(Boolean).join('\n')),
+    gameSection(config),
     '',
     section('Tone guide', config.game.toneGuide),
     '',

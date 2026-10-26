@@ -47,15 +47,25 @@ export type JobSnapshot = {
   batches: { id: number; size: number; status: BatchStatus }[]
 }
 
+/**
+ * 배치 작업 종류. 종류와 상관없이 한 번에 하나만 돈다 — 같은 사용량 한도를 나눠 쓰고,
+ * 진행 카드·로그·제어를 같이 쓴다.
+ */
+export const JobKind = z.enum(['translate', 'context', 'terms'])
+export type JobKind = z.infer<typeof JobKind>
+
 export type JobView = {
   id: string
-  language: string
-  scope: TranslateScope
+  kind: JobKind
+  /** 번역 작업의 대상 언어. 컨텍스트 추정·용어 추출은 null */
+  language: string | null
+  /** 진행 카드에 보여 줄 범위 설명. 예: "en · 미번역" */
+  summary: string
   model: TranslateModel
   effort: TranslateEffort
   startedAt: string
-  /** 범위에 들었지만 approved 라서 뺀 행 수 */
-  skippedApproved: number
+  /** 범위에서 뺀 행처럼 함께 알릴 것. 예: "승인 3행 제외" */
+  notes: string[]
   snapshot: JobSnapshot
 }
 
@@ -77,3 +87,9 @@ export type ChatToolCall = {
   summary: string
   ok: boolean
 }
+
+/**
+ * 작업이나 패널 도구가 프로젝트 파일(용어집·컨텍스트 제안)을 썼다. 앱이 쓴 파일은 감시자가 알려 주지 않으므로
+ * 그 파일을 보는 화면이 다시 읽도록 따로 알린다.
+ */
+export type DataWritten = { file: string }

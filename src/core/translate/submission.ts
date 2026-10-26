@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { QaDiagnostic, QaRuleId } from '@shared/schema/qa'
 import { STRUCTURAL_RULES } from '../qa/check'
+import type { SubmitVerdict } from '../submit'
 
 /** 에이전트가 submit_translations 로 내는 한 행. MCP 도구의 입력 스키마로도 쓴다. */
 export const SubmittedTranslation = z.object({
@@ -117,4 +118,19 @@ export function judgeSubmission(input: {
   const structural = issues.filter((issue) => STRUCTURAL_RULES.has(issue.ruleId))
   if (structural.length > 0) return { kind: 'reject', problems: describeIssues(structural) }
   return { kind: 'accept', unresolved: issues }
+}
+
+/** 제출 도구 공통 판정으로 옮긴다. 받은 제출의 남은 오류는 remarks 로 알린다. */
+export function toSubmitVerdict(
+  verdict: SubmissionVerdict,
+  items: SubmittedTranslation[]
+): SubmitVerdict<SubmittedTranslation> {
+  if (verdict.kind !== 'accept') return verdict
+  const { unresolved } = verdict
+  return {
+    kind: 'accept',
+    items,
+    remarks: unresolved.length > 0 ? describeIssues(unresolved) : null,
+    remarkCount: unresolved.length
+  }
 }

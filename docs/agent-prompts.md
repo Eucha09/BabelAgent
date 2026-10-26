@@ -34,7 +34,8 @@ query({
 })
 ```
 
-- 배치 세션의 도구는 `submit_translations` 하나다. 원문·컨텍스트·용어는 프롬프트에 다 들어 있으므로 읽기 도구를 주지 않는다.
+- 배치 세션의 도구는 그 작업의 제출 도구 하나다 — 번역 `submit_translations`, 컨텍스트 추정 `submit_context`, 용어 추출 `submit_terms`. 필요한 데이터는 프롬프트에 다 들어 있으므로 읽기 도구를 주지 않는다.
+- 컨텍스트 추정·용어 추출도 `translate.model`·`translate.effort`를 따른다. 세 작업은 한 번에 하나만 돈다(같은 사용량 한도).
 - MCP 도구 이름은 `mcp__<서버>__<도구>` 로 허용 목록에 넣는다(서버 이름 `babel`).
 
 ## 프롬프트 조립 순서
@@ -47,14 +48,14 @@ query({
 4. 스타일 규칙 (`styleRules`, `id` 순 정렬)
 5. 언어 지시 — `sourceLanguage` → 대상 언어
 6. ── 여기까지 고정 ──
-7. 이번 배치에 등장하는 용어집 항목만
+7. 이번 배치에 등장하는 용어집 항목만 — 승인된 용어를 QA 의 용어 탐지(`findTermsInSource`)와 같은 방식으로 문자열마다 찾아 합친다. 배치를 시작할 때 넣은 용어를 작업 로그에 남긴다(`배치 3 시작 (30행) · 용어 4개: …`, 상세에 확정 번역과 strict)
 8. 이번 배치 문자열(키, 원문, context, ui_type, max_len, vars)
 
 금지:
 
 - 고정 부분에 타임스탬프, 배치 번호, 진행률, 난수를 넣지 않는다.
 - `styleRules`를 삽입 순서대로 넣지 않는다. 정렬해서 넣어야 추가·삭제 시 앞부분이 유지된다.
-- 전체 용어집을 매번 넣지 않는다. 배치 문자열에 등장하는 항목만 필터링한다(`get_glossary_terms`).
+- 전체 용어집을 매번 넣지 않는다. 배치 문자열에 등장하는 항목만 필터링한다(`filterTermsForTexts`, 패널의 `get_glossary_terms`도 같은 함수).
 
 ## 배치 산정
 
@@ -106,14 +107,45 @@ const SubmittedTranslation = z.object({
 
 ### 컨텍스트 추정
 
-- 입력: `context`가 빈 행
-- 출력: `{ key, context, confidence, note }[]`
-- 추정값은 `context` 열에 쓰되 `confidence`가 낮은 항목은 그리드에서 구분 표시한다. 번역 상태에는 영향을 주지 않는다.
+- 대상: 고른 필드(`context`, `ui_type`, `max_len`, `vars`) 중 원문에서 빈 칸이 있는 행. 승인을 기다리는 제안이 있는 행은 뺀다. 변수가 없는 원문에는 vars 를 묻지 않는다(`src/core/context/targets.ts`).
+- 고정 부분(`buildContextSystemPrompt`): 역할, 필드 설명, 규칙, 출력 규약, 게임 소개. 사람이 읽을 글(context, 변수 meaning, note)은 원문 언어로 쓰게 한다. `max_len`은 버튼·탭처럼 길이 제한이 분명할 때만 내라고 하고, 원문이 아니라 **모든 대상 언어 번역문**의 한도이니 가장 긴 번역에 여유를 더해 넉넉하게 잡으라고 지시한다(대상 언어 목록을 함께 준다).
+- `max_len` 하한(코드): 받은 값이 원문 표시 길이 × `context.maxLenRatio`(기본 2.5, 최소 10자)보다 작으면 그 값으로 올린다(`generousMaxLen`). 원문 길이는 QA 와 같이 센다 — 태그는 빼고 변수는 제안된 example(없으면 기존 vars 의 example)로 바꾼다. 에이전트가 원문(한국어) 길이에 맞춰 빡빡하게 잡는 일이 실측에서 나와 넣었다(2026-10-22, 사용자 요청).
+- 가변 부분(`buildContextBatchPrompt`): 프로젝트에서 이미 쓰는 ui_type 목록(표기를 맞추게), 행마다 키·원문·이미 있는 메타데이터·`fill`(채울 필드)·`variables`(코드가 원문에서 뽑은 변수 이름).
+- 출력: `submit_context` 도구 `{ entries: { key, context?, ui_type?, max_len?, vars?: { name, type?, meaning, example? }[], confidence, note? }[] }` (`src/core/context/submission.ts`).
+- 판정: 키 집합(빠짐·남음·겹침), 요청한 context·ui_type 이 비지 않았는지, vars 이름 집합이 `variables`와 같은지(`caseSensitive` 따름). 첫 제출의 문제는 돌려줘 한 번 고치게 하고, 마지막 제출은 문제없는 행만 받는다 — 버린 행은 다시 실행하면 그 행만 돈다. 받을 행이 하나도 없으면 배치 실패.
+- 결과는 원문에 바로 쓰지 않고 `context_suggestions.csv`에 제안으로 쌓는다. 요청한 필드만 담는다. 사람이 컨텍스트 화면에서 고치고 승인해야 원문에 들어간다. 신뢰도가 `review.lowConfidence` 미만인 제안은 구분 표시하고 "기준 이상 선택"에서 뺀다. 번역 상태에는 영향을 주지 않는다.
+- 실측(2026-10-22, haiku · 낮음): 10행 · 배치 3개 · 작업자 2 → 약 21초. 이미 채워진 칸(dialog 행의 context·ui_type)은 제안하지 않고 vars 만 냈다. 신뢰도 0.6 인 아이템 이름 1행이 "신뢰도 낮음"으로 남았다.
 
 ### 용어 추출
 
-- 출력: `{ term, pos, reason, confidence }[]`
-- 결과는 `glossary.csv`에 `status: pending`으로 들어간다. 사용자가 승인해야 `approved`가 되고, 승인된 항목만 번역 프롬프트에 들어간다.
+- 대상: 전체 원문 또는 선택 행. 번역과 같은 배치 산정.
+- 고정 부분(`buildTermsSystemPrompt`): 역할, 무엇을 뽑을지(고유명사·게임 용어·반복 UI 용어), 후보마다 낼 것, 출력 규약, 게임 소개. 대상 언어별 번역 제안을 함께 받는다 — 사람은 고치고 승인만 하면 된다(사용자 결정, 2026-10-22). note·reason 은 원문 언어로.
+- 가변 부분(`buildTermsBatchPrompt`): 이 배치 원문에 이미 나오는 용어집 용어(승인 대기 포함, "Already in glossary"), 행마다 키·원문·context. 용어집은 배치마다 다시 읽는다.
+- 출력: `submit_terms` 도구 `{ terms: { term, pos?, translations?: { language, text }[], note?, reason?, confidence }[] }` (`src/core/terms/submission.ts`). 빈 목록도 받는다.
+- 판정: 용어가 그 배치 원문에 실제로 나오는지(QA 의 용어 탐지와 같은 방식 — context 에만 있는 낱말은 안 된다), 자리표시자·태그가 섞였는지, 같은 제출 안의 겹침, 대상 언어 코드. 이미 있는 용어는 문제로 보지 않고 조용히 뺀다. 첫 제출의 문제는 돌려주고 마지막 제출은 문제없는 후보만 받는다.
+- 결과는 `glossary.csv`에 `status: pending`으로 들어간다(기록할 때 다시 읽어 이미 있는 용어는 빼므로 병렬 배치가 같은 용어를 내도 한 번만 들어간다). 사용자가 승인해야 `approved`가 되고, 승인된 항목만 번역 프롬프트와 QA 에 쓰인다.
+- 실측(2026-10-22, haiku · 낮음): 10행 · 배치 3개 → 약 24초, 후보 6개(골드·체력 물약·설정·구매·제단·저장). 두 배치가 context 에만 있던 낱말("수호자", "인벤토리")을 냈다가 "not found in the source strings"로 돌려받고 고쳐 냈다.
+
+### 용어 추가(용어집 화면)
+
+- 사용자가 용어 하나와 (선택) 품사·분류·사용 지침·strict 를 넣는다. 이미 있는 용어, 원문에 없는 용어는 세션을 열기 전에 거부한다(대화상자도 입력하는 동안 찾은 행 수와 함께 막는다).
+- 예문(코드, `src/core/terms/addition.ts`): 원문에서 그 용어가 나오는 행을 QA 와 같은 탐지로 찾고, 최대 8행을 고른다. 기존 번역이 있는 행, 그중 승인된 행을 앞에 둔다. 행마다 키·원문·context·언어별 기존 번역과 상태를 준다.
+- 고정 부분(`buildTermEntrySystemPrompt`): 대상 언어별 번역을 내되 예문의 기존 번역(특히 승인된 것)이 일관되게 옮긴 표현이 있으면 따르고, 엇갈리면 고른 이유를 reason 에. 사용자가 준 품사·지침은 그대로 두고 빈 칸만 채운다. note·reason 은 원문 언어. 게임 소개·톤 가이드.
+- 가변 부분(`buildTermEntryPrompt`): 용어, 사용자가 준 값(빈 칸은 "fill it in"), 예문(찾은 행 수 중 몇 행인지).
+- 출력: `submit_glossary_entry` 도구 `{ entry: { term, pos?, translations: { language, text }[], note?, reason?, confidence } }`. 같은 용어(대소문자 무시)이고 대상 언어마다 번역이 있어야 받는다. 첫 제출의 문제는 돌려주고 마지막에도 남으면 실패.
+- 기록: 사용자가 준 품사·지침·strict 를 덮어 `pending`으로 붙인다. 바로 승인하지 않는다 — 그리드에서 확인하고 [선택 승인](사용자 결정, 2026-10-26). 화면은 그 행으로 스크롤해 골라 둔다.
+- 코드가 그 번역으로 확정하면 용어집 위반이 될 기존 번역 행을 언어별로 세어(QA 의 `usesTranslation`) 메시지로 알린다.
+- 일회성 세션, `translate.model`·`effort`, 한도에 걸려도 자동 재시도 없음, 취소 가능. 시작·결과·실패는 작업 로그에 남는다.
+- 실측(2026-10-26, 같은 샘플 복사본): "구매"(품사 "단위"만 입력) → 11초. 승인된 예문 `Buy Health Potion`을 따라 en "Buy", ja "購入", 지침은 에이전트가 채우고 품사 "단위"는 그대로, pending 으로 추가.
+
+### 용어 재번역(용어집 화면)
+
+- 그리드에서 용어 하나를 고르고 [선택 재번역]. 지시는 선택이고 사용자가 쓴 그대로 넣는다(비우면 "더 나은 대안").
+- 용어 추가와 같은 고정 부분·예문·도구(`submit_glossary_entry`)를 쓴다. 가변 부분에 지금 번역·지침(화면이 보고 있는 값, 고친 칸 포함)과 검토자 지시를 더한다(`buildTermEntryPrompt`의 `revision`). 품사는 "사용자가 준 값"으로 넘겨 바꾸지 않고, 지침은 "다시 쓸 것"으로 표시해 **번역과 지침**을 다시 받는다 — 아직 맞는 안내는 살리고 옛 번역을 가리키는 부분은 고치거나 빼며, 필요 없으면 비운다(사용자 요청, 2026-10-26).
+- 원문에 아직 없는 용어도 다시 번역할 수 있다(예문 없이, 프롬프트가 그 사실을 밝힌다). 용어 추가와 달리 막지 않는 이유: 이미 용어집에 들어 있는 용어다.
+- 결과는 파일에 쓰지 않는다. 화면이 그 행의 번역 칸·근거·신뢰도에 미저장 편집으로 채우고, 사람이 [저장]해야 반영된다([변경 취소]로 되돌림). 바뀐 번역과 기존 번역과 어긋나는 행 수를 메시지로 알린다. 상태(승인/대기)는 바꾸지 않는다.
+- 처음에는 번역만 다시 받았는데, 지침이 옛 번역을 언급하면(예: "Purchase 대신 Buy") 새 번역과 어긋나서 지침도 함께 다시 받게 바꿨다. 화면은 새 지침도 그 행의 칸에 미저장 편집으로 채우고, 메시지에 "지침 다시 씀"/"지침 비움"을 알린다.
+- 실측(2026-10-26, 샘플 복사본): "구매" + 지시 "영어는 Buy 대신 Purchase 로" → 14초, en Buy → Purchase, ja 購入 유지, 승인된 예문 `Buy Health Potion`과 어긋나는 en 1행을 알림. 지침을 함께 받게 한 뒤 "영어는 Purchase 로 유지" → 12초, 지침의 "Purchase 대신 Buy" 가 "영어는 Purchase 로 통일"로 바뀌고 일본어 안내와 품사는 그대로.
 
 ### 행 단위 리롤
 
@@ -141,6 +173,7 @@ const SubmittedTranslation = z.object({
 ## 에이전트 패널
 
 - 유일하게 `resume`으로 이어지는 세션. 사용자가 프로젝트를 닫으면 세션 ID를 버린다.
-- 사용자가 "앞으로 ~하게 해줘"라고 지시하면 에이전트는 `update_project_rules`를 호출해 `styleRules`에 저장한다. 저장되지 않은 지시는 다음 배치에 반영되지 않는다 — 패널에서 그 사실을 사용자에게 알린다.
-- 패널 세션의 도구(M3): 읽기 전용 `get_project_context`, `get_strings_batch`, `get_glossary_terms`. 부를 때마다 패널에 도구 줄이 남는다.
-- 쓰기 도구 `update_project_rules`, `propose_glossary_terms` 는 아직 없다(M5).
+- 사용자가 "앞으로 ~하게 해줘"라고 지시하면 에이전트는 `update_project_rules`(추가·수정·삭제 하나)를 호출한다. 도구는 저장하지 않는다 — 지금 규칙에 적용해 보고 문제가 없으면 패널 입력창 위에 확인 카드를 띄운다. 사용자가 [저장]을 눌러야 `project:rules:apply`로 `styleRules`에 들어간다(사용자 결정, 2026-10-22). 저장되지 않은 지시는 다음 배치에 반영되지 않는다 — 시스템 프롬프트가 에이전트에게 그 사실을 사용자에게 알리게 한다.
+- 규칙을 고치거나 지울 때 에이전트는 `get_project_context`로 규칙 id 를 먼저 본다. 충돌하는 규칙을 새로 더하지 말고 기존 규칙을 고치라고 지시한다.
+- 패널 세션의 도구: 읽기 `get_project_context`(규칙 id 포함), `get_strings_batch`, `get_glossary_terms`, 쓰기 요청 `update_project_rules`, `propose_glossary_terms`(대상 언어별 번역 포함, pending 으로 붙음). 부를 때마다 패널에 도구 줄이 남는다.
+- 실측(2026-10-22): "앞으로 NPC 대사는 반말로 번역해 줘" → `get_project_context` → `update_project_rules`(add) → 카드 [저장] → r2 저장, 약 11초. "영어 부분은 빼 줘" → 같은 r2 를 고치는 update 카드. "수호자를 용어집 후보로" → `propose_glossary_terms` 1개(Guardian / 守護者) pending.

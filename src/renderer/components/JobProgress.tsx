@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { JobControlInput, JobState, JobView } from '@shared/schema/jobs'
+import type { JobControlInput, JobKind, JobState, JobView } from '@shared/schema/jobs'
 import { effortLabel, modelLabel } from '../state/translate-options'
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -10,11 +10,17 @@ const STATE_LABEL: Record<JobState, string> = {
   cancelled: '취소됨'
 }
 
-const SCOPE_LABEL: Record<JobView['scope'], string> = {
-  all: '전체',
-  untranslated: '미번역',
-  stale: 'stale',
-  selected: '선택 행'
+export const JOB_TITLE: Record<JobKind, string> = {
+  translate: '번역 작업',
+  context: '컨텍스트 추정',
+  terms: '용어 추출'
+}
+
+/** 실패한 배치를 다시 돌리는 방법. 작업마다 "남은 행"을 다시 계산하므로 같은 조건으로 다시 실행하면 된다. */
+const RETRY_HINT: Record<JobKind, string> = {
+  translate: '같은 범위로 다시 번역하면 그 행만 다시 돕니다.',
+  context: '다시 추정하면 아직 제안이 없는 행만 돕니다.',
+  terms: '다시 추출하면 이미 있는 용어는 다시 넣지 않습니다.'
 }
 
 function countdown(ms: number): string {
@@ -30,7 +36,7 @@ type Props = {
   onControl: (action: JobControlInput['action']) => void
 }
 
-/** 진행 중이거나 마지막으로 끝난 번역 작업. */
+/** 진행 중이거나 마지막으로 끝난 배치 작업(번역·컨텍스트 추정·용어 추출). */
 export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element {
   const { snapshot } = job
   const [now, setNow] = useState(() => Date.now())
@@ -49,12 +55,12 @@ export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element 
   return (
     <div className="card job-card">
       <div className="job-head">
-        <h3>번역 작업</h3>
+        <h3>{JOB_TITLE[job.kind]}</h3>
         <span className={`job-state ${snapshot.state}`}>{STATE_LABEL[snapshot.state]}</span>
       </div>
       <p className="hint">
-        {job.language} · {SCOPE_LABEL[job.scope]} · 모델 {modelLabel(job.model)} · 사고 {effortLabel(job.effort)}
-        {job.skippedApproved > 0 ? ` · 승인 ${job.skippedApproved}행 제외` : ''}
+        {job.summary} · 모델 {modelLabel(job.model)} · 사고 {effortLabel(job.effort)}
+        {job.notes.map((note) => ` · ${note}`).join('')}
       </p>
 
       <div className="job-bar" title={`완료 ${snapshot.doneRows} / 실패 ${snapshot.failedRows} / 전체 ${snapshot.totalRows}`}>
@@ -118,7 +124,7 @@ export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element 
               {failure.detail ? <pre>{failure.detail}</pre> : null}
             </div>
           ))}
-          <p className="hint">실패한 행은 기록되지 않았습니다. 같은 범위로 다시 번역하면 그 행만 다시 돕니다.</p>
+          <p className="hint">실패한 배치는 기록되지 않았습니다. {RETRY_HINT[job.kind]}</p>
         </div>
       ) : null}
     </div>

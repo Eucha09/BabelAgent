@@ -15,14 +15,14 @@ export const StyleRule = z.object({
 })
 export type StyleRule = z.infer<typeof StyleRule>
 
-const GameInfo = z.object({
+export const GameInfo = z.object({
   genre: z.string(),
   intro: z.string(),
   toneGuide: z.string()
 })
 const DEFAULT_GAME: z.infer<typeof GameInfo> = { genre: '', intro: '', toneGuide: '' }
 
-const BatchSettings = z.object({
+export const BatchSettings = z.object({
   maxRows: z.number().int().min(1),
   maxSourceChars: z.number().int().min(1),
   /** 상한 3. 더 큰 값은 스케줄러가 잘라낸다. */
@@ -36,7 +36,7 @@ const DEFAULT_BATCH: z.infer<typeof BatchSettings> = {
 export const MAX_CONCURRENCY = 3
 
 /** Unity SmartFormat 설정을 그대로 옮긴 값. 토크나이저와 QA가 이 값을 따른다. */
-const SmartStringsSettings = z.object({
+export const SmartStringsSettings = z.object({
   enabled: z.boolean(),
   formatters: z.array(z.string().min(1)),
   alternativeEscaping: z.boolean(),
@@ -71,8 +71,15 @@ export type TranslateSettings = z.infer<typeof TranslateSettings>
 const DEFAULT_TRANSLATE: TranslateSettings = { model: 'opus', effort: 'medium' }
 
 /** 검토 화면 설정. 신뢰도가 이 값보다 낮은 행을 "신뢰도 낮음" 필터로 모은다. */
-const ReviewSettings = z.object({ lowConfidence: z.number().min(0).max(1) })
+export const ReviewSettings = z.object({ lowConfidence: z.number().min(0).max(1) })
 const DEFAULT_REVIEW: z.infer<typeof ReviewSettings> = { lowConfidence: 0.7 }
+
+/**
+ * 컨텍스트 추정 설정. 제안하는 max_len 은 원문 표시 길이 × maxLenRatio(최소 10자) 아래로 내려가지 않는다 —
+ * max_len 은 번역문의 한도인데 번역은 원문보다 길어지기 쉽다. 알맞은 배수는 언어 조합마다 달라 프로젝트마다 둔다.
+ */
+export const ContextSettings = z.object({ maxLenRatio: z.number().min(1) })
+const DEFAULT_CONTEXT: z.infer<typeof ContextSettings> = { maxLenRatio: 2.5 }
 
 const ExportSettings = z.object({
   /** Unity에서 내보낸 샘플 CSV 경로(프로젝트 폴더 기준 상대 경로). */
@@ -92,7 +99,8 @@ export const ProjectConfig = z.object({
   grammar: GrammarSettings.default(DEFAULT_GRAMMAR),
   export: ExportSettings.default(DEFAULT_EXPORT),
   translate: TranslateSettings.default(DEFAULT_TRANSLATE),
-  review: ReviewSettings.default(DEFAULT_REVIEW)
+  review: ReviewSettings.default(DEFAULT_REVIEW),
+  context: ContextSettings.default(DEFAULT_CONTEXT)
 })
 export type ProjectConfig = z.infer<typeof ProjectConfig>
 
@@ -115,18 +123,43 @@ export function createDefaultProjectConfig(input: {
     grammar: { ...DEFAULT_GRAMMAR, tables: [] },
     export: { ...DEFAULT_EXPORT },
     translate: { ...DEFAULT_TRANSLATE },
-    review: { ...DEFAULT_REVIEW }
+    review: { ...DEFAULT_REVIEW },
+    context: { ...DEFAULT_CONTEXT }
   }
 }
 
 /**
- * project.json 부분 갱신(렌더러 → 메인). 화면에서 고칠 수 있는 항목만 받는다.
- * 지금은 번역 모델·사고 수준뿐이다.
+ * project.json 부분 갱신(렌더러 → 메인). 화면(프로젝트·번역·설정)에서 고칠 수 있는 항목만 받는다.
+ * 묶음마다 바뀐 것만 보내고, 메인이 지금 설정에 합친다. 배열(대상 언어, 스타일 규칙)은 통째로 바꾼다.
+ * schemaVersion·grammar·export 는 받지 않는다.
  */
 export const ProjectSettingsPatch = z.object({
-  translate: z.object({ model: TranslateModel, effort: TranslateEffort }).partial().optional()
+  name: z.string().optional(),
+  sourceLanguage: z.string().optional(),
+  targetLanguages: z.array(z.string()).optional(),
+  game: GameInfo.partial().optional(),
+  styleRules: z.array(StyleRule).optional(),
+  batch: BatchSettings.partial().optional(),
+  translate: z.object({ model: TranslateModel, effort: TranslateEffort }).partial().optional(),
+  review: ReviewSettings.partial().optional(),
+  context: ContextSettings.partial().optional(),
+  smartStrings: SmartStringsSettings.partial().optional()
 })
 export type ProjectSettingsPatch = z.infer<typeof ProjectSettingsPatch>
+
+/**
+ * 스타일 규칙 하나를 바꾸는 요청. 에이전트 패널이 제안하고, 사용자가 패널 카드에서 [저장]을 눌러야 적용된다.
+ * 규칙 id 는 코드가 붙이며 한 번 붙인 id 는 바꾸지 않는다(프롬프트가 id 순으로 넣는다).
+ */
+export const StyleRuleChange = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('add'), text: z.string() }),
+  z.object({ op: z.literal('update'), id: z.string().min(1), text: z.string() }),
+  z.object({ op: z.literal('remove'), id: z.string().min(1) })
+])
+export type StyleRuleChange = z.infer<typeof StyleRuleChange>
+
+export const ApplyStyleRuleInput = z.object({ change: StyleRuleChange })
+export type ApplyStyleRuleInput = z.infer<typeof ApplyStyleRuleInput>
 
 /** 프로젝트 생성 요청(렌더러 → 메인). */
 export const CreateProjectInput = z.object({
@@ -143,4 +176,10 @@ export type OpenProjectInput = z.infer<typeof OpenProjectInput>
 export type OpenProject = {
   dir: string
   config: ProjectConfig
+}
+
+export type ApplyStyleRuleResult = {
+  project: OpenProject
+  /** 추가·수정·삭제한 규칙의 id */
+  ruleId: string
 }
