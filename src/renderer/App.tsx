@@ -12,10 +12,11 @@ import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { Context } from './components/screens/Context'
+import { Export } from './components/screens/Export'
 import { Glossary } from './components/screens/Glossary'
 import { Placeholder } from './components/screens/Placeholder'
 import { Project } from './components/screens/Project'
-import { Review } from './components/screens/Review'
+import { Review, type ReviewFocus } from './components/screens/Review'
 import { Settings, type SettingsPatch } from './components/screens/Settings'
 import { Strings } from './components/screens/Strings'
 import { Translate } from './components/screens/Translate'
@@ -336,8 +337,12 @@ export function App(): React.JSX.Element {
   )
 
   /** 저장하지 않은 편집이 있으면 먼저 확인을 받는다. */
+  /** 내보내기 진단에서 검토 화면의 한 행으로 갈 때. 사이드바로 옮기면 지운다 */
+  const [reviewFocus, setReviewFocus] = useState<ReviewFocus | null>(null)
+
   const selectScreen = useCallback(
     (id: ScreenId) => {
+      setReviewFocus(null)
       if (id === screen) return
       if (unsaved) setPendingLeave({ kind: 'screen', id })
       else setScreen(id)
@@ -458,7 +463,7 @@ export function App(): React.JSX.Element {
         ) : project && screen === 'project' ? (
           <Project key={project.dir} project={project} onSave={updateProject} onDirtyChange={setUnsaved} onMessage={setMessage} />
         ) : project && screen === 'strings' ? (
-          <Strings key={project.dir} onMessage={setMessage} onDirtyChange={setUnsaved} />
+          <Strings key={project.dir} syntax={project.config.smartStrings} onMessage={setMessage} onDirtyChange={setUnsaved} />
         ) : project && screen === 'context' ? (
           <Context key={project.dir} project={project} job={job} jobLog={jobLog} onMessage={setMessage} onDirtyChange={setUnsaved} />
         ) : project && screen === 'glossary' ? (
@@ -474,7 +479,20 @@ export function App(): React.JSX.Element {
               onSettings={(patch) => void saveTranslateSettings(patch)}
             />
           ) : screen === 'review' ? (
-            <Review key={project.dir} project={project} job={job} onMessage={setMessage} />
+            <Review key={project.dir} project={project} job={job} onMessage={setMessage} initialFocus={reviewFocus} />
+          ) : screen === 'export' ? (
+            <Export
+              key={project.dir}
+              project={project}
+              onSettings={updateProject}
+              onProjectReplaced={setProject}
+              onOpenReview={(focus) => {
+                setReviewFocus(focus)
+                setScreen('review')
+              }}
+              onOpenProjectSettings={() => selectScreen('project')}
+              onMessage={setMessage}
+            />
           ) : (
             <Placeholder screen={screenDef} />
           )

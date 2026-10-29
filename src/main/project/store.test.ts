@@ -40,6 +40,7 @@ function master(key: string, source: string): MasterRow {
     ui_type: '',
     max_len: '',
     vars: '',
+    smart: '',
     tags: '',
     source_hash: sourceHash(source)
   }
@@ -100,7 +101,7 @@ describe('행 순서와 빈 파일', () => {
   it('행이 없으면 헤더만 있는 파일을 만든다', () => {
     expect(saveMaster(dir, [], false).ok).toBe(true)
     expect(readFileSync(masterPath(dir), 'utf8').trim()).toBe(
-      'key,source,context,ui_type,max_len,vars,tags,source_hash'
+      'key,source,context,ui_type,max_len,vars,smart,tags,source_hash'
     )
 
     forgetReadHashes()
@@ -108,6 +109,19 @@ describe('행 순서와 빈 파일', () => {
     if (!loaded.ok) throw new Error('읽기 실패')
     expect(loaded.value.exists).toBe(true)
     expect(loaded.value.rows).toEqual([])
+  })
+
+  it('smart 열이 없는 옛 원문도 읽고, 저장하면 열을 더하며 칸 글자는 그대로 둔다', () => {
+    writeFileSync(masterPath(dir), `key,source,source_hash\na,{0}개,${sourceHash('{0}개')}\n`)
+    const old = loadMaster(dir)
+    if (!old.ok) throw new Error('읽기 실패')
+    expect(old.value.rows[0]?.smart).toBe('')
+
+    saveMaster(dir, [{ ...master('a', '{0}개'), smart: 'TRUE' }], false)
+    forgetReadHashes()
+    const loaded = loadMaster(dir)
+    if (!loaded.ok) throw new Error('읽기 실패')
+    expect(loaded.value.rows[0]?.smart).toBe('TRUE')
   })
 
   it('새 행의 빈 해시를 저장할 때 채운다', () => {

@@ -14,7 +14,7 @@
 | M3 | 번역 파이프라인 | [~] | (UI 확인 대기) |
 | M4 | 검토/QA | [~] | (UI 확인 대기) |
 | M5 | 컨텍스트 보강과 용어집 | [~] | (UI 확인 대기) |
-| M6 | 내보내기 | [ ] | |
+| M6 | 내보내기 | [~] | (UI 확인 대기) |
 | M7 | 선택 기능 | [ ] | |
 
 ## M1 골격
@@ -181,19 +181,35 @@ Smart Strings 토크나이저, QA 검사, 필터, 인라인 편집, 재번역.
 
 ## M6 내보내기
 
-Unity 템플릿 기반 CSV, 의사 로컬라이제이션, 글자 목록.
+템플릿 없이 자동 생성하는 Unity Localization CSV, Unity 프로젝트 연결(선택), 템플릿(선택), Smart 항목, 글자 목록.
 
-완료 기준:
+완료 기준 (코드 작성 완료 · UI 클릭 확인 대기):
 
-- [ ] 템플릿 헤더 해석과 열 역할 추론, 사용자 수정 UI, 매핑 저장
-- [ ] 미번역/stale 처리 옵션(`empty`/`source`/`skip`)
-- [ ] QA 오류 시 내보내기 차단과 진단 목록
-- [ ] 의사 로컬라이제이션 생성(길이 확장, 변수/태그 보존)
-- [ ] 사용 글자 목록 추출(폰트 아틀라스용)
+- [x] 자동 생성 헤더: `Key`, `Id`, `Shared Comments`(선택), 언어별 `{언어명}({로케일 코드})` 열, 언어별 `… Comments` 열(선택). Id는 모르면 비운다
+- [~] project.json `export.locales`의 언어별 `unityLocaleCode`·`columnName`을 프로젝트 화면 "내보내기" 카드에서 고친다
+- [~] 내보내기 전에 생성될 헤더 미리보기(열마다 출처 표시, 앞 5행 표)
+- [~] `Shared Comments`에 `context`를 넣을지 옵션
+- [~] (선택) Unity 프로젝트 연결: 로케일 에셋·String Table 공유 데이터 에셋(YAML)을 읽어 실제 로케일 코드와 기존 키 Id를 가져온다. 읽기 실패 시 자동 생성으로 대체 — 읽기는 실제 파일로 확인, 폴더 선택 대화상자는 클릭 확인 대기
+- [~] (선택) 템플릿 등록: 헤더 해석과 열 역할 추론, 사용자 수정 UI, 매핑 저장 — 파일 선택 대화상자는 클릭 확인 대기
+- [~] `strings_master.csv`의 `smart` 열과 토크나이저 기반 `true` 제안
+- [~] 내보내기 때 Smart 항목 목록 표시와 별도 파일 출력
+- [x] 미번역/stale 처리 옵션(`empty`/`source`/`skip`)
+- [~] QA 오류 시 내보내기 차단과 진단 목록([검토에서 보기]로 그 행 열기)
+- 제외: 의사 로컬라이제이션 생성 — Unity 내장 `PseudoLocale`을 쓴다(사용자 결정, 2026-10-26)
+- [x] 사용 글자 목록 추출(폰트 아틀라스용)
 
-메모:
+메모 (2026-10-26):
 
-- 의사 로컬라이제이션과 글자 목록은 M6에서 처음 등장하는 기능이다. 범위를 좁힐 필요가 생기면 글자 목록을 먼저 뺀다.
+- 내보내기 방식 변경(사용자 결정, 2026-10-26): 템플릿 필수 → **템플릿 없이 자동 생성이 기본**. Unity 프로젝트 연결과 템플릿 등록은 선택 기능이고, 읽지 못해도 자동 생성으로 내보낸다. `strings_master.csv`에 `smart` 열을 더한다.
+- 사용자 결정(2026-10-26): ① 의사 로컬라이제이션은 M6에서 뺀다 — Unity에 런타임 `PseudoLocale`(원문 테이블 값을 포맷한 뒤 변환)이 이미 있다 ② 언어별 로케일 코드·열 이름은 프로젝트 화면의 "내보내기" 카드에서 고친다. 계획에서 권한 기본값(아래 "구현 중 정한 것")도 그대로 받았다.
+- Unity 동작은 이 PC의 Unity 프로젝트(MazeBreaker, Unity 6000.4.10f1, Localization 1.5.13)로 확인했다: `Library/PackageCache`의 CSV 확장 원본, 실제 로케일 에셋, 패키지 샘플의 공유 데이터·컬렉션·로케일 테이블 에셋. 헤더의 언어명은 로케일 에셋의 표시 이름이 아니라 `CultureInfo.EnglishName`이고, Unity Mono 값이 CLDR과 다른 코드가 있다(`zh-CN`, `zh-TW` 등). 빈 값 칸은 Unity 번역·주석을 덮거나 지우고, `Import > CSV...`는 파일에 없는 키를 지운다. Smart 플래그는 CSV에 없다(로케일 테이블마다 `SmartFormatTag` 메타데이터). 상세는 `unity-export.md`의 "Unity 가져오기 동작".
+- 이름표: Unity Editor 의 Mono 로 `CultureInfo.GetCultures(AllCultures)`를 돌려 341개 `코드 → EnglishName`을 뽑아 `src/core/export/unity-locale-names.ts`에 상수로 뒀다(Intl 은 CLDR 이라 다르다). 표에 없는 코드는 같은 Mono 로 실측한 규칙대로 마지막 하위 태그를 떼어 가며 찾고(`es-419`→`Spanish`), 끝내 없으면 `Custom`.
+- 기계적으로 확인한 것: `npm run typecheck` 통과, `npm test` 523개 통과(+69), `npm run build` 성공. 빌드 산출물을 임시 사용자 데이터 폴더와 샘플 프로젝트(원문 8행 ko → en·ja, 일부러 넣은 변수 누락·stale·쉼표/따옴표/줄바꿈·Smart 구문)로 띄우고 스크립트로 눌러 확인했다 — 자동 헤더 `Key, Id, Korean(ko), English(en), Japanese(ja)`, QA 오류 1건과 [검토에서 보기] → 검토 화면에서 en·그 행이 골라져 열림, Unity 연결(가짜 Unity 폴더에 MazeBreaker 의 실제 로케일 에셋 복사본 + `ja-JP` 로케일 + 패키지 샘플을 고친 공유 데이터) → 열 이름 `Japanese (Japan)(ja-JP)`, Id `9223372036854775001` 자리 그대로, Unity 에만 있는 키 6개 경고, 원문 화면 Smart 열·"제안" 배지·[Smart 제안 적용 (2)] → 저장 후 파일 반영, 프로젝트 화면 "내보내기" 카드, 내보내기 → `export/UI.csv`·`UI_smart.csv`·`UI_chars_{ko,en,ja}.txt` 내용, 다시 내보내기 → 덮어쓰기 확인 대화상자, 헤더를 바꾼 템플릿 → 템플릿 순서·이름, 모르는 열 경고, 렌더러 콘솔 경고·오류 0건. **Unity 폴더·템플릿 파일 선택 대화상자는 스크립트로 누를 수 없어 project.json 에 경로를 직접 넣어 확인했다. 사람이 직접 클릭해 거친 경로는 아직 없다** — `[~]`는 사용자 확인 뒤 `[x]`로 바꾼다.
+- 실측: MazeBreaker 전체 `Assets/` 훑기 1.5초, 로케일 en·ko 를 찾았고 String Table 은 아직 없다(→ "공유 데이터를 찾지 못해 Id 를 비웁니다"). `.asset` 83개가 바이너리였는데 모두 NavMesh·LightingData(Unity 가 늘 바이너리로 둠)라 알림 문구를 "괜찮을 수 있음"으로 바꿨다. 패키지 샘플 공유 데이터 2개는 키·Id 가 원본과 같게 읽혔다.
+- 구현 중 정한 것(모두 `unity-export.md`·`data-format.md`에 적음): Shared Comments·언어별 Comments 는 기본 꺼짐이고 끄면 열을 아예 만들지 않는다(템플릿을 써도) · 언어별 Comments 내용은 번역 메모(`note`) · 템플릿에서 모르는 열은 "비워 둠"이 아니라 `omit`(빈 칸은 Unity 기존 값을 지운다 — 문서 원안을 바꿈) · 고른 언어인데 템플릿에 열이 없으면 알림 · `skip`은 고른 대상 언어 중 하나라도 비면 행을 뺀다 · QA 는 번역문을 그대로 내보내는 칸만 본다 · 출력은 프로젝트 폴더 `export/`, 파일 이름은 컬렉션 이름 → 프로젝트 이름, 쓸 수 없는 글자는 지운다 · 옵션은 고르는 즉시 project.json 에 저장하고 내보낼 언어 선택은 저장하지 않는다(기본 전체) · Unity 경로는 프로젝트 폴더 기준 상대 경로로 저장 · Unity 읽기 결과는 연결·[다시 읽기] 때만 새로 훑는다 · YAML 은 `yaml` 패키지(새 의존성)를 failsafe 스키마로 써서 모든 값을 문자열로 읽는다(64비트 Id, `No`·`007` 같은 키) · `smart` 칸의 글자는 읽을 때 바꾸지 않는다(`TRUE`는 그대로 두고 참으로 해석) · 옛 `export.unityTemplate`은 읽을 때 `template.path`로 옮기고 매핑은 다시 추론, 그대로 [매핑 저장] 가능 · Smart 파일은 `{이름}_smart.csv`(`Key`, `Id`), Smart 항목이 없으면 쓰지 않는다.
+- 구조: 결정론적 부분은 `src/core/export/`(이름표·로케일 결정·헤더·행 생성·Unity YAML·글자 목록·계획 `plan.ts`)와 `src/core/strings/smart.ts`, 메인은 Unity 폴더 훑기(`src/main/export/unity-project.ts`)와 채널(`src/main/ipc/export.ts`)만 맡는다. 미리보기와 쓰기가 같은 `planExport`를 쓰고, 쓰기 직전에 파일을 다시 읽고 QA 를 다시 돈다.
+- 알려진 한계: 컬렉션 에셋의 CSV 확장 사용자 열 이름(`m_Extensions`)은 읽지 않는다(실제 샘플이 없어서) — 그런 프로젝트는 템플릿을 쓴다. 프로젝트 화면 카드의 자리표시자(자동값)는 Unity 연결을 모른다 — 연결 후 실제 코드는 내보내기 화면의 언어 표에서 본다. 설정한 로케일 코드는 대소문자까지 같아야 Unity 로케일과 맞는 것으로 본다. 일부 키만 내보내기는 없다. 이름표는 Unity 6000.4 Mono 기준이다.
+- M7 이후로 넘긴 것: `_smart.csv`를 읽어 Unity 쪽 Smart 플래그를 켜는 에디터 스크립트, CSV 확장 사용자 열 이름 읽기, `validate_translation` 패널 도구, 언어별 복수형 분기 수 검사, `tags` 기준 배치 묶기(M5 에서 넘어온 것).
 
 ## M7 선택 기능
 

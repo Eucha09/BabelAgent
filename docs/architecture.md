@@ -46,7 +46,7 @@
 | `project:pick` | 폴더 선택 대화상자 |
 | `project:open` | 프로젝트 로드, schemaVersion 확인·마이그레이션 |
 | `project:rules:apply` | 에이전트 패널의 스타일 규칙 카드에서 [저장]. 메인이 지금 규칙에 다시 적용해 보고(`core/project/rules.ts`) 설정 검증을 통과하면 project.json 에 쓴다. 저장한 규칙 id 와 새 설정을 돌려준다 |
-| `project:settings:set` | project.json 부분 갱신. 프로젝트·번역·설정 화면이 바뀐 묶음(name, sourceLanguage, targetLanguages, game, styleRules, batch, translate, review, context, smartStrings)만 보내면, 메인이 지금 설정에 합치고 `core/project/settings.ts`의 검증을 통과해야 쓴다. schemaVersion·grammar·export 는 받지 않는다. 같은 값이면 쓰지 않는다 |
+| `project:settings:set` | project.json 부분 갱신. 프로젝트·번역·설정 화면이 바뀐 묶음(name, sourceLanguage, targetLanguages, game, styleRules, batch, translate, review, context, smartStrings)만 보내면, 메인이 지금 설정에 합치고 `core/project/settings.ts`의 검증을 통과해야 쓴다. schemaVersion·grammar 는 받지 않는다. export 는 경로가 아닌 값(언어별 로케일 코드·열 이름, 내보내기 옵션)만 받는다 — Unity 프로젝트 경로와 템플릿 경로는 대화상자 채널로만 정한다. 같은 값이면 쓰지 않는다 |
 | `strings:list` | 원문 + 선택 언어 번역 조인 결과, 원문 파일 존재 여부 |
 | `strings:save` | 원문 전체 저장(편집·행 추가·순서 변경·삭제). 키 검사 후 해시 재계산, 충돌 감지, 모든 번역 파일의 stale 갱신과 `deletedKeys` 행 삭제 |
 | `strings:create` | 헤더만 있는 빈 `strings_master.csv` 생성 |
@@ -72,7 +72,11 @@
 | `row:reroll` | 행 단위 재번역(일회성 세션, 사용자 지시 포함). 결과는 쓰지 않고 후보와 그 진단을 돌려준다. 한도에 걸려도 자동으로 다시 시도하지 않는다 |
 | `row:reroll:cancel` | 진행 중인 재번역 취소 |
 | `agent:chat:send` | 에이전트 패널 메시지 전송 |
-| `export:unity` | 템플릿 기반 CSV 내보내기 |
+| `export:preview` | 내보내기 미리보기(쓰지 않음). 화면이 고른 언어·옵션·파일 이름을 받아 원문·번역·Unity 읽기 결과·템플릿으로 계획(`core/export/plan.ts`)을 세우고, 번역문을 그대로 내보내는 칸만 QA 한다. 헤더(열마다 출처), 앞부분 몇 행, 언어별 로케일, Unity·템플릿 상태, 막는 문제·알림, QA 오류(최대 200)·경고 수, Smart 항목, 요약, 출력 파일(있는지) |
+| `export:run` | 같은 계획을 다시 세우고 다시 검사한 뒤 `export/`에 쓴다. 막는 문제나 QA 오류가 있으면 쓰지 않는다. 이미 있는 파일은 `overwrite` 확인 없이는 덮지 않는다(`conflict` + 파일 목록). 파일마다 원자적으로 교체 |
+| `export:reveal` | `export/` 폴더 열기 |
+| `export:unity:link` / `:unlink` / `:reload` / `:collection` | Unity 프로젝트 폴더 연결(메인의 폴더 대화상자, Assets·ProjectSettings 확인)·해제·다시 읽기·컬렉션 고르기. 읽은 결과는 메인이 들고 있다가 연결·다시 읽기 때만 새로 훑는다 |
+| `export:template:set` / `:clear` | Unity 에서 내보낸 CSV 를 메인의 파일 대화상자로 골라 템플릿으로 등록(프로젝트 밖이면 `templates/unity_template.csv`로 복사, 열 역할 추론해 저장)·해제 |
 | `app:settings:get` / `:set` | CLI 경로, 인증 모드 등 앱 전역 설정 |
 
 이벤트(메인 → 렌더러):

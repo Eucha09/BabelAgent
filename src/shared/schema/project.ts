@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DEFAULT_SMART_FORMATTERS } from '@core/qa/formatters'
+import { DEFAULT_EXPORT, ExportSettings, ExportSettingsPatch } from './export'
 import { TranslateEffort, TranslateModel } from './jobs'
 
 export { SUPPORTED_SCHEMA_VERSION } from '@core/project/schema-version'
@@ -81,12 +82,6 @@ const DEFAULT_REVIEW: z.infer<typeof ReviewSettings> = { lowConfidence: 0.7 }
 export const ContextSettings = z.object({ maxLenRatio: z.number().min(1) })
 const DEFAULT_CONTEXT: z.infer<typeof ContextSettings> = { maxLenRatio: 2.5 }
 
-const ExportSettings = z.object({
-  /** Unity에서 내보낸 샘플 CSV 경로(프로젝트 폴더 기준 상대 경로). */
-  unityTemplate: z.string().nullable()
-})
-const DEFAULT_EXPORT: z.infer<typeof ExportSettings> = { unityTemplate: null }
-
 export const ProjectConfig = z.object({
   schemaVersion: z.number().int().min(1),
   name: z.string().min(1),
@@ -121,7 +116,7 @@ export function createDefaultProjectConfig(input: {
     batch: { ...DEFAULT_BATCH },
     smartStrings: { ...DEFAULT_SMART_STRINGS, formatters: [...DEFAULT_SMART_FORMATTERS] },
     grammar: { ...DEFAULT_GRAMMAR, tables: [] },
-    export: { ...DEFAULT_EXPORT },
+    export: { ...DEFAULT_EXPORT, locales: {} },
     translate: { ...DEFAULT_TRANSLATE },
     review: { ...DEFAULT_REVIEW },
     context: { ...DEFAULT_CONTEXT }
@@ -131,7 +126,7 @@ export function createDefaultProjectConfig(input: {
 /**
  * project.json 부분 갱신(렌더러 → 메인). 화면(프로젝트·번역·설정)에서 고칠 수 있는 항목만 받는다.
  * 묶음마다 바뀐 것만 보내고, 메인이 지금 설정에 합친다. 배열(대상 언어, 스타일 규칙)은 통째로 바꾼다.
- * schemaVersion·grammar·export 는 받지 않는다.
+ * schemaVersion·grammar 는 받지 않는다. export 는 경로가 아닌 값만 받는다(Unity 프로젝트·템플릿 경로는 대화상자 채널).
  */
 export const ProjectSettingsPatch = z.object({
   name: z.string().optional(),
@@ -143,7 +138,8 @@ export const ProjectSettingsPatch = z.object({
   translate: z.object({ model: TranslateModel, effort: TranslateEffort }).partial().optional(),
   review: ReviewSettings.partial().optional(),
   context: ContextSettings.partial().optional(),
-  smartStrings: SmartStringsSettings.partial().optional()
+  smartStrings: SmartStringsSettings.partial().optional(),
+  export: ExportSettingsPatch.optional()
 })
 export type ProjectSettingsPatch = z.infer<typeof ProjectSettingsPatch>
 

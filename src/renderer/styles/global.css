@@ -1857,3 +1857,143 @@ details > summary {
   padding: var(--space-2) var(--space-3) 0;
   border-top: 1px solid var(--border);
 }
+
+/* 프로젝트 화면 "내보내기" 카드의 언어별 로케일 표 */
+.locale-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.locale-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  padding: 0 var(--space-2) var(--space-1) 0;
+}
+
+.locale-table td {
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
+  vertical-align: middle;
+}
+
+.locale-table td:first-child {
+  width: 110px;
+  white-space: nowrap;
+}
+
+.locale-table td:nth-child(2) {
+  width: 170px;
+}
+
+/* 원문 그리드의 Smart 칸: 선택 상자 + 제안 배지 */
+.smart-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-top: 3px;
+}
+
+.grid-select {
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px;
+  font-size: var(--font-size-xs);
+}
+
+/* 내보내기 화면 */
+.export-screen .card {
+  max-width: 760px;
+}
+
+.export-screen .card.wide {
+  max-width: 1040px;
+}
+
+.header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.header-chip {
+  max-width: none;
+  gap: var(--space-2);
+}
+
+.header-chip code {
+  color: var(--text-primary);
+}
+
+.header-chip-origin {
+  color: var(--text-muted);
+}
+
+.export-warning {
+  color: var(--warn);
+}
+
+.export-qa-list,
+.export-smart-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.export-qa-item {
+  display: grid;
+  grid-template-columns: auto minmax(80px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-size-sm);
+}
+
+.export-smart-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-size-sm);
+}
+
+.export-qa-item:last-child,
+.export-smart-list li:last-child {
+  border-bottom: none;
+}
+
+.export-smart-source {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.template-table td:first-child {
+  width: auto;
+  white-space: normal;
+}
+
+.template-table td:nth-child(2) {
+  width: 240px;
+}
+
+/* 체크 상자 옆 보조 글자 */
+.check-note {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* .field 안에 두면 .field label(블록)이 .check 의 flex 를 덮으므로 따로 감싼다 */
+.export-languages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}

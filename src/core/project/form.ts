@@ -1,6 +1,7 @@
+import type { ExportLocale } from '@shared/schema/export'
 import type { ProjectConfig, StyleRule } from '@shared/schema/project'
 import type { TranslateEffort, TranslateModel } from '@shared/schema/jobs'
-import { validateProjectSettings, type SettingsProblem } from './settings'
+import { normalizeExportLocales, validateProjectSettings, type SettingsProblem } from './settings'
 
 /**
  * 프로젝트 화면의 입력 상태. 숫자 칸은 입력 중에 비거나 잘못될 수 있으므로 글자로 들고 있다가
@@ -27,6 +28,8 @@ export type ProjectForm = {
   escapeChar: string
   convertCharacterStringLiterals: boolean
   caseSensitive: boolean
+  /** 언어별 Unity 로케일 코드·열 이름. 빈 칸은 자동 */
+  exportLocales: Record<string, ExportLocale>
 }
 
 export function toProjectForm(config: ProjectConfig): ProjectForm {
@@ -50,7 +53,8 @@ export function toProjectForm(config: ProjectConfig): ProjectForm {
     alternativeEscaping: config.smartStrings.alternativeEscaping,
     escapeChar: config.smartStrings.escapeChar,
     convertCharacterStringLiterals: config.smartStrings.convertCharacterStringLiterals,
-    caseSensitive: config.smartStrings.caseSensitive
+    caseSensitive: config.smartStrings.caseSensitive,
+    exportLocales: Object.fromEntries(Object.entries(config.export.locales).map(([language, locale]) => [language, { ...locale }]))
   }
 }
 
@@ -70,7 +74,7 @@ function toNumber(text: string): number {
 
 /**
  * 입력을 설정으로 바꾸고 문제를 모은다. base 는 화면을 연 시점의 설정 — 화면에 없는 항목
- * (schemaVersion, grammar, export)은 거기서 가져온다.
+ * (schemaVersion, grammar, 내보내기의 로케일 밖 항목)은 거기서 가져온다.
  */
 export function fromProjectForm(form: ProjectForm, base: ProjectConfig): { config: ProjectConfig; problems: SettingsProblem[] } {
   const config: ProjectConfig = {
@@ -95,7 +99,8 @@ export function fromProjectForm(form: ProjectForm, base: ProjectConfig): { confi
       escapeChar: form.escapeChar,
       convertCharacterStringLiterals: form.convertCharacterStringLiterals,
       caseSensitive: form.caseSensitive
-    }
+    },
+    export: { ...base.export, locales: normalizeExportLocales(form.exportLocales) }
   }
   return { config, problems: validateProjectSettings(config) }
 }

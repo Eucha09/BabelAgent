@@ -17,6 +17,7 @@ const row = (key: string, extra: Partial<MasterRow> = {}): MasterRow => ({
   ui_type: '',
   max_len: '',
   vars: '',
+  smart: '',
   tags: '',
   source_hash: 'h',
   ...extra

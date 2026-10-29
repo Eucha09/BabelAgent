@@ -1,3 +1,4 @@
+import type { ExportLocale, ExportSettings, ExportSettingsPatch } from '@shared/schema/export'
 import {
   MAX_CONCURRENCY,
   ProjectConfig,
@@ -21,7 +22,32 @@ export function applySettingsPatch(config: ProjectConfig, patch: ProjectSettings
     translate: { ...config.translate, ...patch.translate },
     review: { ...config.review, ...patch.review },
     context: { ...config.context, ...patch.context },
-    smartStrings: { ...config.smartStrings, ...patch.smartStrings }
+    smartStrings: { ...config.smartStrings, ...patch.smartStrings },
+    export: applyExportPatch(config.export, patch.export)
+  }
+}
+
+/** 로케일 칸의 앞뒤 공백을 지우고, 두 칸이 다 빈 언어는 뺀다(자동과 같다). */
+export function normalizeExportLocales(locales: Readonly<Record<string, ExportLocale>>): Record<string, ExportLocale> {
+  const result: Record<string, ExportLocale> = {}
+  for (const [language, locale] of Object.entries(locales)) {
+    const unityLocaleCode = locale.unityLocaleCode.trim()
+    const columnName = locale.columnName.trim()
+    if (unityLocaleCode !== '' || columnName !== '') result[language] = { unityLocaleCode, columnName }
+  }
+  return result
+}
+
+/** 템플릿 매핑은 등록된 템플릿이 있을 때만 바꾼다. 경로(unity, template.path)는 여기서 바꾸지 않는다. */
+function applyExportPatch(current: ExportSettings, patch: ExportSettingsPatch | undefined): ExportSettings {
+  if (!patch) return current
+  const { locales, templateColumns, fileName, ...options } = patch
+  return {
+    ...current,
+    ...options,
+    ...(locales === undefined ? {} : { locales: normalizeExportLocales(locales) }),
+    ...(fileName === undefined ? {} : { fileName: fileName.trim() }),
+    template: current.template && templateColumns ? { ...current.template, columns: templateColumns } : current.template
   }
 }
 
@@ -48,6 +74,9 @@ export function buildSettingsPatch(base: ProjectConfig, next: ProjectConfig): Pr
   if (!same(base.review, next.review)) patch.review = next.review
   if (!same(base.context, next.context)) patch.context = next.context
   if (!same(base.smartStrings, next.smartStrings)) patch.smartStrings = next.smartStrings
+  // 프로젝트 화면은 내보내기 중 언어별 로케일만 고친다
+  const locales = normalizeExportLocales(next.export.locales)
+  if (!same(normalizeExportLocales(base.export.locales), locales)) patch.export = { locales }
   return patch
 }
 
@@ -78,10 +107,17 @@ export type SettingsField =
   | 'context.maxLenRatio'
   | 'smartStrings.escapeChar'
   | 'smartStrings.formatters'
+  | 'export.locales'
 
 export type SettingsProblem = { field: SettingsField; message: string }
 
 const FORMATTER_NAME = /^[A-Za-z0-9_]+$/
+
+/** Unity 로케일 코드. Unity 는 사용자 정의 코드도 받으므로 BCP 47 보다 느슨하게 본다. */
+const LOCALE_CODE = /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$/
+
+/** Unity CSV 의 Key·Id·Shared Comments 열 이름. 로케일 열 이름으로 쓸 수 없다. */
+export const RESERVED_COLUMN_NAMES: readonly string[] = ['Key', 'Id', 'Shared Comments']
 
 /** max_len 배수의 상한. 이보다 크면 길이 제한이 사실상 없다. */
 export const MAX_LEN_RATIO_LIMIT = 10
@@ -142,7 +178,30 @@ export function validateProjectSettings(config: ProjectConfig): SettingsProblem[
   const badNames = formatters.filter((name) => !FORMATTER_NAME.test(name))
   if (badNames.length > 0) add('smartStrings.formatters', `포매터 이름은 영문·숫자·_ 만 씁니다: ${badNames.join(', ')}`)
 
+  for (const message of exportLocaleProblems(config)) add('export.locales', message)
+
   return problems
+}
+
+/** 프로젝트 언어(원문 + 대상)의 내보내기 로케일 칸. 목록에서 빠진 언어의 값은 보지 않는다. */
+function exportLocaleProblems(config: ProjectConfig): string[] {
+  const messages: string[] = []
+  const languages = [config.sourceLanguage, ...config.targetLanguages]
+  const names = new Map<string, string>()
+  for (const language of languages) {
+    const locale = config.export.locales[language]
+    if (!locale) continue
+    const code = locale.unityLocaleCode
+    if (code !== '' && !LOCALE_CODE.test(code)) messages.push(`${language}: 로케일 코드가 올바르지 않습니다: "${code}"`)
+    const name = locale.columnName
+    if (name === '') continue
+    if (name !== name.trim() || /[\r\n]/.test(name)) messages.push(`${language}: 열 이름 앞뒤에 공백이나 줄바꿈을 둘 수 없습니다.`)
+    else if (RESERVED_COLUMN_NAMES.includes(name)) messages.push(`${language}: "${name}" 은 Unity 가 쓰는 열 이름입니다.`)
+    const other = names.get(name)
+    if (other !== undefined) messages.push(`${other}·${language}: 열 이름 "${name}" 이 겹칩니다.`)
+    names.set(name, language)
+  }
+  return messages
 }
 
 /**

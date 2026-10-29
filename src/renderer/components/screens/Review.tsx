@@ -54,17 +54,22 @@ function describeBulkResult({ approved, skipped }: BulkApproveResult): string {
   return parts.join(' ')
 }
 
+/** 다른 화면(내보내기 진단 목록)에서 특정 행을 열 때 */
+export type ReviewFocus = { language: string; key: string }
+
 type Props = {
   project: OpenProject
   job: JobView | null
   onMessage: (text: string) => void
+  /** 처음 열 때 고를 언어와 행. 화면을 열 때마다 새로 그려지므로 초기값으로만 쓴다 */
+  initialFocus?: ReviewFocus | null
 }
 
-export function Review({ project, job, onMessage }: Props): React.JSX.Element {
+export function Review({ project, job, onMessage, initialFocus = null }: Props): React.JSX.Element {
   const { config } = project
   const syntax = config.smartStrings
   const lowConfidence = config.review.lowConfidence
-  const [language, setLanguage] = useState(config.targetLanguages[0] ?? '')
+  const [language, setLanguage] = useState(initialFocus?.language ?? config.targetLanguages[0] ?? '')
   const [rows, setRows] = useState<StringsRow[]>([])
   const [diagnostics, setDiagnostics] = useState<Record<string, QaDiagnostic[]>>({})
   const [notices, setNotices] = useState<string[]>([])
@@ -72,7 +77,7 @@ export function Review({ project, job, onMessage }: Props): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<IpcError | null>(null)
   const [filter, setFilter] = useState<ReviewFilter>(EMPTY_FILTER)
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [selectedKey, setSelectedKey] = useState<string | null>(initialFocus?.key ?? null)
   const [editing, setEditingState] = useState<EditingCell | null>(null)
   const [saving, setSaving] = useState(false)
   const [conflict, setConflict] = useState<Conflict | null>(null)

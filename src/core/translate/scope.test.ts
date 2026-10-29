@@ -10,6 +10,7 @@ const m = (key: string): MasterRow => ({
   ui_type: '',
   max_len: '',
   vars: '',
+  smart: '',
   tags: '',
   source_hash: ''
 })

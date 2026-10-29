@@ -9,6 +9,8 @@ import type {
 } from '@shared/schema/strings'
 import type { IpcError } from '@shared/types'
 import { insertAfter, moveByOffset, moveRelative, type DropPosition } from '@core/strings/order'
+import type { SmartSyntax } from '@core/qa/smart'
+import { formatSmartFlag, needsSmartSuggestion } from '@core/strings/smart'
 import { AddRowDialog, type NewRowInput } from '../AddRowDialog'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { ConflictDialog } from '../ConflictDialog'
@@ -29,6 +31,7 @@ function toMasterRow(row: StringsRow): MasterRow {
     ui_type: row.ui_type,
     max_len: row.max_len,
     vars: row.vars,
+    smart: row.smart,
     tags: row.tags,
     source_hash: row.source_hash
   }
@@ -41,12 +44,14 @@ type Conflict = {
 }
 
 type Props = {
+  /** Smart 구문 제안에 쓰는 토크나이저 설정(project.json smartStrings) */
+  syntax: SmartSyntax
   onMessage: (text: string) => void
   /** 저장하지 않은 변경이 있는지. 다른 화면으로 갈 때 확인을 받는다. */
   onDirtyChange: (dirty: boolean) => void
 }
 
-export function Strings({ onMessage, onDirtyChange }: Props): React.JSX.Element {
+export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.Element {
   const [view, setView] = useState<StringsView | null>(null)
   const [rows, setRows] = useState<StringsRow[]>([])
   const [language, setLanguage] = useState<string | null>(null)
@@ -141,6 +146,7 @@ export function Strings({ onMessage, onDirtyChange }: Props): React.JSX.Element 
         ui_type: '',
         max_len: '',
         vars: '',
+        smart: '',
         tags: '',
         // 해시는 저장할 때 메인이 계산한다
         source_hash: '',
@@ -310,6 +316,14 @@ export function Strings({ onMessage, onDirtyChange }: Props): React.JSX.Element 
   )
 
   const notices = view?.notices ?? []
+  const smartSuggestions = useMemo(() => rows.filter((row) => needsSmartSuggestion(row, syntax)).length, [rows, syntax])
+
+  /** 원문에 Smart 구문이 있는데 smart 가 미정인 행을 true 로 둔다. 미저장 편집이라 [저장]해야 반영된다. */
+  const applySmartSuggestions = (): void => {
+    setRows((prev) => prev.map((row) => (needsSmartSuggestion(row, syntax) ? { ...row, smart: formatSmartFlag(true) } : row)))
+    setDirty(true)
+    onMessage(`Smart 제안 ${smartSuggestions}행을 적용했습니다. [저장]하면 원문 파일에 반영됩니다.`)
+  }
   const pendingRow = pendingDelete === null ? null : (rows.find((row) => row.key === pendingDelete) ?? null)
 
   return (
@@ -452,6 +466,14 @@ export function Strings({ onMessage, onDirtyChange }: Props): React.JSX.Element 
               ) : null}
             </div>
             <div className="row">
+              <button
+                type="button"
+                disabled={busy || smartSuggestions === 0}
+                title="원문에 Smart 구문(플레이스홀더)이 있는데 Smart 칸이 미정인 행을 Smart 로 둡니다. 일반으로 둔 행은 건드리지 않습니다."
+                onClick={applySmartSuggestions}
+              >
+                Smart 제안 적용 ({smartSuggestions})
+              </button>
               <button type="button" onClick={() => setAdding(true)} disabled={busy}>
                 행 추가
               </button>
@@ -484,6 +506,7 @@ export function Strings({ onMessage, onDirtyChange }: Props): React.JSX.Element 
           <StringsGrid
             rows={rows}
             language={language}
+            syntax={syntax}
             newKeys={newKeys}
             selectedKey={selectedKey}
             onSelect={setSelectedKey}

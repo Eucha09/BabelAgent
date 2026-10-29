@@ -13,6 +13,7 @@ const CANDIDATES: Record<keyof ColumnMapping, readonly string[]> = {
   ui_type: ['ui_type', 'uitype', 'type', 'ui', '화면', '유형'],
   max_len: ['max_len', 'maxlen', 'max_length', 'length', '길이', '제한'],
   vars: ['vars', 'variables', 'params', '변수'],
+  smart: ['smart', 'is_smart', 'issmart', 'smart_string'],
   tags: ['tags', 'tag', 'category', '태그', '분류']
 }
 
@@ -30,11 +31,12 @@ export function guessMapping(header: readonly string[]): ColumnMapping {
     ui_type: pick('ui_type'),
     max_len: pick('max_len'),
     vars: pick('vars'),
+    smart: pick('smart'),
     tags: pick('tags')
   }
 }
 
-const OPTIONAL_FIELDS = ['context', 'ui_type', 'max_len', 'vars', 'tags'] as const
+const OPTIONAL_FIELDS = ['context', 'ui_type', 'max_len', 'vars', 'smart', 'tags'] as const
 
 /**
  * 가져온 레코드를 기존 원문에 합친다.
@@ -77,6 +79,7 @@ export function importMaster(
       ui_type: '',
       max_len: '',
       vars: '',
+      smart: '',
       tags: '',
       source_hash: ''
     }

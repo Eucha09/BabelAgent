@@ -66,6 +66,7 @@ export function toMasterRows(
       ui_type: record['ui_type'] ?? '',
       max_len: record['max_len'] ?? '',
       vars: record['vars'] ?? '',
+      smart: record['smart'] ?? '',
       tags: record['tags'] ?? '',
       source_hash: expected
     })

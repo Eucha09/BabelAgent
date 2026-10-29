@@ -164,3 +164,70 @@ describe('프로젝트 화면 입력', () => {
     expect(fromProjectForm(toProjectForm(withGrammar), withGrammar).config.grammar).toEqual(withGrammar.grammar)
   })
 })
+
+describe('내보내기 설정', () => {
+  it('export 가 없거나 옛 unityTemplate 만 있는 project.json 도 읽는다', () => {
+    const empty = ProjectConfig.parse({ schemaVersion: 1, name: 'p', sourceLanguage: 'ko' })
+    expect(empty.export).toEqual({
+      locales: {},
+      sharedComments: false,
+      localeComments: false,
+      missing: 'empty',
+      glyphs: false,
+      fileName: '',
+      unity: null,
+      template: null
+    })
+    const legacy = ProjectConfig.parse({ schemaVersion: 1, name: 'p', sourceLanguage: 'ko', export: { unityTemplate: 'templates/unity_sample.csv' } })
+    expect(legacy.export.template).toEqual({ path: 'templates/unity_sample.csv', columns: [] })
+    const legacyNull = ProjectConfig.parse({ schemaVersion: 1, name: 'p', sourceLanguage: 'ko', export: { unityTemplate: null } })
+    expect(legacyNull.export.template).toBeNull()
+  })
+
+  it('패치는 옵션과 로케일만 바꾸고 경로는 건드리지 않는다', () => {
+    const linked: ProjectConfig = {
+      ...base,
+      export: { ...base.export, unity: { projectPath: '../Game', tableCollection: 'UI' }, template: { path: 't.csv', columns: [] } }
+    }
+    const next = applySettingsPatch(linked, {
+      export: {
+        missing: 'skip',
+        fileName: '  out ',
+        locales: { en: { unityLocaleCode: ' en-US ', columnName: '' }, ko: { unityLocaleCode: '', columnName: '' } },
+        templateColumns: [{ name: 'Key', role: 'key', language: '' }]
+      }
+    })
+    expect(next.export.missing).toBe('skip')
+    expect(next.export.fileName).toBe('out')
+    expect(next.export.locales).toEqual({ en: { unityLocaleCode: 'en-US', columnName: '' } })
+    expect(next.export.unity).toEqual({ projectPath: '../Game', tableCollection: 'UI' })
+    expect(next.export.template).toEqual({ path: 't.csv', columns: [{ name: 'Key', role: 'key', language: '' }] })
+    // 템플릿이 없으면 매핑은 무시한다
+    expect(applySettingsPatch(base, { export: { templateColumns: [] } }).export.template).toBeNull()
+  })
+
+  it('경로 필드는 패치 스키마가 받지 않는다', () => {
+    const parsed = ProjectSettingsPatch.parse({ export: { unity: { projectPath: 'C:/x' }, missing: 'source' } })
+    expect(parsed.export).toEqual({ missing: 'source' })
+  })
+
+  it('프로젝트 화면의 로케일 변경만 패치로 만든다', () => {
+    const next: ProjectConfig = { ...base, export: { ...base.export, locales: { en: { unityLocaleCode: 'en-US', columnName: '' } } } }
+    expect(buildSettingsPatch(base, next)).toEqual({ export: { locales: { en: { unityLocaleCode: 'en-US', columnName: '' } } } })
+    const blank: ProjectConfig = { ...base, export: { ...base.export, locales: { en: { unityLocaleCode: '', columnName: '' } } } }
+    expect(buildSettingsPatch(base, blank)).toEqual({})
+  })
+
+  it('로케일 코드 형식, 열 이름 공백·예약어·중복을 막는다', () => {
+    const withLocales = (locales: ProjectConfig['export']['locales']): ProjectConfig => ({ ...base, export: { ...base.export, locales } })
+    expect(fields(withLocales({ en: { unityLocaleCode: 'en-US', columnName: 'English(en-US)' } }))).toEqual([])
+    expect(fields(withLocales({ en: { unityLocaleCode: 'en US', columnName: '' } }))).toEqual(['export.locales'])
+    expect(fields(withLocales({ en: { unityLocaleCode: '', columnName: ' English' } }))).toEqual(['export.locales'])
+    expect(fields(withLocales({ en: { unityLocaleCode: '', columnName: 'Key' } }))).toEqual(['export.locales'])
+    expect(fields(withLocales({ ko: { unityLocaleCode: '', columnName: 'X' }, en: { unityLocaleCode: '', columnName: 'X' } }))).toEqual([
+      'export.locales'
+    ])
+    // 프로젝트 언어가 아닌 항목은 보지 않는다
+    expect(fields(withLocales({ fr: { unityLocaleCode: 'bad code', columnName: '' } }))).toEqual([])
+  })
+})

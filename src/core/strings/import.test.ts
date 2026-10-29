@@ -10,6 +10,7 @@ const EMPTY_MAPPING: ColumnMapping = {
   ui_type: '',
   max_len: '',
   vars: '',
+  smart: '',
   tags: ''
 }
 
@@ -21,6 +22,7 @@ function master(key: string, source: string, extra: Partial<MasterRow> = {}): Ma
     ui_type: '',
     max_len: '',
     vars: '',
+    smart: '',
     tags: '',
     source_hash: sourceHash(source),
     ...extra

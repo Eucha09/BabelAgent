@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { DropPosition } from '@core/strings/order'
+import type { SmartSyntax } from '@core/qa/smart'
+import { needsSmartSuggestion, parseSmartFlag } from '@core/strings/smart'
 import type { StringsRow } from '@shared/schema/strings'
 import { useColumnSizing } from '../state/column-sizing'
 
@@ -13,13 +15,15 @@ const HEADER_HEIGHT = 30
 /** 사용자가 바꾼 열 너비의 저장 키 */
 const SIZING_KEY = 'babel.stringsGrid.columnSizing'
 
-export type EditableField = 'source' | 'context' | 'ui_type' | 'max_len' | 'vars' | 'tags'
+export type EditableField = 'source' | 'context' | 'ui_type' | 'max_len' | 'vars' | 'smart' | 'tags'
 
 type DropTarget = { key: string; position: DropPosition }
 
 type Props = {
   rows: StringsRow[]
   language: string | null
+  /** Smart 구문 제안에 쓰는 토크나이저 설정(project.json smartStrings) */
+  syntax: SmartSyntax
   /** 아직 저장하지 않은 새 행. 상태 칸에 따로 표시한다. */
   newKeys: ReadonlySet<string>
   selectedKey: string | null
@@ -42,6 +46,7 @@ const helper = createColumnHelper<StringsRow>()
 export function StringsGrid({
   rows,
   language,
+  syntax,
   newKeys,
   selectedKey,
   onSelect,
@@ -109,6 +114,34 @@ export function StringsGrid({
       editable('max_len', '최대 길이', 70, true),
       // 변수 메타데이터(JSON 배열). 형식이 틀리면 검토 화면이 경고한다
       editable('vars', '변수', 150, true),
+      // Unity Smart String 여부. 미정인데 원문에 Smart 구문이 있으면 "제안"을 붙인다
+      helper.accessor('smart', {
+        header: 'Smart',
+        size: 104,
+        cell: (info) => {
+          const flag = parseSmartFlag(info.getValue())
+          const row = info.row.original
+          return (
+            <div className="smart-cell">
+              <select
+                className="grid-select"
+                value={flag === null ? '' : String(flag)}
+                title={flag === null && info.getValue().trim() !== '' ? `알 수 없는 값 "${info.getValue()}" — 미정으로 봅니다` : undefined}
+                onChange={(event) => onEdit(row.key, 'smart', event.target.value)}
+              >
+                <option value="">미정</option>
+                <option value="true">Smart</option>
+                <option value="false">일반</option>
+              </select>
+              {needsSmartSuggestion(row, syntax) ? (
+                <span className="badge warn" title="원문에 Smart 구문이 있습니다">
+                  제안
+                </span>
+              ) : null}
+            </div>
+          )
+        }
+      }),
       editable('tags', '태그', 100, true),
       helper.accessor('translation', {
         header: language ? `번역 (${language})` : '번역',
@@ -128,7 +161,7 @@ export function StringsGrid({
           )
       })
     ]
-  }, [language, newKeys, onEdit])
+  }, [language, newKeys, onEdit, syntax])
 
   const table = useReactTable({
     data: rows,

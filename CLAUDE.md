@@ -56,7 +56,7 @@
 프로젝트는 폴더 하나로 저장하고 CSV가 원본(source of truth)이다. 앱 내부 DB에 원본을 두지 않는다. 열 정의는 `docs/data-format.md`.
 
 - `project.json` — schemaVersion, 설정, sourceLanguage, 대상 언어, 톤 가이드, 스타일 규칙
-- `strings_master.csv` — 원문
+- `strings_master.csv` — 원문. `smart` 열(선택)에 Unity Smart String 여부
 - `translations_{lang}.csv` — 언어별 번역
 - `glossary.csv` — 용어집
 - `grammar_*.csv` — 어픽스 조합용 문법 테이블. 동적 텍스트 조합이 필요한 프로젝트에서만 쓰는 선택 기능
@@ -95,7 +95,13 @@
 
 ## 내보내기
 
-- Unity 내보내기 형식을 하드코딩하지 않는다. Unity에서 내보낸 샘플 CSV를 템플릿으로 읽어 열 이름과 순서를 맞춘다. 템플릿 경로는 project.json에 저장한다.
+- 기본은 템플릿 없이 자동 생성한다. 형식은 Unity Localization CSV 확장의 기본 구성: `Key`, `Id`, `Shared Comments`(선택), 언어별 `{언어명}({로케일 코드})` 열, 언어별 `… Comments` 열(선택). 열 이름이 다르면 Unity가 그 열을 조용히 무시하므로, 내보내기 전에 만들어질 헤더를 미리 보여준다.
+- `Id`는 알 수 없으면 비운다. Unity가 가져올 때 새 Id를 붙인다.
+- 언어별 `unityLocaleCode`와 `columnName`은 project.json `export.locales`에 두고 프로젝트 화면(project.json 설정 화면)에서 고친다. 언어명·로케일 코드를 코드에 박지 않는다 — 빈 값일 때만 자동으로 채운다.
+- `Shared Comments`에 `context`를 넣을지는 옵션이다. 옵션을 끄면 열을 만들지 않는다 — 빈 칸은 Unity의 기존 주석을 지운다.
+- 선택: Unity 프로젝트 폴더를 연결하면 로케일 에셋과 String Table 공유 데이터 에셋(YAML)을 **읽기만** 해서 실제 로케일 코드와 기존 키의 Id를 가져온다. 필드 이름은 실제 파일로 확인한 것만 쓴다. 읽기에 실패하면 기본 자동 생성으로 대신하고 이유를 알린다.
+- 선택: 헤더를 바꾼 Unity 프로젝트를 위해 Unity에서 내보낸 샘플 CSV를 템플릿으로 등록할 수 있다. 등록하면 템플릿의 열 이름과 순서를 따른다.
+- `strings_master.csv`의 `smart` 열이 Smart String 여부다. 토크나이저가 Smart 구문을 찾으면 `true`로 제안하고 사용자가 적용한다. Unity CSV는 Smart 플래그를 옮기지 않으므로, 내보낼 때 Smart 항목 목록을 보여주고 별도 파일로도 쓴다.
 - 상세는 `docs/unity-export.md`.
 
 ## UI
@@ -125,4 +131,4 @@
 - `docs/data-format.md` — project.json 스키마, CSV 열 정의, 상태 전이, 해시·인코딩·충돌 규칙
 - `docs/agent-prompts.md` — 프롬프트 조립 구조, 배치 산정, 응답 JSON 스키마, 한도 처리
 - `docs/qa-rules.md` — 변수·태그·Smart Strings·용어집 검사 규칙과 심각도
-- `docs/unity-export.md` — Unity Localization 템플릿 매칭 규칙
+- `docs/unity-export.md` — Unity Localization CSV 자동 생성 헤더, Unity 프로젝트 연결, 템플릿(선택), Smart 항목, 확인한 Unity 가져오기 동작

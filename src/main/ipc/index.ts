@@ -1,6 +1,7 @@
 import { registerAgentIpc } from './agent'
 import { registerAuthIpc } from './auth'
 import { registerContextIpc } from './context'
+import { registerExportIpc } from './export'
 import { registerGlossaryIpc } from './glossary'
 import { registerJobsIpc } from './jobs'
 import { registerAppSettingsIpc } from './app-settings'
@@ -17,5 +18,6 @@ export function registerIpc(): void {
   registerContextIpc()
   registerGlossaryIpc()
   registerReviewIpc()
+  registerExportIpc()
   registerAgentIpc()
 }

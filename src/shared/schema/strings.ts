@@ -9,6 +9,7 @@ export const MASTER_COLUMNS = [
   'ui_type',
   'max_len',
   'vars',
+  'smart',
   'tags',
   'source_hash'
 ] as const
@@ -21,6 +22,8 @@ export const MasterRow = z.object({
   ui_type: z.string(),
   max_len: z.string(),
   vars: z.string(),
+  /** Unity Smart String 여부. `true`/`false`(대소문자 무시), 그 밖의 값은 미정. 글자는 그대로 들고 다닌다. */
+  smart: z.string(),
   tags: z.string(),
   source_hash: z.string()
 })
@@ -116,6 +119,7 @@ export const ColumnMapping = z.object({
   ui_type: z.string(),
   max_len: z.string(),
   vars: z.string(),
+  smart: z.string(),
   tags: z.string()
 })
 export type ColumnMapping = z.infer<typeof ColumnMapping>

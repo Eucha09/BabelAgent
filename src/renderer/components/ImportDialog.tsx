@@ -15,6 +15,7 @@ const FIELDS: { field: keyof ColumnMapping; label: string; required: boolean }[]
   { field: 'ui_type', label: 'UI 유형', required: false },
   { field: 'max_len', label: '최대 길이', required: false },
   { field: 'vars', label: '변수', required: false },
+  { field: 'smart', label: 'Smart', required: false },
   { field: 'tags', label: '태그', required: false }
 ]
 

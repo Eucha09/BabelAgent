@@ -11,7 +11,8 @@ MyGame/
 ├ glossary.csv
 ├ context_suggestions.csv       (승인을 기다리는 메타데이터 제안)
 ├ grammar_ko_particles.csv      (선택)
-├ templates/unity_sample.csv    (내보내기 템플릿)
+├ templates/unity_template.csv  (선택. Unity에서 내보낸 샘플 CSV — 헤더를 바꾼 Unity 프로젝트용)
+├ export/                       (내보내기 출력: {이름}.csv, {이름}_smart.csv, {이름}_chars_{lang}.txt)
 └ .babel/backups/<schemaVersion>-<timestamp>/   (마이그레이션 백업)
 ```
 
@@ -43,7 +44,19 @@ MyGame/
     "caseSensitive": true
   },
   "grammar": { "enabled": false, "tables": [] },
-  "export": { "unityTemplate": "templates/unity_sample.csv" },
+  "export": {
+    "locales": {                // 내보낼 언어(원문 + 대상)마다. 빈 값은 자동(unity-export.md)
+      "ko": { "unityLocaleCode": "", "columnName": "" },
+      "en": { "unityLocaleCode": "en", "columnName": "English(en)" }
+    },
+    "sharedComments": false,    // Shared Comments 열을 만들고 context 를 넣는다
+    "localeComments": false,    // 언어별 "… Comments" 열을 만들고 번역 메모(note)를 넣는다
+    "missing": "empty",         // 번역 없음·stale 칸: empty | source | skip
+    "glyphs": false,            // 언어별 글자 목록 파일도 쓴다
+    "fileName": "",             // 출력 파일 이름(확장자 제외). 빈 값이면 컬렉션 이름 → 프로젝트 이름
+    "unity": null,              // 선택. { "projectPath": "../MyGame", "tableCollection": "UI" }
+    "template": null            // 선택. { "path": "templates/unity_template.csv", "columns": [{ "name": "Key", "role": "key" }, …] }
+  },
   "translate": { "model": "opus", "effort": "medium" },  // 번역 모델(opus | sonnet | haiku | default=CLI 설정)과 사고 수준(low | medium | high | xhigh | max). 번역 화면·설정 화면에서 고친다
   "review": { "lowConfidence": 0.7 },   // 검토 화면 "신뢰도 낮음" 필터 기준(이 값 미만)
   "context": { "maxLenRatio": 2.5 }     // 컨텍스트 추정이 제안하는 max_len 의 하한 배수. 원문 표시 길이 × 이 값, 최소 10자. 1~10
@@ -51,10 +64,11 @@ MyGame/
 ```
 
 - 스키마는 `src/shared/schema/project.ts`의 zod로 정의하고 타입은 `z.infer`로 끌어낸다.
-- 사용자는 사이드바의 **프로젝트** 화면에서 고친다(이름·언어·게임 소개·톤 가이드·스타일 규칙·번역·배치·검토 기준·최대 길이 여유 배수·Smart Strings). 여러 칸을 고친 뒤 한 번에 저장하고, 저장하지 않은 채 다른 화면으로 가면 확인을 받는다. 저장할 때는 바뀐 묶음만 보내므로 그 사이 앱 밖에서 고친 다른 묶음은 남는다. 문법 테이블(`grammar`)과 내보내기 템플릿(`export`)은 그 기능이 생길 때 화면에 넣는다.
-- 값의 뜻 검증(`validateProjectSettings`, `src/core/project/settings.ts`): 이름은 비울 수 없고, 언어 코드는 BCP 47 태그여야 하며 대상 언어는 겹치거나 원문 언어와 같을 수 없다. 배치 행 수·글자 수는 1 이상 정수, 동시 작업자는 1~3, 신뢰도 기준은 0~1, 최대 길이 여유 배수는 1~10, `escapeChar`는 중괄호가 아닌 글자 하나, 포매터 이름은 영문·숫자·`_`.
+- 사용자는 사이드바의 **프로젝트** 화면에서 고친다(이름·언어·게임 소개·톤 가이드·스타일 규칙·번역·배치·검토 기준·최대 길이 여유 배수·Smart Strings). 여러 칸을 고친 뒤 한 번에 저장하고, 저장하지 않은 채 다른 화면으로 가면 확인을 받는다. 저장할 때는 바뀐 묶음만 보내므로 그 사이 앱 밖에서 고친 다른 묶음은 남는다. 문법 테이블(`grammar`)은 그 기능이 생길 때 화면에 넣는다. 내보내기(`export`)의 언어별 Unity 로케일 코드·열 이름은 이 화면의 "내보내기" 카드에서, 나머지 내보내기 옵션은 내보내기 화면에서 고친다(사용자 결정, 2026-10-26). Unity 프로젝트 경로와 템플릿 경로는 메인의 선택 대화상자로만 정한다.
+- 값의 뜻 검증(`validateProjectSettings`, `src/core/project/settings.ts`): 이름은 비울 수 없고, 언어 코드는 BCP 47 태그여야 하며 대상 언어는 겹치거나 원문 언어와 같을 수 없다. 배치 행 수·글자 수는 1 이상 정수, 동시 작업자는 1~3, 신뢰도 기준은 0~1, 최대 길이 여유 배수는 1~10, `escapeChar`는 중괄호가 아닌 글자 하나, 포매터 이름은 영문·숫자·`_`. 내보내기 로케일 코드는 비우거나 BCP 47 태그, 열 이름은 비우거나 앞뒤 공백 없는 문자열이고 겹칠 수 없다.
 - 스타일 규칙 id 는 `r` + 번호(`r1`, `r2` …)로 새로 붙이고 한 번 붙인 id 는 바꾸지 않는다. 프롬프트가 id 순으로 넣으므로 id 가 바뀌면 고정 부분이 바뀐다(캐싱).
 - 기본값은 스키마의 `.default()`로 준다. 코드 곳곳에서 `?? 기본값`을 반복하지 않는다.
+- 옛 파일의 `export.unityTemplate`(문자열)은 읽을 때 `export.template.path`로 옮긴다(매핑은 다시 추론). 템플릿이 필수에서 선택으로 바뀐 것이라 `schemaVersion`은 올리지 않는다.
 
 ### Smart Strings 설정
 
@@ -87,6 +101,7 @@ MyGame/
 | `max_len` | | 표시 길이 제한(문자 수). 빈 값은 제한 없음 |
 | `vars` | | 변수 메타데이터 JSON 배열(아래) |
 | `tags` | | 분류 태그. `;` 구분 |
+| `smart` | | Unity Smart String 여부. `true`/`false`/빈 값(미정) |
 | `source_hash` | ○ | `source`의 해시 |
 
 - **행 순서는 사용자가 정한 순서를 그대로 보존한다.** 앱은 행을 정렬하지 않는다. 가져오기는 기존 순서를 유지하고 새 키를 뒤에 붙이며, 사용자는 그리드에서 끌어서 놓기나 ↑↓로 순서를 바꾼다.
@@ -95,6 +110,13 @@ MyGame/
 - 번역 파일은 저장 직전에 다시 읽어 고친다(stale 표시·삭제). 앱 밖에서 바뀐 번역을 덮어쓰지 않기 위해서다. 원문은 저장됐는데 번역 파일이 잠겨 실패하면 그 사실을 알리고, 다시 저장하면 이어서 맞춘다.
 - 저장 직전 메인이 빈 키와 중복 키를 다시 검사한다. 렌더러를 거치지 않은 요청도 막기 위해서다.
 - 새 행의 `source_hash`는 비워 두고 저장할 때 메인이 채운다.
+
+### smart 열
+
+- Unity의 Smart 플래그는 CSV로 옮겨지지 않는다. 내보내기가 `smart=true` 행 목록을 따로 보여주고 파일로 쓴다(`unity-export.md`).
+- 원문 화면은 토크나이저(project.json `smartStrings` 설정)가 원문에서 플레이스홀더를 찾았는데 `smart`가 비어 있는 행에 `true`를 제안한다. 적용은 사용자가 한다(미저장 편집 → 저장). `false`로 둔 행은 제안하지 않는다. `true`인데 구문이 없는 행은 그대로 둔다.
+- 값은 대소문자를 무시하고 `true`/`false`로 읽고, 그 밖의 값은 미정으로 본다. 다른 열처럼 칸의 글자는 그대로 들고 다닌다(읽을 때 바꿔 쓰지 않는다). 앱이 값을 정할 때는 소문자로 쓴다.
+- 메타데이터라 원문 해시에 들어가지 않는다. 선택 열이라 옛 파일도 그대로 읽히므로 `schemaVersion`은 올리지 않는다.
 
 ### vars 열
 
@@ -133,7 +155,7 @@ MyGame/
 
 ### source_hash 규칙
 
-- 대상은 **원문 텍스트만**. `context`, `ui_type`, `max_len`, `vars`, `tags`는 해시에 넣지 않는다 — 메타데이터를 고칠 때마다 전체가 stale이 되면 쓸 수 없다.
+- 대상은 **원문 텍스트만**. `context`, `ui_type`, `max_len`, `vars`, `tags`, `smart`는 해시에 넣지 않는다 — 메타데이터를 고칠 때마다 전체가 stale이 되면 쓸 수 없다.
 - 정규화는 `\r\n` → `\n` 하나뿐. 공백 trim, 대소문자 변환, 유니코드 정규화는 하지 않는다 — 원문의 공백 차이는 실제 차이다.
 - 알고리즘은 SHA-256, 앞 16자(hex)만 저장한다. 함수는 `src/core/hash.ts` 한 곳.
 

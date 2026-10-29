@@ -27,6 +27,7 @@ function toMaster(row: StringsRow): MasterRow {
     ui_type: row.ui_type,
     max_len: row.max_len,
     vars: row.vars,
+    smart: row.smart,
     tags: row.tags,
     source_hash: row.source_hash
   }

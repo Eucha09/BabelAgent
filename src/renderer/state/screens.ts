@@ -70,11 +70,11 @@ export const SCREENS: readonly ScreenDef[] = [
   {
     id: 'export',
     label: '내보내기',
-    badge: 'M6',
-    badgeTone: 'default',
+    badge: '사용 가능',
+    badgeTone: 'ready',
     requiresProject: true,
     description: 'Unity Localization용 CSV를 내보내는 화면입니다.',
-    planned: ['템플릿 헤더 해석과 열 매핑', '미번역 처리 옵션', 'QA 오류 시 내보내기 차단']
+    planned: []
   },
   {
     id: 'settings',

@@ -3,7 +3,7 @@ import type { MasterRow } from '@shared/schema/strings'
 import { buildBatches, clampConcurrency } from './batches'
 
 function row(key: string, source: string): MasterRow {
-  return { key, source, context: '', ui_type: '', max_len: '', vars: '', tags: '', source_hash: '' }
+  return { key, source, context: '', ui_type: '', max_len: '', vars: '', smart: '', tags: '', source_hash: '' }
 }
 
 const sizes = (batches: ReturnType<typeof buildBatches>): number[] => batches.map((b) => b.rows.length)

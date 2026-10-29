@@ -22,6 +22,7 @@ import type {
   StyleRuleChange
 } from '@shared/schema/project'
 import type { ApplyContextInput, ApplyContextResult, ContextView, StartContextInput } from '@shared/schema/context'
+import type { ExportPreview, ExportRequest, ExportResult } from '@shared/schema/export'
 import type {
   AddTermInput,
   AddTermResult,
@@ -156,6 +157,23 @@ const api = {
     reroll: (input: RerollInput): Promise<IpcResult<RerollCandidate>> => ipcRenderer.invoke(IPC.rowReroll, input),
     cancelReroll: (requestId: string): Promise<IpcResult<boolean>> =>
       ipcRenderer.invoke(IPC.rowRerollCancel, { requestId })
+  },
+  export: {
+    /** 헤더·QA·Smart 항목·요약 미리보기. 쓰지 않는다 */
+    preview: (request: ExportRequest): Promise<IpcResult<ExportPreview>> => ipcRenderer.invoke(IPC.exportPreview, request),
+    /** 다시 검사한 뒤 export/ 에 쓴다. 덮어쓸 파일이 있으면 overwrite 를 확인받아 true 로 */
+    run: (request: ExportRequest, overwrite: boolean): Promise<IpcResult<ExportResult>> =>
+      ipcRenderer.invoke(IPC.exportRun, { request, overwrite }),
+    reveal: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.exportReveal),
+    /** Unity 프로젝트 폴더를 대화상자로 골라 연결한다(읽기 전용) */
+    linkUnity: (): Promise<IpcResult<OpenProject>> => ipcRenderer.invoke(IPC.exportUnityLink),
+    unlinkUnity: (): Promise<IpcResult<OpenProject>> => ipcRenderer.invoke(IPC.exportUnityUnlink),
+    reloadUnity: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.exportUnityReload),
+    selectCollection: (tableCollection: string): Promise<IpcResult<OpenProject>> =>
+      ipcRenderer.invoke(IPC.exportUnityCollection, { tableCollection }),
+    /** Unity 에서 내보낸 샘플 CSV 를 대화상자로 골라 템플릿으로 등록한다 */
+    setTemplate: (): Promise<IpcResult<OpenProject>> => ipcRenderer.invoke(IPC.exportTemplateSet),
+    clearTemplate: (): Promise<IpcResult<OpenProject>> => ipcRenderer.invoke(IPC.exportTemplateClear)
   },
   usage: {
     read: (): Promise<IpcResult<UsageLimits>> => ipcRenderer.invoke(IPC.usageRead)

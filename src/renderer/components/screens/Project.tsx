@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fromProjectForm, splitList, toProjectForm, type ProjectForm } from '@core/project/form'
 import { MIN_SUGGESTED_MAX_LEN } from '@core/context/submission'
+import { defaultColumnName } from '@core/export/locales'
 import {
   buildSettingsPatch,
   isLanguageTag,
@@ -134,6 +135,18 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
 
   const targetCodes = splitList(form.targetLanguages)
   const removedTargets = base.targetLanguages.filter((code) => !targetCodes.includes(code))
+  // 내보내기 카드는 원문 + 대상 언어마다 한 줄
+  const exportLanguages = [...new Set([form.sourceLanguage.trim(), ...targetCodes])].filter((code) => isLanguageTag(code))
+
+  const updateLocale = (language: string, field: 'unityLocaleCode' | 'columnName', value: string): void => {
+    const current = form.exportLocales[language] ?? { unityLocaleCode: '', columnName: '' }
+    const next = { ...current, [field]: value }
+    const locales = { ...form.exportLocales }
+    // 두 칸이 다 비면 자동과 같으므로 항목을 지운다(저장할 때 바뀐 것으로 보지 않게)
+    if (next.unityLocaleCode === '' && next.columnName === '') delete locales[language]
+    else locales[language] = next
+    update('exportLocales', locales)
+  }
 
   return (
     <div className="project-screen">
@@ -427,6 +440,61 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             번역문의 한도라서, 원문보다 번역이 길어지는 언어 조합이면 값을 키우세요.
           </p>
         </div>
+      </section>
+
+      <section className="card" id="project-export-card">
+        <h3>내보내기</h3>
+        <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
+          Unity CSV 의 언어 열입니다. 열 이름이 Unity 쪽과 한 글자라도 다르면 Unity 가 그 열을 조용히 무시합니다. 빈 칸은
+          자동입니다 — 로케일 코드는 프로젝트 언어 코드(Unity 프로젝트를 연결했으면 그 프로젝트의 로케일), 열 이름은{' '}
+          <code>{'{영어 언어명}({코드})'}</code>입니다.
+        </p>
+        <table className="locale-table">
+          <thead>
+            <tr>
+              <th>언어</th>
+              <th>Unity 로케일 코드</th>
+              <th>열 이름</th>
+            </tr>
+          </thead>
+          <tbody>
+            {exportLanguages.map((language) => {
+              const locale = form.exportLocales[language] ?? { unityLocaleCode: '', columnName: '' }
+              const code = locale.unityLocaleCode.trim() || language
+              return (
+                <tr key={language}>
+                  <td>
+                    <code>{language}</code>
+                    {language === form.sourceLanguage.trim() ? <span className="hint"> 원문</span> : null}
+                  </td>
+                  <td>
+                    <input
+                      className="mono"
+                      value={locale.unityLocaleCode}
+                      placeholder={language}
+                      aria-label={`${language} Unity 로케일 코드`}
+                      onChange={(event) => updateLocale(language, 'unityLocaleCode', event.target.value)}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="mono"
+                      value={locale.columnName}
+                      placeholder={defaultColumnName(code)}
+                      aria-label={`${language} 열 이름`}
+                      onChange={(event) => updateLocale(language, 'columnName', event.target.value)}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        <FieldError problems={problems} field="export.locales" />
+        <p className="hint">
+          만들어질 헤더 전체와 Unity 연결·템플릿·옵션은 <strong>내보내기</strong> 화면에서 봅니다. 처음 한 번은 Unity 에서
+          내보낸 CSV 의 첫 줄과 눈으로 비교해 보세요.
+        </p>
       </section>
 
       <section className="card">
