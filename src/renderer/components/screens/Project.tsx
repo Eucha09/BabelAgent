@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { fromProjectForm, splitList, toProjectForm, type ProjectForm } from '@core/project/form'
+import { fromProjectForm, toProjectForm, type ProjectForm } from '@core/project/form'
 import { MIN_SUGGESTED_MAX_LEN } from '@core/context/submission'
 import { defaultColumnName } from '@core/export/locales'
 import {
@@ -14,6 +14,7 @@ import { TranslateEffort, TranslateModel } from '@shared/schema/jobs'
 import { MAX_CONCURRENCY, type OpenProject, type ProjectConfig, type ProjectSettingsPatch } from '@shared/schema/project'
 import type { IpcError, IpcResult } from '@shared/types'
 import { EFFORT_HINT, EFFORT_OPTIONS, MODEL_OPTIONS } from '../../state/translate-options'
+import { LanguageMultiSelect, LanguageSelect } from '../LanguagePicker'
 
 type Props = {
   project: OpenProject
@@ -22,19 +23,6 @@ type Props = {
   /** 저장하지 않은 변경이 있는지. 다른 화면으로 갈 때 확인을 받는다. */
   onDirtyChange: (dirty: boolean) => void
   onMessage: (text: string) => void
-}
-
-const languageNames = new Intl.DisplayNames(['ko'], { type: 'language' })
-
-/** 언어 코드 옆에 붙일 이름. 모르는 코드면 빈 글자. */
-function languageName(code: string): string {
-  if (!isLanguageTag(code)) return ''
-  try {
-    const name = languageNames.of(code)
-    return name && name !== code ? name : ''
-  } catch {
-    return ''
-  }
 }
 
 function FieldError({ problems, field }: { problems: readonly SettingsProblem[]; field: SettingsField }): React.JSX.Element | null {
@@ -48,24 +36,6 @@ function FieldError({ problems, field }: { problems: readonly SettingsProblem[];
         </p>
       ))}
     </>
-  )
-}
-
-/** 언어 목록을 이름과 함께 보여 준다. 잘못된 코드는 오류 색으로. */
-function LanguageChips({ codes }: { codes: readonly string[] }): React.JSX.Element | null {
-  if (codes.length === 0) return null
-  return (
-    <div className="language-chips">
-      {codes.map((code) => {
-        const name = languageName(code)
-        return (
-          <span key={code} className={isLanguageTag(code) ? 'chip' : 'chip invalid'}>
-            <code>{code}</code>
-            {name ? <span>{name}</span> : null}
-          </span>
-        )
-      })}
-    </div>
   )
 }
 
@@ -133,7 +103,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
     setError(null)
   }
 
-  const targetCodes = splitList(form.targetLanguages)
+  const targetCodes = form.targetLanguages
   const removedTargets = base.targetLanguages.filter((code) => !targetCodes.includes(code))
   // 내보내기 카드는 원문 + 대상 언어마다 한 줄
   const exportLanguages = [...new Set([form.sourceLanguage.trim(), ...targetCodes])].filter((code) => isLanguageTag(code))
@@ -196,15 +166,13 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
         </div>
         <div className="form-grid">
           <div className="field">
-            <label htmlFor="source-language">원문 언어 코드</label>
-            <input
+            <label htmlFor="source-language">원문 언어</label>
+            <LanguageSelect
               id="source-language"
-              className="mono"
               value={form.sourceLanguage}
-              onChange={(event) => update('sourceLanguage', event.target.value)}
-              placeholder="ko"
+              exclude={targetCodes}
+              onChange={(code) => update('sourceLanguage', code)}
             />
-            <LanguageChips codes={[form.sourceLanguage.trim()].filter((code) => code !== '')} />
             <FieldError problems={problems} field="sourceLanguage" />
             {form.sourceLanguage.trim() !== base.sourceLanguage ? (
               <p className="hint">
@@ -214,15 +182,13 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             ) : null}
           </div>
           <div className="field">
-            <label htmlFor="target-languages">대상 언어 코드 (쉼표로 구분)</label>
-            <input
+            <label htmlFor="target-languages">대상 언어</label>
+            <LanguageMultiSelect
               id="target-languages"
-              className="mono"
-              value={form.targetLanguages}
-              onChange={(event) => update('targetLanguages', event.target.value)}
-              placeholder="en, ja"
+              values={targetCodes}
+              exclude={[form.sourceLanguage]}
+              onChange={(codes) => update('targetLanguages', codes)}
             />
-            <LanguageChips codes={targetCodes} />
             <FieldError problems={problems} field="targetLanguages" />
             {removedTargets.length > 0 ? (
               <p className="hint">

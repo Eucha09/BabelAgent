@@ -5,12 +5,12 @@ import { normalizeExportLocales, validateProjectSettings, type SettingsProblem }
 
 /**
  * 프로젝트 화면의 입력 상태. 숫자 칸은 입력 중에 비거나 잘못될 수 있으므로 글자로 들고 있다가
- * 저장할 때 숫자로 바꾼다. 목록 칸(대상 언어, 포매터)은 쉼표·줄바꿈으로 나눈 글자다.
+ * 저장할 때 숫자로 바꾼다. 포매터 목록은 쉼표·줄바꿈으로 나눈 글자, 대상 언어는 고른 순서의 코드 배열이다.
  */
 export type ProjectForm = {
   name: string
   sourceLanguage: string
-  targetLanguages: string
+  targetLanguages: string[]
   genre: string
   intro: string
   toneGuide: string
@@ -36,7 +36,7 @@ export function toProjectForm(config: ProjectConfig): ProjectForm {
   return {
     name: config.name,
     sourceLanguage: config.sourceLanguage,
-    targetLanguages: config.targetLanguages.join(', '),
+    targetLanguages: [...config.targetLanguages],
     genre: config.game.genre,
     intro: config.game.intro,
     toneGuide: config.game.toneGuide,
@@ -81,7 +81,7 @@ export function fromProjectForm(form: ProjectForm, base: ProjectConfig): { confi
     ...base,
     name: form.name.trim(),
     sourceLanguage: form.sourceLanguage.trim(),
-    targetLanguages: splitList(form.targetLanguages),
+    targetLanguages: form.targetLanguages.map((code) => code.trim()).filter((code) => code !== ''),
     game: { genre: form.genre.trim(), intro: form.intro, toneGuide: form.toneGuide },
     styleRules: form.styleRules.map((rule) => ({ ...rule, text: rule.text.trim() })),
     translate: { model: form.model, effort: form.effort },

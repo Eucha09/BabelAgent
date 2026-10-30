@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CreateProjectInput } from '@shared/schema/project'
+import { LanguageMultiSelect, LanguageSelect } from './LanguagePicker'
 
 type Props = {
   dir: string
@@ -12,15 +13,10 @@ type Props = {
 export function NewProjectDialog({ dir, busy, onCancel, onSubmit }: Props): React.JSX.Element {
   const [name, setName] = useState('')
   const [sourceLanguage, setSourceLanguage] = useState('ko')
-  const [targets, setTargets] = useState('en, ja')
+  const [targetLanguages, setTargetLanguages] = useState<string[]>(['en', 'ja'])
 
   const trimmedName = name.trim()
-  const trimmedSource = sourceLanguage.trim()
-  const targetLanguages = targets
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0)
-  const valid = trimmedName.length > 0 && trimmedSource.length > 0
+  const valid = trimmedName.length > 0 && sourceLanguage !== ''
 
   return (
     <div className="modal-backdrop">
@@ -40,25 +36,18 @@ export function NewProjectDialog({ dir, busy, onCancel, onSubmit }: Props): Reac
         </div>
 
         <div className="field">
-          <label htmlFor="source-language">원문 언어 코드</label>
-          <input
-            id="source-language"
-            className="mono"
-            value={sourceLanguage}
-            onChange={(event) => setSourceLanguage(event.target.value)}
-            placeholder="ko"
-          />
-          <p className="hint">코드는 특정 원문 언어를 전제하지 않습니다. project.json에 저장됩니다.</p>
+          <label htmlFor="source-language">원문 언어</label>
+          <LanguageSelect id="source-language" value={sourceLanguage} exclude={targetLanguages} onChange={setSourceLanguage} />
+          <p className="hint">project.json 에 저장되고, 나중에 프로젝트 화면에서 바꿀 수 있습니다.</p>
         </div>
 
         <div className="field">
-          <label htmlFor="target-languages">대상 언어 코드 (쉼표로 구분)</label>
-          <input
+          <label htmlFor="target-languages">대상 언어</label>
+          <LanguageMultiSelect
             id="target-languages"
-            className="mono"
-            value={targets}
-            onChange={(event) => setTargets(event.target.value)}
-            placeholder="en, ja"
+            values={targetLanguages}
+            exclude={[sourceLanguage]}
+            onChange={setTargetLanguages}
           />
         </div>
 
@@ -71,7 +60,7 @@ export function NewProjectDialog({ dir, busy, onCancel, onSubmit }: Props): Reac
             className="primary"
             disabled={!valid || busy}
             onClick={() =>
-              onSubmit({ dir, name: trimmedName, sourceLanguage: trimmedSource, targetLanguages })
+              onSubmit({ dir, name: trimmedName, sourceLanguage, targetLanguages })
             }
           >
             만들기
