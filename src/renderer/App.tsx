@@ -14,7 +14,6 @@ import { TitleBar } from './components/TitleBar'
 import { Context } from './components/screens/Context'
 import { Export } from './components/screens/Export'
 import { Glossary } from './components/screens/Glossary'
-import { Placeholder } from './components/screens/Placeholder'
 import { Project } from './components/screens/Project'
 import { Review, type ReviewFocus } from './components/screens/Review'
 import { Settings, type SettingsPatch } from './components/screens/Settings'
@@ -494,7 +493,8 @@ export function App(): React.JSX.Element {
               onMessage={setMessage}
             />
           ) : (
-            <Placeholder screen={screenDef} />
+            // 설정 화면인데 앱 설정을 아직 읽는 중일 때
+            null
           )
         ) : (
           <Welcome

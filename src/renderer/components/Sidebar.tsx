@@ -62,9 +62,6 @@ export function Sidebar({
                 title={disabled ? '프로젝트를 먼저 열어야 합니다' : screen.description}
               >
                 <span>{screen.label}</span>
-                <span className={`badge${screen.badgeTone === 'ready' ? ' ready' : ''}`}>
-                  {screen.badge}
-                </span>
               </button>
             </li>
           )

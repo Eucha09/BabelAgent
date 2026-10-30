@@ -332,11 +332,6 @@ code,
   white-space: nowrap;
 }
 
-.badge.ready {
-  color: var(--ok);
-  border-color: var(--border-strong);
-}
-
 .badge.warn {
   color: var(--warn);
   border-color: var(--border-strong);
