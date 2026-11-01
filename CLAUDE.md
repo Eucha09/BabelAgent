@@ -10,7 +10,8 @@
 - `npm run dev` — electron-vite 개발 모드
 - `npm test` — Vitest
 - `npm run typecheck` — tsc --noEmit
-- `npm run build` / `npm run dist` — 빌드 / electron-builder 패키징
+- `npm run build` / `npm run dist` — 빌드 / electron-builder 패키징(로컬, 올리지 않음)
+- `release.bat [버전]` (`npm run release`) — 릴리스. 새 버전을 묻고 typecheck·test 후 버전 커밋·태그(`v*`)를 만들어 올린다. GitHub Actions 가 태그를 빌드해 Releases 에 공개한다
 - `npm run icon` — `build/icon.svg`에서 아이콘 래스터와 `AppIcon.tsx` 생성
 
 ## 폴더 구조
@@ -128,9 +129,16 @@
 - 주석, 커밋 메시지, `docs/` 문서는 한국어로 쓴다. 식별자는 영어.
 - 커밋 전에 `npm run typecheck`와 `npm test`를 통과시킨다.
 
+## 배포
+
+- 릴리스는 `v*` 태그로만 한다. GitHub Actions(`.github/workflows/release.yml`)가 빌드해 GitHub Releases 에 바로 공개한다. 태그는 `package.json` 버전과 같아야 하므로 `release.bat`(`scripts/release.cjs`, 안에서 `npm version`)으로 만든다.
+- 앱 업데이트는 electron-updater 로 공개 릴리스의 `latest.yml`을 본다. 확인은 자동(켤 때·6시간마다), 받기는 사용자가 [받기]를 누를 때만, 설치는 [다시 시작해 설치] 또는 앱을 끌 때. 작업이 도는 중에는 다시 시작하지 않는다.
+- 설치 파일은 코드 서명이 없다. 업데이트는 서명 대신 `latest.yml`의 sha512 로 검사한다.
+- 저장소 주소는 `electron-builder.yml`의 `publish`와 `src/main/update/app-update.ts`의 `RELEASES_URL` 두 곳에 있다. 바꿀 때 함께 바꾼다.
+
 ## 참조 문서
 
-- `docs/architecture.md` — 프로세스 경계, IPC 채널 목록, MCP 도구 목록, 작업 스케줄러
+- `docs/architecture.md` — 프로세스 경계, IPC 채널 목록, MCP 도구 목록, 작업 스케줄러, 인증과 Claude Code, 앱 업데이트와 릴리스
 - `docs/data-format.md` — project.json 스키마, CSV 열 정의, 상태 전이, 해시·인코딩·충돌 규칙
 - `docs/agent-prompts.md` — 프롬프트 조립 구조, 배치 산정, 응답 JSON 스키마, 한도 처리
 - `docs/qa-rules.md` — 변수·태그·Smart Strings·용어집 검사 규칙과 심각도

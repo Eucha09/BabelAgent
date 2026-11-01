@@ -23,9 +23,13 @@
 
 ## 설치
 
-1. [Releases](../../releases)에서 `Babel Agent Setup x.y.z.exe`를 받아 실행합니다.
+1. [Releases](../../releases)에서 `BabelAgent-Setup-x.y.z.exe`를 받아 실행합니다.
 2. 설치 파일은 아직 코드 서명이 되어 있지 않습니다. Windows 가 "PC 보호" 경고를 띄우면 [추가 정보] → [실행]을 누르세요.
 3. 제거는 Windows 설정 → 앱에서 합니다.
+
+### 업데이트
+
+앱은 켤 때와 켜 둔 동안 6시간마다 새 버전을 확인합니다. 새 버전이 있으면 하단 상태바에 알림이 뜹니다. [받기]를 누르면 받기 시작하고, 다 받으면 [다시 시작해 설치]를 누르거나 앱을 끌 때 설치됩니다. 설정 → 앱 업데이트에서도 확인할 수 있습니다.
 
 ## 처음 실행
 
@@ -56,8 +60,10 @@ npm install
 npm run dev        # 개발 모드 실행 (Windows 는 run-dev.bat 을 더블클릭해도 됩니다)
 npm test           # 단위 테스트(Vitest)
 npm run typecheck  # 타입 검사
-npm run dist       # 설치 파일 만들기 → dist/
+npm run dist       # 설치 파일 만들기 → dist/ (올리지 않음)
 ```
+
+릴리스는 `release.bat`을 실행하고 새 버전을 입력하면 됩니다(`release.bat 0.1.1`처럼 바로 넘겨도 됩니다). 커밋하지 않은 변경이 없는지와 원격 상태를 확인하고, 확인을 받은 뒤 typecheck·test 를 돌리고 버전 커밋과 태그를 만들어 올립니다. 태그가 올라가면 GitHub Actions 가 설치 파일을 빌드해 Releases 에 공개하고, 설치된 앱은 그 릴리스를 보고 업데이트를 알립니다.
 
 Node.js 20 이상이 필요합니다. 구조와 규칙은 [CLAUDE.md](CLAUDE.md)와 `docs/`에 있습니다.
 

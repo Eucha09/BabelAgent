@@ -1,0 +1,49 @@
+# v* 태그를 올리면 Windows 설치 파일을 빌드해 GitHub Releases 에 올린다.
+# 올린 릴리스는 바로 공개되고, 설치된 앱이 latest.yml 을 보고 새 버전을 알린다.
+# 절차: release.bat (버전을 입력하면 버전 커밋·태그를 만들어 올린다)
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # 태그와 package.json 버전이 다르면 릴리스 이름과 latest.yml 의 버전이 어긋난다
+      - name: 태그와 버전 확인
+        shell: bash
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$expected" != "$GITHUB_REF_NAME" ]; then
+            echo "태그 $GITHUB_REF_NAME 와 package.json 버전 $expected 이 다릅니다." >&2
+            exit 1
+          fi
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # 설치 파일·blockmap·latest.yml 을 태그 이름의 릴리스에 올린다(GITHUB_TOKEN 만 쓴다)
+      - name: 빌드·업로드
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -19,3 +19,12 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  # GitHub 은 자산 이름의 공백을 바꿔 올리므로 latest.yml 과 어긋나지 않게 공백 없는 이름을 쓴다
+  artifactName: BabelAgent-Setup-${version}.${ext}
+# 앱 자동 업데이트(electron-updater)가 새 버전을 찾는 곳. 빌드하면 latest.yml 과 앱 안의 app-update.yml 이 생긴다.
+# 올리기는 GitHub Actions(.github/workflows/release.yml)가 v* 태그에서 한다. 저장소를 바꾸면 src/main/update/app-update.ts 의 RELEASES_URL 도 맞춘다.
+publish:
+  provider: github
+  owner: Eucha09
+  repo: BabelAgent
+  releaseType: release

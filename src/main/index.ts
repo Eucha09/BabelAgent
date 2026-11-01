@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { BrowserWindow, app, shell } from 'electron'
 import { cancelLogin } from './agent/auth'
 import { registerIpc } from './ipc'
+import { initAppUpdate } from './update/app-update'
 
 const devUrl = process.env['ELECTRON_RENDERER_URL']
 
@@ -73,6 +74,7 @@ function createWindow(): void {
 
 void app.whenReady().then(() => {
   registerIpc()
+  initAppUpdate()
   createWindow()
 
   app.on('activate', () => {

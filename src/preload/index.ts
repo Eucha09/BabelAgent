@@ -13,6 +13,7 @@ import type {
   LoginMethod
 } from '@shared/schema/agent'
 import type { AppSettings, AppSettingsPatch } from '@shared/schema/app-settings'
+import type { AppUpdateStatus } from '@shared/schema/app-update'
 import type { ClaudeCliStatus, ClaudeInstallDone, ClaudeUpdateResult } from '@shared/schema/cli'
 import type {
   ApplyStyleRuleResult,
@@ -183,6 +184,19 @@ const api = {
     cancelInstall: (): Promise<IpcResult<boolean>> => ipcRenderer.invoke(IPC.cliInstallCancel),
     onInstallDone: (listener: (payload: ClaudeInstallDone) => void): (() => void) =>
       subscribe(IPC_EVENT.cliInstallDone, listener)
+  },
+  appUpdate: {
+    /** 지금 버전과 업데이트 상태 */
+    status: (): Promise<IpcResult<AppUpdateStatus>> => ipcRenderer.invoke(IPC.appUpdateStatus),
+    /** GitHub Releases 에서 새 버전을 확인한다. 확인이 끝난 상태를 돌려준다 */
+    check: (): Promise<IpcResult<AppUpdateStatus>> => ipcRenderer.invoke(IPC.appUpdateCheck),
+    /** 찾은 새 버전을 받기 시작한다. 진행률은 onState */
+    download: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.appUpdateDownload),
+    cancel: (): Promise<IpcResult<boolean>> => ipcRenderer.invoke(IPC.appUpdateCancel),
+    /** 받아 둔 업데이트를 설치한다. 앱이 닫히고 설치가 끝나면 다시 열린다 */
+    install: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.appUpdateInstall),
+    onState: (listener: (payload: AppUpdateStatus) => void): (() => void) =>
+      subscribe(IPC_EVENT.appUpdateState, listener)
   },
   usage: {
     read: (): Promise<IpcResult<UsageLimits>> => ipcRenderer.invoke(IPC.usageRead)

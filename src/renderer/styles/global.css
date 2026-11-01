@@ -2172,3 +2172,13 @@ a:hover {
     left: 100%;
   }
 }
+
+/* 앱 업데이트 — 상태바 칩과 설정 카드의 진행 막대 */
+.app-update-chip button {
+  font-size: var(--font-size-xs);
+  padding: 1px 8px;
+}
+
+.app-update-track {
+  margin-bottom: var(--space-3);
+}

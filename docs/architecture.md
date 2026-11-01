@@ -84,6 +84,10 @@
 | `export:unity:link` / `:unlink` / `:reload` / `:collection` | Unity 프로젝트 폴더 연결(메인의 폴더 대화상자, Assets·ProjectSettings 확인)·해제·다시 읽기·컬렉션 고르기. 읽은 결과는 메인이 들고 있다가 연결·다시 읽기 때만 새로 훑는다 |
 | `export:template:set` / `:clear` | Unity 에서 내보낸 CSV 를 메인의 파일 대화상자로 골라 템플릿으로 등록(프로젝트 밖이면 `templates/unity_template.csv`로 복사, 열 역할 추론해 저장)·해제 |
 | `app:settings:get` / `:set` | CLI 경로·설정 폴더 등 앱 전역 설정 |
+| `app:update:status` | 지금 앱 버전·앱 업데이트 상태·릴리스 페이지 주소 |
+| `app:update:check` | GitHub Releases 에서 새 버전 확인. 겹친 요청은 하나로 합치고, 받는 중이거나 받아 둔 뒤에는 다시 확인하지 않는다 |
+| `app:update:download` / `:cancel` | 찾은 새 버전 받기 시작 / 멈추기. 진행률은 `app:update:state` 이벤트 |
+| `app:update:install` | 받아 둔 업데이트 설치(앱을 닫고 조용히 설치한 뒤 다시 연다). 작업이 도는 중에는 거부 |
 
 이벤트(메인 → 렌더러):
 
@@ -99,6 +103,7 @@
 | `file:changed` | 앱 밖에서 바뀐 파일 이름. 자동 리로드 여부는 렌더러가 미저장 변경을 보고 정한다 |
 | `auth:login:done` | 로그인 창이 닫혔다(종료 코드). 성공 여부는 화면이 상태를 다시 읽어 판단한다 |
 | `cli:install:done` | 설치 창이 닫혔다. 화면이 `cli:status`로 다시 확인한다 |
+| `app:update:state` | 앱 업데이트 상태가 바뀔 때마다(확인 중·최신·새 버전·받는 중 n%·받아 둠·오류). 모든 창에 보낸다 |
 
 ## MCP 도구 목록 (초안)
 
@@ -165,3 +170,16 @@ Anthropic 문서로 확인한 규칙(2026-10-30, code.claude.com/docs/en/legal-a
 - Claude Code 실행 파일 선택·버전 확인·업데이트·설치는 `src/main/agent/claude-cli.ts`, 판정 로직은 `src/core/cli/claude.ts`(테스트). 시작 확인 창은 `ClaudeGate`.
 - 공식 설치판(native installer)은 스스로도 업데이트된다. 앱은 켤 때 `claude update`를 한 번 더 돌려 확인한다. Windows 는 실행 중인 파일을 잠그므로 작업 중에는 업데이트하지 않는다.
 - 새로 받은 실행 파일(300 MB 넘음)은 처음 실행이 백신 검사로 몇 초 걸린다. 버전 확인 제한 시간은 60초이고, 업데이트 직후에는 몇 번 더 확인한다. 개발 모드(React StrictMode)는 마운트 효과를 두 번 돌리므로 시작 확인은 한 번만 시작한다.
+
+## 앱 업데이트와 릴리스
+
+앱(Babel Agent) 자체의 업데이트. Claude Code 업데이트(위 절)와는 별개다.
+
+- 릴리스: `v*` 태그를 올리면 GitHub Actions(`.github/workflows/release.yml`)가 Windows 러너에서 태그와 `package.json` 버전이 같은지 확인하고 typecheck·test·build 뒤 `electron-builder --publish always`로 설치 파일·blockmap·`latest.yml`을 그 태그의 릴리스에 올린다. 릴리스는 바로 공개된다(`releaseType: release`). 토큰은 Actions 기본 `GITHUB_TOKEN`만 쓴다. 절차는 `release.bat`(`scripts/release.cjs`): main·커밋 안 한 변경 없음·원격보다 뒤처지지 않음·태그 없음을 확인하고, 새 버전(기본은 다음 패치)과 실행 확인을 받은 뒤 typecheck·test → `npm version <버전> -m "릴리스 %s"` → `git push --atomic origin main v<버전>`. 저장소가 비공개로 보이면 경고한다.
+- 설치 파일 이름은 `BabelAgent-Setup-<버전>.exe`. GitHub 는 자산 이름의 공백을 바꿔 올리므로 `latest.yml`과 어긋나지 않게 공백을 뺐다.
+- 앱은 electron-updater 로 공개 릴리스의 `latest.yml`을 본다(저장소는 공개여야 한다 — 비공개 릴리스는 토큰 없이 보이지 않는다). 저장소 주소는 `electron-builder.yml`의 `publish`와 `src/main/update/app-update.ts`의 `RELEASES_URL` 두 곳에 있다.
+- 확인은 자동: 시작 확인 창(Claude Code)이 끝난 뒤 한 번, 켜 둔 동안 6시간마다. 받기는 사용자가 [받기]를 눌러야 시작하고(상태바 칩·설정 화면 카드), 진행률과 [받기 멈춤]을 보여 준다. 받아 둔 업데이트는 [다시 시작해 설치]로 바로 설치하거나 앱을 끌 때 조용히 설치된다(`autoInstallOnAppQuit`).
+- [다시 시작해 설치]는 작업이 도는 중이면 메인이 거부하고, 저장하지 않은 편집이 있으면 화면이 먼저 확인을 받는다.
+- 확인 실패(오프라인 등)는 상태바에 띄우지 않고 설정 화면 카드에만 보여 준다. 오류 문장은 오류 코드와 Chromium 네트워크 오류 이름으로만 고르고(`src/core/update/app-update.ts`, 테스트), 원래 메시지는 자세히 보기로 남긴다.
+- 코드 서명이 없으므로 `app-update.yml`에 `publisherName`이 없고, electron-updater 는 서명 검사를 건너뛴다. 받은 파일은 `latest.yml`의 sha512 로 검사한다. 신뢰의 기준은 GitHub 저장소다.
+- 개발 모드(`app.isPackaged`가 거짓)에서는 확인하지 않고 그 이유를 카드에 보여 준다. 로컬 `npm run dist`는 `--publish never`로 올리지 않는다.

@@ -1,4 +1,5 @@
 import { registerAgentIpc } from './agent'
+import { registerAppUpdateIpc } from './app-update'
 import { registerAuthIpc } from './auth'
 import { registerCliIpc } from './cli'
 import { registerContextIpc } from './context'
@@ -12,6 +13,7 @@ import { registerStringsIpc } from './strings'
 
 export function registerIpc(): void {
   registerAppSettingsIpc()
+  registerAppUpdateIpc()
   registerProjectIpc()
   registerStringsIpc()
   registerAuthIpc()

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { describeAuthMethod } from '@core/auth/method'
 import type { AgentCheckResult, AuthStatus, LoginMethod } from '@shared/schema/agent'
 import type { AppSettings } from '@shared/schema/app-settings'
+import type { AppUpdateStatus } from '@shared/schema/app-update'
 import type { ClaudeCliStatus } from '@shared/schema/cli'
 import type { CreateProjectInput, OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
 import type { IpcResult } from '@shared/types'
@@ -35,13 +36,17 @@ export function App(): React.JSX.Element {
   const [screen, setScreen] = useState<ScreenId>('strings')
   /** 지금 화면에 저장하지 않은 편집이 있는지(프로젝트·원문 화면이 알려 준다). 다른 화면으로 갈 때 확인을 받는다. */
   const [unsaved, setUnsaved] = useState(false)
-  const [pendingLeave, setPendingLeave] = useState<{ kind: 'screen'; id: ScreenId } | { kind: 'close' } | null>(null)
+  const [pendingLeave, setPendingLeave] = useState<
+    { kind: 'screen'; id: ScreenId } | { kind: 'close' } | { kind: 'update' } | null
+  >(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   /** 앱을 켤 때 Claude Code 확인·업데이트 창이 끝났는지. 끝나기 전에는 CLI 를 부르는 조회(로그인 상태 등)를 하지 않는다 */
   const [startupDone, setStartupDone] = useState(false)
   const [cliStatus, setCliStatus] = useState<ClaudeCliStatus | null>(null)
   const [cliBusy, setCliBusy] = useState(false)
+  /** 앱(Babel Agent) 업데이트 상태. 메인이 바뀔 때마다 보내 준다 */
+  const [appUpdate, setAppUpdate] = useState<AppUpdateStatus | null>(null)
   const [checkResult, setCheckResult] = useState<AgentCheckResult | null>(null)
   const [checking, setChecking] = useState(false)
   const [newProjectDir, setNewProjectDir] = useState<string | null>(null)
@@ -161,6 +166,59 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     if (startupDone) void refreshAuth()
   }, [startupDone, refreshAuth])
+
+  // 앱 업데이트 상태. 새 버전을 처음 찾았을 때만 상태바 메시지로 알린다
+  const lastUpdateKind = useRef<string | null>(null)
+  useEffect(() => {
+    const apply = (status: AppUpdateStatus): void => {
+      const { state } = status
+      if (state.kind === 'available' && lastUpdateKind.current !== 'available') {
+        setMessage(`새 버전 ${state.version} 이 있습니다. 상태바나 설정 화면에서 [받기]를 누르세요.`)
+      }
+      if (state.kind === 'downloaded' && lastUpdateKind.current !== 'downloaded') {
+        setMessage(`${state.version} 을 받아 두었습니다. 다시 시작하거나 앱을 끌 때 설치됩니다.`)
+      }
+      lastUpdateKind.current = state.kind
+      setAppUpdate(status)
+    }
+    void api.appUpdate.status().then((result) => {
+      if (result.ok) apply(result.value)
+    })
+    return api.appUpdate.onState(apply)
+  }, [])
+
+  // Claude Code 확인 창이 끝난 뒤 한 번 확인한다(이후는 메인이 6시간마다 확인한다)
+  useEffect(() => {
+    if (startupDone) void api.appUpdate.check()
+  }, [startupDone])
+
+  const checkAppUpdate = useCallback(async () => {
+    const result = await api.appUpdate.check()
+    if (!result.ok) setMessage(result.error.message)
+    else if (result.value.state.kind === 'current') setMessage('앱이 최신 버전입니다.')
+  }, [])
+
+  const downloadAppUpdate = useCallback(async () => {
+    const result = await api.appUpdate.download()
+    if (!result.ok) setMessage(result.error.message)
+  }, [])
+
+  const cancelAppUpdate = useCallback(async () => {
+    await api.appUpdate.cancel()
+    setMessage('업데이트 받기를 멈췄습니다.')
+  }, [])
+
+  const installAppUpdate = useCallback(async () => {
+    const result = await api.appUpdate.install()
+    if (!result.ok) setMessage(result.error.message)
+    else setMessage('업데이트를 설치하려고 앱을 닫습니다. 설치가 끝나면 다시 열립니다.')
+  }, [])
+
+  /** 저장하지 않은 편집이 있으면 먼저 확인을 받는다 */
+  const requestAppUpdateInstall = useCallback(() => {
+    if (unsaved) setPendingLeave({ kind: 'update' })
+    else void installAppUpdate()
+  }, [installAppUpdate, unsaved])
 
   const refreshCli = useCallback(async () => {
     const result = await api.cli.status()
@@ -511,6 +569,11 @@ export function App(): React.JSX.Element {
             jobRunning={job !== null && job.snapshot.state !== 'done' && job.snapshot.state !== 'cancelled'}
             onCliUpdate={() => void updateCli()}
             onCliInstall={() => void installCli()}
+            appUpdate={appUpdate}
+            onAppUpdateCheck={() => void checkAppUpdate()}
+            onAppUpdateDownload={() => void downloadAppUpdate()}
+            onAppUpdateCancel={() => void cancelAppUpdate()}
+            onAppUpdateInstall={requestAppUpdateInstall}
           />
         ) : project && screen === 'project' ? (
           <Project key={project.dir} project={project} onSave={updateProject} onDirtyChange={setUnsaved} onMessage={setMessage} />
@@ -582,24 +645,40 @@ export function App(): React.JSX.Element {
         auth={auth}
         sessionId={sessionId}
         message={message}
+        appUpdate={appUpdate}
+        onAppUpdateDownload={() => void downloadAppUpdate()}
+        onAppUpdateInstall={requestAppUpdateInstall}
       />
 
       {pendingLeave ? (
         <ConfirmDialog
           title="저장하지 않은 변경"
-          confirmLabel={pendingLeave.kind === 'close' ? '버리고 닫기' : '버리고 이동'}
+          confirmLabel={
+            pendingLeave.kind === 'close' ? '버리고 닫기' : pendingLeave.kind === 'update' ? '버리고 다시 시작' : '버리고 이동'
+          }
           danger
           onCancel={() => setPendingLeave(null)}
           onConfirm={() => {
             const leave = pendingLeave
             setPendingLeave(null)
+            // 다시 시작하지 못하면(작업 중 등) 편집이 화면에 그대로 남으므로 표시를 지우지 않는다
+            if (leave.kind === 'update') {
+              void installAppUpdate()
+              return
+            }
             setUnsaved(false)
             if (leave.kind === 'close') void closeProject()
             else setScreen(leave.id)
           }}
         >
           <p className="hint">
-            {findScreen(screen).label} 화면에 저장하지 않은 변경이 있습니다. {pendingLeave.kind === 'close' ? '프로젝트를 닫으면' : '다른 화면으로 가면'} 그
+            {findScreen(screen).label} 화면에 저장하지 않은 변경이 있습니다.{' '}
+            {pendingLeave.kind === 'close'
+              ? '프로젝트를 닫으면'
+              : pendingLeave.kind === 'update'
+                ? '업데이트를 설치하려고 다시 시작하면'
+                : '다른 화면으로 가면'}{' '}
+            그
             변경은 사라집니다.
           </p>
         </ConfirmDialog>

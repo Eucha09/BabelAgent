@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import type { AgentCheckResult, LoginMethod } from '@shared/schema/agent'
 import type { AppSettings } from '@shared/schema/app-settings'
+import type { AppUpdateStatus } from '@shared/schema/app-update'
 import type { ClaudeCliStatus, ClaudeSource } from '@shared/schema/cli'
 import { TranslateEffort, TranslateModel } from '@shared/schema/jobs'
 import type { OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
 import { EFFORT_HINT, EFFORT_OPTIONS, MODEL_OPTIONS } from '../../state/translate-options'
 import { AccountCard, type AuthView } from '../AccountCard'
+import { AppUpdateCard } from '../AppUpdateCard'
 import type { UsageView } from '../UsageMeters'
 
 export type SettingsPatch = { cliPath?: string | null; claudeConfigDir?: string | null }
@@ -34,6 +36,12 @@ type Props = {
   jobRunning: boolean
   onCliUpdate: () => void
   onCliInstall: () => void
+  /** 앱(Babel Agent) 업데이트 상태. 메인에서 읽기 전에는 null */
+  appUpdate: AppUpdateStatus | null
+  onAppUpdateCheck: () => void
+  onAppUpdateDownload: () => void
+  onAppUpdateCancel: () => void
+  onAppUpdateInstall: () => void
 }
 
 const SOURCE_LABEL: Record<ClaudeSource, string> = {
@@ -68,7 +76,12 @@ export function Settings({
   cliBusy,
   jobRunning,
   onCliUpdate,
-  onCliInstall
+  onCliInstall,
+  appUpdate,
+  onAppUpdateCheck,
+  onAppUpdateDownload,
+  onAppUpdateCancel,
+  onAppUpdateInstall
 }: Props): React.JSX.Element {
   const [cliPath, setCliPath] = useState(settings.cliPath ?? '')
   const [configDir, setConfigDir] = useState(settings.claudeConfigDir ?? '')
@@ -190,7 +203,7 @@ export function Settings({
             placeholder="비워 두면 자동으로 찾습니다"
           />
           <p className="hint">
-            비워 두면 공식 설치 위치(%USERPROFILE%.localin) → PATH 순으로 찾습니다. 로그인·상태 조회와 번역 세션이 모두 이
+            비워 두면 공식 설치 위치(%USERPROFILE%\.local\bin) → PATH 순으로 찾습니다. 로그인·상태 조회와 번역 세션이 모두 이
             실행 파일을 씁니다. 다른 Claude Code 를 쓰려면 지정하세요.
           </p>
         </div>
@@ -265,6 +278,15 @@ export function Settings({
           </div>
         ) : null}
       </div>
+
+      <AppUpdateCard
+        status={appUpdate}
+        jobRunning={jobRunning}
+        onCheck={onAppUpdateCheck}
+        onDownload={onAppUpdateDownload}
+        onCancel={onAppUpdateCancel}
+        onInstall={onAppUpdateInstall}
+      />
     </div>
   )
 }
