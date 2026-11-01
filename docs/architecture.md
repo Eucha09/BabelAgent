@@ -175,7 +175,9 @@ Anthropic 문서로 확인한 규칙(2026-10-30, code.claude.com/docs/en/legal-a
 
 앱(Babel Agent) 자체의 업데이트. Claude Code 업데이트(위 절)와는 별개다.
 
-- 릴리스: `v*` 태그를 올리면 GitHub Actions(`.github/workflows/release.yml`)가 Windows 러너에서 태그와 `package.json` 버전이 같은지 확인하고 typecheck·test·build 뒤 `electron-builder --publish always`로 설치 파일·blockmap·`latest.yml`을 그 태그의 릴리스에 올린다. 릴리스는 바로 공개된다(`releaseType: release`). 토큰은 Actions 기본 `GITHUB_TOKEN`만 쓴다. 절차는 `release.bat`(`scripts/release.cjs`): main·커밋 안 한 변경 없음·원격보다 뒤처지지 않음·태그 없음을 확인하고, 새 버전(기본은 다음 패치)과 실행 확인을 받은 뒤 typecheck·test → `npm version <버전> -m "릴리스 %s"` → `git push --atomic origin main v<버전>`. 저장소가 비공개로 보이면 경고한다.
+- 릴리스: `v*` 태그를 올리면 GitHub Actions(`.github/workflows/release.yml`)가 Windows 러너에서 태그와 `package.json` 버전이 같은지 확인하고 typecheck·test·build 뒤, 태그의 초안 릴리스를 만들고 `electron-builder --publish always`로 설치 파일·blockmap·`latest.yml`을 그 초안에 올린 다음 공개한다. 토큰은 Actions 기본 `GITHUB_TOKEN`만 쓴다(`gh` 포함).
+- 초안을 먼저 만드는 이유: electron-builder 26.15.3 은 설치 파일과 blockmap 을 동시에 올리면서 같은 태그의 릴리스를 두 개 만들 수 있다(게시자를 캐시에 넣기 전에 `await`). 그러면 `releases/download/<태그>/…` 주소가 한쪽 릴리스만 가리켜 다른 쪽 파일이 404 가 된다(v0.1.1 에서 실제로 겪음). 초안이 있으면 둘 다 그 초안에 올린다. 파일이 다 올라간 뒤 공개하므로 앱이 `latest.yml` 없는 릴리스를 보는 틈도 없다.
+- 워크플로 파일을 처음 넣는 커밋과 태그를 한 번에 올리면 태그 이벤트에 워크플로가 돌지 않았다(v0.1.1). 워크플로가 `main`에 있는 지금은 문제없다. 다시 돌리려면 원격 태그를 지우고 다시 올린다. 절차는 `release.bat`(`scripts/release.cjs`): main·커밋 안 한 변경 없음·원격보다 뒤처지지 않음·태그 없음을 확인하고, 새 버전(기본은 다음 패치)과 실행 확인을 받은 뒤 typecheck·test → `npm version <버전> -m "릴리스 %s"` → `git push --atomic origin main v<버전>`. 저장소가 비공개로 보이면 경고한다.
 - 설치 파일 이름은 `BabelAgent-Setup-<버전>.exe`. GitHub 는 자산 이름의 공백을 바꿔 올리므로 `latest.yml`과 어긋나지 않게 공백을 뺐다.
 - 앱은 electron-updater 로 공개 릴리스의 `latest.yml`을 본다(저장소는 공개여야 한다 — 비공개 릴리스는 토큰 없이 보이지 않는다). 저장소 주소는 `electron-builder.yml`의 `publish`와 `src/main/update/app-update.ts`의 `RELEASES_URL` 두 곳에 있다.
 - 확인은 자동: 시작 확인 창(Claude Code)이 끝난 뒤 한 번, 켜 둔 동안 6시간마다. 받기는 사용자가 [받기]를 눌러야 시작하고(상태바 칩·설정 화면 카드), 진행률과 [받기 멈춤]을 보여 준다. 받아 둔 업데이트는 [다시 시작해 설치]로 바로 설치하거나 앱을 끌 때 조용히 설치된다(`autoInstallOnAppQuit`).
