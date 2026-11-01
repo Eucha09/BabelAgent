@@ -33,12 +33,15 @@
 
 - 모든 세션에 `settingSources`를 명시한다(기본 `[]`). 사용자 PC의 Claude Code 설정과 이 CLAUDE.md가 번역 세션에 섞이면 안 된다.
 - 권한은 최소로. `Bash`와 파일 쓰기 도구는 비허용하고, 커스텀 MCP 도구만 허용한다. `cwd`는 열린 프로젝트 폴더로 제한한다.
-- 인증은 PC에 로그인된 Claude Code 계정을 그대로 쓴다. 코드에서 API 키를 읽거나 요구하지 않는다. 설정 구조에는 `auth: { mode: 'claude-code' | 'api-key' }` 자리를 남겨 둔다 — 추후 배포 대비.
-- 로그인·로그아웃·상태 조회는 설정 화면에서 `claude auth login|logout|status --json`을 실행해 CLI에 위임한다. 앱은 토큰을 저장하지도 읽지도 않는다.
+- 인증은 Claude Code 에 로그인한 방식을 그대로 쓴다: Claude 구독 계정, Anthropic Console(API 과금), 환경 변수 `ANTHROPIC_API_KEY` 등. 앱은 방식을 고르지도 막지도 않는다 — Claude Code 의 인증 방법을 막지 않는 것이 Anthropic 의 조건이다(`docs/architecture.md` "인증과 Claude Code").
+- 앱은 로그인 코드·토큰·API 키를 받거나 저장하거나 중계하지 않는다. 로그인은 Claude Code 가 **자기 창**(Windows: `conhost.exe` 로 연 콘솔)에서 Anthropic 의 흐름으로 진행하고, 앱은 창이 닫히면 `claude auth status --json`으로 결과만 읽는다. 로그아웃도 CLI 에 맡긴다.
+- 인증 방식은 `auth status`의 `apiKeySource`로 가린다(Console 로그인도 `authMethod`가 `claude.ai`로 온다). 구독 사용량 막대(`/usage`)는 구독일 때만 보여 준다.
 - 구독 사용량 한도는 `/usage` 로컬 슬래시 명령을 돌려 응답의 `usage_report.rate_limits.limits[]`에서 읽는다. 출력 문장을 파싱하지 않는다 — 문구와 날짜 형식은 로케일에 따라 바뀐다.
 - 사용량 행의 종류(`kind`)를 열거형으로 좁히지 않는다. 서버가 미터를 추가해도 그대로 렌더링하고, 모르는 종류는 서버 값을 그대로 보여준다.
-- CLI를 직접 실행할 때는 `shell: true`를 쓰지 않는다. 경로는 설정값 또는 PATH 탐색으로 해결한다 — 경로의 공백·특수문자가 인자로 재해석되면 안 된다.
-- Claude Code CLI 실행 파일 경로를 설정에서 덮어쓸 수 있게 하고 `pathToClaudeCodeExecutable`로 넘긴다 — 패키징 후 경로가 달라진다.
+- CLI를 직접 실행할 때는 `shell: true`를 쓰지 않는다 — 경로의 공백·특수문자가 인자로 재해석되면 안 된다. `.cmd`·`.bat` 실행 파일은 셸이 필요하므로 쓰지 않는다.
+- Claude Code 실행 파일은 한 곳(`src/main/agent/claude-cli.ts`)에서 정하고, 로그인·상태 조회·에이전트 세션이 모두 같은 것을 쓴다. 순서: 설정한 경로 → 공식 설치(`%USERPROFILE%\.local\bin`) → PATH → Agent SDK 내장(개발 중에만). 세션에는 항상 `pathToClaudeCodeExecutable`로 넘긴다.
+- 설치판에는 Agent SDK 내장 Claude Code(플랫폼 패키지)를 넣지 않는다. 앱을 켤 때 확인 창이 Claude Code 를 찾아 `claude update`로 최신으로 맞추고, 끝날 때까지 앱을 가린다. 업데이트 결과는 출력 문장이 아니라 앞뒤 `--version`으로 판단한다. 최소 버전은 Agent SDK `package.json`의 `claudeCodeVersion`이다.
+- Claude Code 가 없으면 사용자가 [설치]를 눌렀을 때만 공식 설치 스크립트를 **보이는 창**에서 돌린다. 인터넷에서 받은 스크립트를 몰래 실행하지 않는다.
 - 배치 작업(번역, 컨텍스트 추정, 용어 추출)은 배치마다 새 `query()`로 실행한다. 세션 재사용 금지. 행 단위 리롤도 일회성 세션.
 - 배치 크기는 30행 또는 원문 3,000자 중 먼저 도달하는 쪽. 둘 다 project.json에서 조정 가능하게 둔다.
 - 동시 실행은 기본 2, 상한 3. 상한을 넘기는 설정값은 코드에서 잘라낸다.

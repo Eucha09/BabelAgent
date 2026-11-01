@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import type { AgentCheckResult } from '@shared/schema/agent'
+import type { AgentCheckResult, LoginMethod } from '@shared/schema/agent'
 import type { AppSettings } from '@shared/schema/app-settings'
+import type { ClaudeCliStatus, ClaudeSource } from '@shared/schema/cli'
 import { TranslateEffort, TranslateModel } from '@shared/schema/jobs'
 import type { OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
 import { EFFORT_HINT, EFFORT_OPTIONS, MODEL_OPTIONS } from '../../state/translate-options'
@@ -19,13 +20,27 @@ type Props = {
   auth: AuthView
   usage: UsageView
   onAuthRefresh: () => void
-  onLoginStart: () => void
-  onLoginInput: (text: string) => void
+  onLoginStart: (method: LoginMethod) => void
   onLoginCancel: () => void
   onLogout: () => void
   /** 열린 프로젝트. 번역 모델·사고 수준은 프로젝트(project.json)마다 저장한다. */
   project: OpenProject | null
   onProjectSettings: (patch: ProjectSettingsPatch) => void
+  /** 앱이 쓰는 Claude Code 실행 파일과 버전. 시작 확인 창이 끝나기 전에는 null */
+  cli: ClaudeCliStatus | null
+  /** 업데이트·설치 창이 진행 중인지 */
+  cliBusy: boolean
+  /** 번역 등 작업이 도는 중이면 업데이트하지 않는다 */
+  jobRunning: boolean
+  onCliUpdate: () => void
+  onCliInstall: () => void
+}
+
+const SOURCE_LABEL: Record<ClaudeSource, string> = {
+  setting: '설정한 경로',
+  native: '공식 설치(자동 업데이트)',
+  path: 'PATH',
+  bundled: '개발용(SDK 내장)'
 }
 
 function toValue(input: string): string | null {
@@ -45,11 +60,15 @@ export function Settings({
   usage,
   onAuthRefresh,
   onLoginStart,
-  onLoginInput,
   onLoginCancel,
   onLogout,
   project,
-  onProjectSettings
+  onProjectSettings,
+  cli,
+  cliBusy,
+  jobRunning,
+  onCliUpdate,
+  onCliInstall
 }: Props): React.JSX.Element {
   const [cliPath, setCliPath] = useState(settings.cliPath ?? '')
   const [configDir, setConfigDir] = useState(settings.claudeConfigDir ?? '')
@@ -58,8 +77,8 @@ export function Settings({
     <div>
       <h2 className="screen-title">설정</h2>
       <p className="screen-desc">
-        에이전트는 이 PC에 로그인된 Claude Code 계정을 그대로 사용합니다. 앱은 API 키를 저장하지
-        않습니다.
+        에이전트는 Claude Code 를 통해 실행되고, Claude Code 에 로그인한 방식(Claude 구독 또는 API 키)을 그대로 씁니다.
+        앱은 로그인 코드·토큰·API 키를 받지도 보관하지도 않습니다.
       </p>
 
       <AccountCard
@@ -68,7 +87,6 @@ export function Settings({
         busy={busy}
         onRefresh={onAuthRefresh}
         onLoginStart={onLoginStart}
-        onLoginInput={onLoginInput}
         onLoginCancel={onLoginCancel}
         onLogout={onLogout}
       />
@@ -130,6 +148,38 @@ export function Settings({
       <div className="card">
         <h3>Claude Code 연결</h3>
 
+        <dl className="dl" style={{ marginBottom: 'var(--space-3)' }}>
+          <dt>실행 파일</dt>
+          <dd>{cli === null ? '확인 중…' : (cli.executable?.path ?? '찾지 못함')}</dd>
+          <dt>출처</dt>
+          <dd>{cli?.executable ? SOURCE_LABEL[cli.executable.source] : '-'}</dd>
+          <dt>버전</dt>
+          <dd>
+            {cli === null ? '-' : (cli.version ?? (cli.runError ? `실행하지 못함 (${cli.runError})` : '실행하지 못함'))}
+            {cli?.requiredVersion ? <span className="hint"> · 앱이 맞춰진 버전 {cli.requiredVersion}</span> : null}
+          </dd>
+        </dl>
+        {cli?.meetsRequired === false ? (
+          <p className="hint field-error">
+            앱이 맞춰진 버전보다 낮아 일부 기능이 동작하지 않을 수 있습니다. [업데이트 확인]을 누르세요.
+          </p>
+        ) : null}
+        <div className="row" style={{ marginBottom: 'var(--space-4)' }}>
+          <button
+            type="button"
+            disabled={busy || cliBusy || jobRunning || !cli?.canUpdate}
+            title={jobRunning ? '작업이 끝난 뒤에 업데이트할 수 있습니다' : undefined}
+            onClick={onCliUpdate}
+          >
+            {cliBusy ? '진행 중…' : '업데이트 확인'}
+          </button>
+          {cli && (!cli.executable || cli.version === null) && cli.canInstall ? (
+            <button type="button" className="primary" disabled={busy || cliBusy} onClick={onCliInstall}>
+              Claude Code 설치
+            </button>
+          ) : null}
+        </div>
+
         <div className="field">
           <label htmlFor="cli-path">CLI 실행 파일 경로</label>
           <input
@@ -140,7 +190,8 @@ export function Settings({
             placeholder="비워 두면 자동으로 찾습니다"
           />
           <p className="hint">
-            비워 두면 SDK 기본 탐색을 씁니다. 패키징한 앱에서 경로를 찾지 못할 때 지정하세요.
+            비워 두면 공식 설치 위치(%USERPROFILE%.localin) → PATH 순으로 찾습니다. 로그인·상태 조회와 번역 세션이 모두 이
+            실행 파일을 씁니다. 다른 Claude Code 를 쓰려면 지정하세요.
           </p>
         </div>
 
@@ -213,24 +264,6 @@ export function Settings({
             {checkResult.error.detail ? <pre>{checkResult.error.detail}</pre> : null}
           </div>
         ) : null}
-      </div>
-
-      <div className="card">
-        <h3>인증 방식</h3>
-        <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
-          토큰은 앱이 아니라 Claude Code CLI가 보관합니다. 앱은 로그인 명령만 대신 실행합니다.
-        </p>
-        <div className="row">
-          <input type="radio" checked readOnly style={{ width: 'auto' }} />
-          <span>로그인된 Claude Code 계정</span>
-        </div>
-        <div className="row" style={{ marginTop: 'var(--space-2)' }}>
-          <input type="radio" disabled readOnly style={{ width: 'auto' }} />
-          <span style={{ color: 'var(--text-muted)' }}>API 키 (추후 배포용, 미구현)</span>
-        </div>
-        <p className="hint">
-          현재 설정값: <code>{settings.auth.mode}</code>
-        </p>
       </div>
     </div>
   )

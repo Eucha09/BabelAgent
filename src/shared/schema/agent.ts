@@ -67,14 +67,26 @@ export type AgentChatDelta = { requestId: string; text: string }
 export type AgentChatEnd = { requestId: string; sessionId: string | null; durationMs: number }
 export type AgentChatError = { requestId: string } & AgentError
 
+/**
+ * CLI 는 값이 없는 필드를 빼기도 하고 null 로 주기도 한다(Console 로그인의 subscriptionType 은 null).
+ * 둘 다 "없음"으로 받는다.
+ */
+const OptionalText = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? undefined)
+
 /** `claude auth status --json` 출력. CLI가 필드를 늘려도 깨지지 않게 느슨하게 받는다. */
 export const AuthStatusJson = z.object({
   loggedIn: z.boolean(),
-  authMethod: z.string().optional(),
-  apiProvider: z.string().optional(),
-  email: z.string().optional(),
-  orgName: z.string().optional(),
-  subscriptionType: z.string().optional()
+  /** Console(API 과금) 로그인도 "claude.ai" 로 온다. 방식은 apiKeySource 로 가린다 */
+  authMethod: OptionalText,
+  apiProvider: OptionalText,
+  /** API 키를 쓸 때 그 출처(Console 로그인이면 "/login managed key", 환경 변수면 그 이름 등). 구독 로그인이면 없다 */
+  apiKeySource: OptionalText,
+  email: OptionalText,
+  orgName: OptionalText,
+  subscriptionType: OptionalText
 })
 export type AuthStatusJson = z.infer<typeof AuthStatusJson>
 
@@ -86,12 +98,15 @@ export type AuthStatus = AuthStatusJson & {
   cliPath: string
 }
 
-export const AuthLoginInput = z.object({
-  /** 브라우저가 코드를 보여주는 경우 사용자가 붙여넣는 값. */
-  text: z.string()
-})
-export type AuthLoginInput = z.infer<typeof AuthLoginInput>
+/**
+ * Claude Code 의 로그인 방식. claudeai = Claude 구독 계정, console = Anthropic Console(API 사용량 과금).
+ * 두 방식 모두 Claude Code 가 자기 창에서 Anthropic 의 흐름으로 진행한다 — 앱은 코드·토큰을 만지지 않는다.
+ */
+export const LoginMethod = z.enum(['claudeai', 'console'])
+export type LoginMethod = z.infer<typeof LoginMethod>
 
-/** 로그인 진행 중 CLI가 뱉는 줄. 그대로 화면에 쌓는다. */
-export type AuthLoginOutput = { text: string }
-export type AuthLoginDone = { ok: boolean; detail?: string }
+export const AuthLoginStartInput = z.object({ method: LoginMethod })
+export type AuthLoginStartInput = z.infer<typeof AuthLoginStartInput>
+
+/** 로그인 창이 닫혔다. 성공 여부는 화면이 로그인 상태를 다시 읽어 판단한다. */
+export type AuthLoginDone = { exitCode: number | null }

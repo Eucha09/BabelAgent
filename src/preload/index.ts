@@ -2,8 +2,6 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import type {
   AuthLoginDone,
-  AuthLoginInput,
-  AuthLoginOutput,
   AuthStatus,
   AgentChatCancelInput,
   AgentChatDelta,
@@ -11,9 +9,11 @@ import type {
   AgentChatError,
   AgentChatSendInput,
   AgentCheckResult,
-  ChatRuleProposal
+  ChatRuleProposal,
+  LoginMethod
 } from '@shared/schema/agent'
 import type { AppSettings, AppSettingsPatch } from '@shared/schema/app-settings'
+import type { ClaudeCliStatus, ClaudeInstallDone, ClaudeUpdateResult } from '@shared/schema/cli'
 import type {
   ApplyStyleRuleResult,
   CreateProjectInput,
@@ -130,13 +130,11 @@ const api = {
   },
   auth: {
     status: (): Promise<IpcResult<AuthStatus>> => ipcRenderer.invoke(IPC.authStatus),
-    loginStart: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.authLoginStart),
-    loginInput: (input: AuthLoginInput): Promise<IpcResult<null>> =>
-      ipcRenderer.invoke(IPC.authLoginInput, input),
+    /** Claude Code 가 자기 창에서 로그인을 진행한다. 창이 닫히면 onLoginDone */
+    loginStart: (method: LoginMethod): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.authLoginStart, { method }),
+    /** 열어 둔 로그인 창을 닫는다 */
     loginCancel: (): Promise<IpcResult<boolean>> => ipcRenderer.invoke(IPC.authLoginCancel),
     logout: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.authLogout),
-    onLoginOutput: (listener: (payload: AuthLoginOutput) => void): (() => void) =>
-      subscribe(IPC_EVENT.authLoginOutput, listener),
     onLoginDone: (listener: (payload: AuthLoginDone) => void): (() => void) =>
       subscribe(IPC_EVENT.authLoginDone, listener)
   },
@@ -174,6 +172,17 @@ const api = {
     /** Unity 에서 내보낸 샘플 CSV 를 대화상자로 골라 템플릿으로 등록한다 */
     setTemplate: (): Promise<IpcResult<OpenProject>> => ipcRenderer.invoke(IPC.exportTemplateSet),
     clearTemplate: (): Promise<IpcResult<OpenProject>> => ipcRenderer.invoke(IPC.exportTemplateClear)
+  },
+  cli: {
+    /** 앱이 쓰는 Claude Code 실행 파일과 버전 */
+    status: (): Promise<IpcResult<ClaudeCliStatus>> => ipcRenderer.invoke(IPC.cliStatus),
+    /** claude update 를 돌리고 앞뒤 버전을 돌려준다 */
+    update: (): Promise<IpcResult<ClaudeUpdateResult>> => ipcRenderer.invoke(IPC.cliUpdate),
+    /** 공식 설치 스크립트를 보이는 콘솔 창에서 돌린다. 창이 닫히면 onInstallDone */
+    install: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.cliInstall),
+    cancelInstall: (): Promise<IpcResult<boolean>> => ipcRenderer.invoke(IPC.cliInstallCancel),
+    onInstallDone: (listener: (payload: ClaudeInstallDone) => void): (() => void) =>
+      subscribe(IPC_EVENT.cliInstallDone, listener)
   },
   usage: {
     read: (): Promise<IpcResult<UsageLimits>> => ipcRenderer.invoke(IPC.usageRead)

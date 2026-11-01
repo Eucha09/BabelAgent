@@ -577,7 +577,6 @@ code,
   font-family: var(--font-mono);
 }
 
-.login-url,
 .login-log {
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
@@ -2120,4 +2119,56 @@ details > summary {
 
 .language-menu-empty {
   padding: var(--space-2);
+}
+
+/* 외부 링크(기본 브라우저로 열린다). 기본 파란색 대신 글자색 + 밑줄 */
+a {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* 앱을 켤 때 Claude Code 확인·업데이트 창. 끝날 때까지 앱을 가린다 */
+.modal.gate {
+  width: 460px;
+}
+
+.modal.gate p {
+  margin: 0 0 var(--space-2);
+  line-height: 1.6;
+  font-size: var(--font-size-sm);
+}
+
+.gate-progress {
+  position: relative;
+  height: 3px;
+  margin-top: var(--space-3);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--bg-active);
+}
+
+.gate-progress::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--text-secondary);
+  animation: gate-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes gate-slide {
+  from {
+    left: -40%;
+  }
+  to {
+    left: 100%;
+  }
 }

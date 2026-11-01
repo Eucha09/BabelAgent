@@ -15,6 +15,7 @@
 | M4 | 검토/QA | [~] | (UI 확인 대기) |
 | M5 | 컨텍스트 보강과 용어집 | [~] | (UI 확인 대기) |
 | M6 | 내보내기 | [~] | (UI 확인 대기) |
+| 배포 | 배포 준비(인증·Claude Code·설치판) | [~] | (Claude Code [설치] 버튼 확인 대기) |
 | M7 | 선택 기능 | [ ] | |
 
 ## M1 골격
@@ -211,6 +212,31 @@ Smart Strings 토크나이저, QA 검사, 필터, 인라인 편집, 재번역.
 - 알려진 한계: 컬렉션 에셋의 CSV 확장 사용자 열 이름(`m_Extensions`)은 읽지 않는다(실제 샘플이 없어서) — 그런 프로젝트는 템플릿을 쓴다. 프로젝트 화면 카드의 자리표시자(자동값)는 Unity 연결을 모른다 — 연결 후 실제 코드는 내보내기 화면의 언어 표에서 본다. 설정한 로케일 코드는 대소문자까지 같아야 Unity 로케일과 맞는 것으로 본다. 일부 키만 내보내기는 없다. 이름표는 Unity 6000.4 Mono 기준이다.
 - 추가(2026-10-29, 사용자 요청): 프로젝트 화면과 새 프로젝트 대화상자에서 원문·대상 언어를 직접 입력하지 않고 **고른다**. 원문은 드롭다운, 대상은 칩(× 로 빼기) + [+ 언어 추가]. 목록은 게임 현지화에서 자주 쓰는 25개(es-419 포함)를 위에, 그 아래 Unity(Mono) 문화권 코드를 코드 순으로 두고(옛 별칭 zh-CHS·zh-CHT 는 뺌), 한국어 이름·영어 이름·코드로 찾는다. 목록에 없는 코드는 BCP 47 태그일 때만 "직접 추가"로 넣는다(`en-XA` 등, 표준 표기로 바꿈). 원문과 대상은 서로의 목록에서 빠지므로 같은 언어를 고를 수 없다. 목록·검색은 `src/core/project/languages.ts`(테스트), 화면 부품은 `LanguagePicker.tsx`. 빌드 산출물로 열기·한국어 검색·Enter 로 추가·직접 추가·칩 빼기·Esc/바깥 클릭/버튼으로 닫기·저장 후 project.json 반영을 스크립트로 확인했다. 같이 찾은 것: 지금 Chromium 의 `scrollIntoView()`가 Promise 를 돌려줘서, 그 값을 그대로 돌려준 효과 함수를 React 가 정리 함수로 불러 화면 전체가 내려갔다 — 효과 함수는 값을 돌려주지 않게 고쳤다(다른 화면에는 같은 꼴이 없음). 테스트 530개(+7).
 - M7 이후로 넘긴 것: `_smart.csv`를 읽어 Unity 쪽 Smart 플래그를 켜는 에디터 스크립트, CSV 확장 사용자 열 이름 읽기, `validate_translation` 패널 도구, 언어별 복수형 분기 수 검사, `tags` 기준 배치 묶기(M5 에서 넘어온 것).
+
+## 배포 준비
+
+GitHub 공개·배포를 위한 정리. 인증을 Anthropic 규정에 맞추고, Claude Code 설치·업데이트를 앱이 챙기고, 설치판을 만든다.
+
+완료 기준:
+
+- [x] 로그인은 Claude Code 가 자기 창에서 진행하고 앱은 로그인 코드·토큰을 받지 않는다. [Claude 계정(구독)] · [Console(API 과금)] 두 방식
+- [x] 인증 방식 표시(`apiKeySource` 기준)와 구독일 때만 사용량 막대. 앱 설정의 `auth.mode` 삭제
+- [x] 앱을 켤 때 확인 창이 Claude Code 를 찾아 최신으로 업데이트하고, 끝날 때까지 앱을 가린다. 실패하면 [다시 시도]·[지금 버전으로 계속]
+- [~] Claude Code 가 없으면 설치 안내와 [설치](공식 설치 스크립트를 보이는 창에서) — 안내 화면은 확인, 실제 설치 스크립트 실행은 확인 대기
+- [x] 설치판(`npm run dist`)에서 Agent SDK 내장 Claude Code 제외. 설치·실행·제거
+- [x] `package.json` author: Euichan Jeong
+
+메모 (2026-10-30 ~ 2026-11-01):
+
+- Anthropic 규정 확인(법률·규정 문서, Agent SDK 개요): 제3자 앱이 Claude.ai 로그인을 제공하거나 구독 자격 증명을 대신 쓰면 안 되고 자격 증명을 모으거나 중계해서도 안 되지만, 사용자가 고치지 않은 Claude Code 에 자기 구독으로 로그인하는 것은 막지 않는다. Claude Code 를 넣어 배포하면 그 인증 방법을 막으면 안 된다. 그래서 구독 방식을 빼지 않고 두 방식을 모두 열었다. 두 문서의 결이 조금 달라 공개 배포 전에 Anthropic 에 확인한다. 상세는 `architecture.md` "인증과 Claude Code".
+- 사용자 결정: ① 로그인은 Claude Code 자기 창에서 ② `auth.mode` 삭제(Claude Code 상태를 따름) ③ Claude Code 는 안내 + [설치] 버튼(자동 설치 안 함) ④ 업데이트는 앱을 켤 때 자동, 가운데 창으로 끝날 때까지 가림 ⑤ 설치판에서 SDK 내장 Claude Code(약 280 MB) 제외.
+- 로그인 창: Node `spawn`은 자식에게 쓸 수 있는 콘솔 창을 줄 수 없고(`detached`는 콘솔 자체가 없음) `cmd /c start`는 셸 해석이 들어가므로, `conhost.exe <exe> auth login --…`로 새 콘솔 창을 연다. 창 제목으로 창이 생기는 것을 확인했다.
+- 실측: Console 로그인의 `auth status`는 `authMethod: "claude.ai"`, `subscriptionType: null`, `apiKeySource: "/login managed key"`다. null 을 받지 못해 "형식이 예상과 다릅니다"가 났던 것을 고쳤고, 방식은 `apiKeySource`로 가린다.
+- 개발 모드 버그: 처음 켰을 때 "찾을 수 없다"는 쪽 화면이 났다. 원인은 React StrictMode 가 마운트 효과를 두 번 돌려 시작 확인 두 개가 동시에 `--version`·`claude update`를 부른 것. `electron-vite dev --entry <드라이버>`로 개발 서버 환경에서 재현했고(가드를 빼면 동시 실행), 확인은 한 번만 시작하고 메인은 겹친 업데이트 요청을 하나로 합치게 고쳤다. 같이: 새로 받은 실행 파일의 첫 실행이 느리다(새 복사본 3.9초, 이후 0.13초) — 버전 확인 제한을 60초로 늘리고 업데이트 직후 몇 번 더 확인하며, "없음"과 "응답 없음"을 나눠 보여 준다.
+- 설치판: 설치 파일 약 114 MB(Electron 실행 환경이 대부분, 앱 코드 약 15 MB). Agent SDK 의 피어 의존성(`@modelcontextprotocol/sdk` 등)은 설치판에 없지만 `sdk.mjs`가 안에 품고 있어 필요 없다. `dist/win-unpacked`를 임시 데이터 폴더로 띄워 원격 디버깅으로 확인: 시작 확인 창이 실제 Claude Code 2.1.316 에서 "최신입니다", 연결 확인 통과, haiku 로 원문 2행 번역 2/2(약 7초, 변수 보존). 사용자가 설치·실행·제거를 확인했다.
+- 코드 서명은 하지 않았다(Windows "PC 보호" 경고). 인증서의 이름은 고를 수 없고(개인 실명·등록 상호), Azure Artifact Signing 은 개인이 미국·캐나다만 가능하며, EV 도 이제 SmartScreen 즉시 신뢰를 주지 않는다. 사용자가 많아지면 그때 사고 author 를 인증서 이름에 맞춘다.
+- 테스트 544개(+14).
+- 공개 준비(사용자 결정, 2026-11-01): 라이선스 MIT(`LICENSE`, 저작권자 Euichan Jeong), 커밋 작성자 `Eucha09 <euchan5791@naver.com>`(이 저장소 설정), 원격 저장소 `https://github.com/Eucha09/BabelAgent`. 남은 것: 공개 배포 전 Anthropic 확인.
 
 ## M7 선택 기능
 

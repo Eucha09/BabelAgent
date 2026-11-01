@@ -68,7 +68,13 @@
 | `job:start` | 배치 번역 시작(대상 언어·범위·선택 키·모델). 고른 모델은 project.json 에 기억 |
 | `job:control` | `pause` / `resume` / `cancel` / `retry`(한도 대기 건너뛰기). 번역·컨텍스트 추정·용어 추출 공통 |
 | `job:current` | 진행 중이거나 마지막 작업의 상태. 화면을 다시 열 때 이어 보기용 |
-| `usage:read` | 구독 사용량 한도(`/usage`) |
+| `usage:read` | 구독 사용량 한도(`/usage`). 화면은 구독 로그인일 때만 부른다 |
+| `auth:status` | `claude auth status --json`. `null` 필드도 "없음"으로 받는다(Console 로그인의 `subscriptionType`) |
+| `auth:login:start` | `{ method: 'claudeai' \| 'console' }`. Claude Code 로그인을 자기 창(conhost)에서 연다. 앱은 코드·토큰을 받지 않는다 |
+| `auth:login:cancel` / `auth:logout` | 로그인 창 닫기 / CLI 로 로그아웃 |
+| `cli:status` | 앱이 쓰는 Claude Code 실행 파일(경로·출처)·버전·실행 실패 이유·최소 버전 |
+| `cli:update` | `claude update` 후 앞뒤 버전 비교(updated / current / failed / skipped). 동시에 들어온 요청은 하나로 합친다. 작업이 도는 중에는 거부 |
+| `cli:install` / `cli:install:cancel` | 공식 설치 스크립트를 보이는 콘솔 창에서 실행 / 그 창 닫기 |
 | `row:reroll` | 행 단위 재번역(일회성 세션, 사용자 지시 포함). 결과는 쓰지 않고 후보와 그 진단을 돌려준다. 한도에 걸려도 자동으로 다시 시도하지 않는다 |
 | `row:reroll:cancel` | 진행 중인 재번역 취소 |
 | `agent:chat:send` | 에이전트 패널 메시지 전송 |
@@ -77,7 +83,7 @@
 | `export:reveal` | `export/` 폴더 열기 |
 | `export:unity:link` / `:unlink` / `:reload` / `:collection` | Unity 프로젝트 폴더 연결(메인의 폴더 대화상자, Assets·ProjectSettings 확인)·해제·다시 읽기·컬렉션 고르기. 읽은 결과는 메인이 들고 있다가 연결·다시 읽기 때만 새로 훑는다 |
 | `export:template:set` / `:clear` | Unity 에서 내보낸 CSV 를 메인의 파일 대화상자로 골라 템플릿으로 등록(프로젝트 밖이면 `templates/unity_template.csv`로 복사, 열 역할 추론해 저장)·해제 |
-| `app:settings:get` / `:set` | CLI 경로, 인증 모드 등 앱 전역 설정 |
+| `app:settings:get` / `:set` | CLI 경로·설정 폴더 등 앱 전역 설정 |
 
 이벤트(메인 → 렌더러):
 
@@ -91,6 +97,8 @@
 | `agent:chat:rule` | 패널 에이전트가 낸 스타일 규칙 제안(추가·수정·삭제). 패널이 확인 카드로 띄운다 |
 | `agent:chat:delta` | 스트리밍 텍스트 조각 |
 | `file:changed` | 앱 밖에서 바뀐 파일 이름. 자동 리로드 여부는 렌더러가 미저장 변경을 보고 정한다 |
+| `auth:login:done` | 로그인 창이 닫혔다(종료 코드). 성공 여부는 화면이 상태를 다시 읽어 판단한다 |
+| `cli:install:done` | 설치 창이 닫혔다. 화면이 `cli:status`로 다시 확인한다 |
 
 ## MCP 도구 목록 (초안)
 
@@ -137,10 +145,23 @@
 
 ```jsonc
 {
-  "cliPath": null,              // null이면 SDK 기본 탐색. 패키징 후 수동 지정 대비
-  "auth": { "mode": "claude-code" },  // 'api-key' 자리는 비워 둠
-  "theme": "dark"               // 다크 한 벌만 지원. 확장 자리
+  "cliPath": null,              // null이면 공식 설치 → PATH → SDK 내장(개발) 순으로 찾는다
+  "claudeConfigDir": null,      // null이면 CLAUDE_CONFIG_DIR, 그것도 없으면 ~/.claude
+  "theme": "dark",              // 다크 한 벌만 지원. 확장 자리
+  "lastProjectDir": null
 }
 ```
 
+인증 방식은 앱 설정에 두지 않는다(옛 `auth.mode`는 읽을 때 버린다). Claude Code 에 로그인한 방식을 그대로 쓴다.
+
 프로젝트 설정은 `data-format.md` 참조.
+
+## 인증과 Claude Code
+
+Anthropic 문서로 확인한 규칙(2026-10-30, code.claude.com/docs/en/legal-and-compliance, agent-sdk/overview, setup).
+
+- 제3자 개발자는 자기 앱에 Claude.ai 로그인을 제공하거나 구독 자격 증명으로 요청을 대신 보내면 안 되고, Claude.ai 자격 증명·세션 토큰을 모으거나 저장하거나 중계해서도 안 된다. 다만 사용자가 **고치지 않은 Claude Code** 에 자기 구독으로 로그인하는 것은 막지 않는다. Claude Code 를 제품에 넣어 배포하려면 상용 약관에 따르고, Claude Code 의 인증 방법(계정 로그인·사용자 API 키)을 빼거나 막으면 안 된다.
+- 그래서 앱은 로그인·토큰·키를 만지지 않고, 로그인은 Claude Code 자기 창에서 끝나며, 구독과 Console 두 버튼을 모두 둔다. 사용자마다 자기 계정·키로 인증한다. 공개 배포 전에는 Anthropic 에 사용 사례를 확인한다.
+- Claude Code 실행 파일 선택·버전 확인·업데이트·설치는 `src/main/agent/claude-cli.ts`, 판정 로직은 `src/core/cli/claude.ts`(테스트). 시작 확인 창은 `ClaudeGate`.
+- 공식 설치판(native installer)은 스스로도 업데이트된다. 앱은 켤 때 `claude update`를 한 번 더 돌려 확인한다. Windows 는 실행 중인 파일을 잠그므로 작업 중에는 업데이트하지 않는다.
+- 새로 받은 실행 파일(300 MB 넘음)은 처음 실행이 백신 검사로 몇 초 걸린다. 버전 확인 제한 시간은 60초이고, 업데이트 직후에는 몇 번 더 확인한다. 개발 모드(React StrictMode)는 마운트 효과를 두 번 돌리므로 시작 확인은 한 번만 시작한다.

@@ -7,6 +7,7 @@ import type {
   AgentError,
   AgentErrorKind
 } from '@shared/schema/agent'
+import { resolveClaudeExecutable } from './claude-cli'
 import { loadAgentSdk } from './sdk'
 
 const STDERR_TAIL_LIMIT = 4000
@@ -34,7 +35,9 @@ export function agentQueryOptions(cwd: string, cliPath: string | null, configDir
     permissionMode: 'dontAsk',
     includePartialMessages: true
   }
-  if (cliPath) options.pathToClaudeCodeExecutable = cliPath
+  // 로그인·상태 조회와 같은 실행 파일을 쓴다(설정 → 공식 설치 → PATH → SDK 내장). 설치판에는 SDK 내장 실행 파일이 없다
+  const executable = resolveClaudeExecutable(cliPath)
+  if (executable) options.pathToClaudeCodeExecutable = executable
   // env를 넘기면 SDK가 환경을 통째로 교체하므로 process.env를 펼쳐 넣어야 한다.
   if (configDir) options.env = { ...process.env, CLAUDE_CONFIG_DIR: configDir }
   return options
@@ -140,7 +143,7 @@ export async function checkAgent(
         ...(info.organization === undefined ? {} : { organization: info.organization }),
         ...(info.subscriptionType === undefined ? {} : { subscriptionType: info.subscriptionType }),
         ...(info.apiProvider === undefined ? {} : { apiProvider: info.apiProvider }),
-        cliPath,
+        cliPath: resolveClaudeExecutable(cliPath),
         configDir: effectiveConfigDir(configDir)
       }
     }

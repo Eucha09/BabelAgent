@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "description": "게임 로컬라이제이션을 돕는 데스크톱 앱",
+  "author": "Euichan Jeong",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Eucha09/BabelAgent.git"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

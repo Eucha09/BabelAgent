@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AgentCheckResult } from '@shared/schema/agent'
+import { describeAuthMethod } from '@core/auth/method'
+import type { AgentCheckResult, AuthStatus, LoginMethod } from '@shared/schema/agent'
 import type { AppSettings } from '@shared/schema/app-settings'
+import type { ClaudeCliStatus } from '@shared/schema/cli'
 import type { CreateProjectInput, OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
-import type { IpcError, IpcResult } from '@shared/types'
+import type { IpcResult } from '@shared/types'
 import type { AuthView } from './components/AccountCard'
 import type { UsageView } from './components/UsageMeters'
 import { AgentPanel, type ChatTurn, type RuleCard } from './components/AgentPanel'
+import { ClaudeGate } from './components/ClaudeGate'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { NewProjectDialog } from './components/NewProjectDialog'
 import { Sidebar } from './components/Sidebar'
@@ -35,6 +38,10 @@ export function App(): React.JSX.Element {
   const [pendingLeave, setPendingLeave] = useState<{ kind: 'screen'; id: ScreenId } | { kind: 'close' } | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  /** 앱을 켤 때 Claude Code 확인·업데이트 창이 끝났는지. 끝나기 전에는 CLI 를 부르는 조회(로그인 상태 등)를 하지 않는다 */
+  const [startupDone, setStartupDone] = useState(false)
+  const [cliStatus, setCliStatus] = useState<ClaudeCliStatus | null>(null)
+  const [cliBusy, setCliBusy] = useState(false)
   const [checkResult, setCheckResult] = useState<AgentCheckResult | null>(null)
   const [checking, setChecking] = useState(false)
   const [newProjectDir, setNewProjectDir] = useState<string | null>(null)
@@ -51,8 +58,7 @@ export function App(): React.JSX.Element {
     status: null,
     error: null,
     loading: true,
-    loginRunning: false,
-    loginLog: ''
+    loginRunning: false
   })
 
   useEffect(() => {
@@ -139,7 +145,7 @@ export function App(): React.JSX.Element {
     })
   }, [])
 
-  const refreshAuth = useCallback(async () => {
+  const refreshAuth = useCallback(async (): Promise<AuthStatus | null> => {
     setAuth((prev) => ({ ...prev, loading: true }))
     const result = await api.auth.status()
     setAuth((prev) => ({
@@ -148,52 +154,92 @@ export function App(): React.JSX.Element {
       status: result.ok ? result.value : null,
       error: result.ok ? null : result.error
     }))
+    return result.ok ? result.value : null
   }, [])
 
+  // 업데이트 중에 다른 CLI 호출이 실행 파일을 잡지 않게, 확인 창이 끝난 뒤에 로그인 상태를 읽는다
   useEffect(() => {
-    void refreshAuth()
-  }, [refreshAuth])
+    if (startupDone) void refreshAuth()
+  }, [startupDone, refreshAuth])
 
+  const refreshCli = useCallback(async () => {
+    const result = await api.cli.status()
+    if (result.ok) setCliStatus(result.value)
+    return result.ok ? result.value : null
+  }, [])
+
+  // 설정 화면에서 띄운 설치 창이 닫히면 다시 읽는다(시작 확인 창은 자기가 다시 확인한다)
   useEffect(() => {
-    const offOutput = api.auth.onLoginOutput(({ text }) => {
-      // 로그는 꼬리만 유지한다. 전체를 쌓을 이유가 없다.
-      setAuth((prev) => ({ ...prev, loginLog: (prev.loginLog + text).slice(-4000) }))
+    if (!startupDone) return
+    return api.cli.onInstallDone(() => {
+      setCliBusy(false)
+      void refreshCli().then((status) => {
+        setMessage(status?.version ? `Claude Code ${status.version} 을 찾았습니다.` : 'Claude Code 를 찾지 못했습니다. 설치 창의 메시지를 확인하세요.')
+        if (status?.version) void refreshAuth()
+      })
     })
-    const offDone = api.auth.onLoginDone(({ ok: success, detail }) => {
-      const error: IpcError | null = success
-        ? null
-        : {
-            kind: 'unknown',
-            message: '로그인이 완료되지 않았습니다.',
-            ...(detail ? { detail } : {})
-          }
-      setAuth((prev) => ({ ...prev, loginRunning: false, error }))
-      setMessage(success ? '로그인을 마쳤습니다.' : '로그인이 완료되지 않았습니다.')
-      void refreshAuth()
-      if (success) void refreshUsage()
-    })
-    return () => {
-      offOutput()
-      offDone()
+  }, [startupDone, refreshCli, refreshAuth])
+
+  const updateCli = useCallback(async () => {
+    setCliBusy(true)
+    try {
+      const result = await api.cli.update()
+      if (!result.ok) {
+        setMessage(result.error.message)
+        return
+      }
+      setCliStatus(result.value.status)
+      const { outcome, before, after } = result.value
+      setMessage(
+        outcome === 'updated'
+          ? `Claude Code 를 ${before ?? '?'} → ${after ?? '?'} 으로 업데이트했습니다.`
+          : outcome === 'current'
+            ? `Claude Code 가 최신입니다 (${after ?? '?'}).`
+            : outcome === 'skipped'
+              ? '개발용 Claude Code 는 업데이트하지 않습니다.'
+              : '업데이트하지 못했습니다. 설정 화면에서 다시 시도하세요.'
+      )
+    } finally {
+      setCliBusy(false)
     }
+  }, [])
+
+  const installCli = useCallback(async () => {
+    const result = await api.cli.install()
+    if (!result.ok) setMessage(result.error.message)
+    else {
+      setCliBusy(true)
+      setMessage('설치 창에서 진행합니다. 끝나면 그 창을 닫으세요.')
+    }
+  }, [])
+
+  // 로그인은 Claude Code 자기 창에서 진행한다. 창이 닫히면 상태를 다시 읽어 결과를 알린다
+  useEffect(() => {
+    return api.auth.onLoginDone(() => {
+      setAuth((prev) => ({ ...prev, loginRunning: false }))
+      void refreshAuth().then((status) => {
+        if (status?.loggedIn) {
+          setMessage(`로그인 상태를 확인했습니다: ${describeAuthMethod(status).label}`)
+          if (describeAuthMethod(status).kind === 'subscription') void refreshUsage()
+        } else {
+          setMessage('로그인 창이 닫혔지만 로그인되지 않았습니다.')
+        }
+      })
+    })
   }, [refreshAuth, refreshUsage])
 
-  const startLogin = useCallback(async () => {
-    setAuth((prev) => ({ ...prev, loginLog: '', error: null, loginRunning: true }))
-    const result = await api.auth.loginStart()
+  const startLogin = useCallback(async (method: LoginMethod) => {
+    setAuth((prev) => ({ ...prev, error: null, loginRunning: true }))
+    const result = await api.auth.loginStart(method)
     if (!result.ok) {
       setAuth((prev) => ({ ...prev, loginRunning: false, error: result.error }))
     }
   }, [])
 
-  const sendLoginInput = useCallback(async (text: string) => {
-    await api.auth.loginInput({ text })
-  }, [])
-
   const cancelLogin = useCallback(async () => {
     await api.auth.loginCancel()
     setAuth((prev) => ({ ...prev, loginRunning: false }))
-    setMessage('로그인을 취소했습니다.')
+    setMessage('로그인 창을 닫았습니다.')
   }, [])
 
   const logout = useCallback(async () => {
@@ -212,7 +258,8 @@ export function App(): React.JSX.Element {
     // CLI를 띄우는 조회라 설정 화면을 열었을 때 한 번만 읽는다
     if (screen !== 'settings') return
     if (usage.limits !== null || usage.loading || usage.error !== null) return
-    if (auth.status?.loggedIn !== true) return
+    // 사용량 한도는 구독에만 있다. API 키·클라우드 제공자는 /usage 를 돌리지 않는다
+    if (describeAuthMethod(auth.status).kind !== 'subscription') return
     void refreshUsage()
   }, [screen, usage, auth.status, refreshUsage])
 
@@ -305,6 +352,7 @@ export function App(): React.JSX.Element {
         setSettings(result.value)
         setCheckResult(null)
         setMessage('설정을 저장했습니다.')
+        void refreshCli()
         void refreshAuth()
       } else {
         setMessage(result.error.message)
@@ -312,7 +360,7 @@ export function App(): React.JSX.Element {
     } finally {
       setBusy(false)
     }
-  }, [refreshAuth])
+  }, [refreshAuth, refreshCli])
 
   /** project.json 부분 갱신. 프로젝트·번역·설정 화면이 같이 쓴다. 저장되면 열린 프로젝트 상태도 맞춘다. */
   const updateProject = useCallback(async (patch: ProjectSettingsPatch): Promise<IpcResult<OpenProject>> => {
@@ -449,15 +497,20 @@ export function App(): React.JSX.Element {
             auth={auth}
             usage={usage}
             onAuthRefresh={() => {
-              void refreshAuth()
-              void refreshUsage()
+              void refreshAuth().then((status) => {
+                if (describeAuthMethod(status).kind === 'subscription') void refreshUsage()
+              })
             }}
-            onLoginStart={startLogin}
-            onLoginInput={sendLoginInput}
+            onLoginStart={(method) => void startLogin(method)}
             onLoginCancel={cancelLogin}
             onLogout={logout}
             project={project}
             onProjectSettings={(patch) => void saveTranslateSettings(patch)}
+            cli={cliStatus}
+            cliBusy={cliBusy}
+            jobRunning={job !== null && job.snapshot.state !== 'done' && job.snapshot.state !== 'cancelled'}
+            onCliUpdate={() => void updateCli()}
+            onCliInstall={() => void installCli()}
           />
         ) : project && screen === 'project' ? (
           <Project key={project.dir} project={project} onSave={updateProject} onDirtyChange={setUnsaved} onMessage={setMessage} />
@@ -558,6 +611,16 @@ export function App(): React.JSX.Element {
           busy={busy}
           onCancel={() => setNewProjectDir(null)}
           onSubmit={createProject}
+        />
+      ) : null}
+
+      {!startupDone ? (
+        <ClaudeGate
+          onFinished={(status, text) => {
+            setCliStatus(status)
+            setStartupDone(true)
+            if (text) setMessage(text)
+          }}
         />
       ) : null}
     </div>

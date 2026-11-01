@@ -1,5 +1,6 @@
 import { registerAgentIpc } from './agent'
 import { registerAuthIpc } from './auth'
+import { registerCliIpc } from './cli'
 import { registerContextIpc } from './context'
 import { registerExportIpc } from './export'
 import { registerGlossaryIpc } from './glossary'
@@ -14,6 +15,7 @@ export function registerIpc(): void {
   registerProjectIpc()
   registerStringsIpc()
   registerAuthIpc()
+  registerCliIpc()
   registerJobsIpc()
   registerContextIpc()
   registerGlossaryIpc()

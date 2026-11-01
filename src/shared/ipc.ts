@@ -25,9 +25,12 @@ export const IPC = {
   stringsImport: 'strings:import',
   authStatus: 'auth:status',
   authLoginStart: 'auth:login:start',
-  authLoginInput: 'auth:login:input',
   authLoginCancel: 'auth:login:cancel',
   authLogout: 'auth:logout',
+  cliStatus: 'cli:status',
+  cliUpdate: 'cli:update',
+  cliInstall: 'cli:install',
+  cliInstallCancel: 'cli:install:cancel',
   usageRead: 'usage:read',
   jobStart: 'job:start',
   jobControl: 'job:control',
@@ -54,8 +57,8 @@ export const IPC = {
 /** 메인 → 렌더러 단방향 이벤트. */
 export const IPC_EVENT = {
   projectChanged: 'project:changed',
-  authLoginOutput: 'auth:login:output',
   authLoginDone: 'auth:login:done',
+  cliInstallDone: 'cli:install:done',
   fileChanged: 'file:changed',
   jobUpdate: 'job:update',
   jobLog: 'job:log',
