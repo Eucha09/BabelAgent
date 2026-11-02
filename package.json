@@ -1,6 +1,6 @@
 {
   "name": "babel-agent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "게임 로컬라이제이션을 돕는 데스크톱 앱",
   "author": "Euichan Jeong",
