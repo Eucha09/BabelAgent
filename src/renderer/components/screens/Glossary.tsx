@@ -374,26 +374,14 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
 
   return (
     <div className="workbench-screen">
-      <div className="strings-header">
-        <div>
-          <h2 className="screen-title">용어집</h2>
-          <p className="screen-desc">
-            glossary.csv 의 용어와 언어별 확정 번역입니다. 승인된 용어만 번역 배치에 들어가며, 배치마다 그 배치 원문에
-            나오는 용어만 넣습니다. strict 를 켠 용어는 어기면 QA 오류가 되어 내보내기를 막습니다.
-          </p>
-        </div>
-      </div>
+      <h2 className="screen-title">용어집</h2>
 
       {config.targetLanguages.length === 0 ? (
-        <div className="message">대상 언어가 없습니다. 프로젝트 화면에서 대상 언어를 정하면 언어별 번역 칸이 생깁니다.</div>
+        <div className="message">대상 언어가 없습니다. 프로젝트 화면에서 정하세요.</div>
       ) : null}
 
       <section className="card">
         <h3>용어 추출</h3>
-        <p className="hint" style={{ marginBottom: 'var(--space-2)' }}>
-          에이전트가 원문에서 고유명사·게임 용어 후보를 찾습니다. 후보는 번역 없이 승인 대기로 들어가고, 이미 있는 용어는
-          다시 넣지 않습니다. 번역은 아래 [용어 번역]으로 채웁니다.
-        </p>
         <div className="scope-options">
           <label className={scope === 'all' ? 'scope-option selected' : 'scope-option'}>
             <input type="radio" name="terms-scope" checked={scope === 'all'} disabled={running || busy} onChange={() => setScope('all')} />
@@ -407,8 +395,8 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
           </label>
         </div>
         <p className="hint">
-          배치 {config.batch.maxRows}행 / {config.batch.maxSourceChars.toLocaleString()}자 · 작업자 {clampConcurrency(config.batch.concurrency)} ·
-          모델 {modelLabel(config.translate.model)} · 사고 {effortLabel(config.translate.effort)} — 프로젝트 화면의 번역 설정을 따릅니다.
+          모델 {modelLabel(config.translate.model)} · 사고 {effortLabel(config.translate.effort)} · 배치 {config.batch.maxRows}행 /{' '}
+          {config.batch.maxSourceChars.toLocaleString()}자 · 작업자 {clampConcurrency(config.batch.concurrency)}
         </p>
         <div className="row" style={{ marginTop: 'var(--space-3)' }}>
           <button
@@ -421,10 +409,10 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
           </button>
           <span className="hint">
             {plan.rows}행 · 배치 {plan.batches}개
-            {running && job.kind !== 'terms' ? ` — ${JOB_TITLE[job.kind]}이 끝나면 시작할 수 있습니다` : ''}
+            {running && job.kind !== 'terms' ? ` — ${JOB_TITLE[job.kind]} 중` : ''}
           </span>
         </div>
-        {extracted ? <p className="hint" style={{ marginTop: 'var(--space-2)' }}>추출이 끝났습니다. 새 후보의 번역은 [용어 번역]으로 채우세요.</p> : null}
+        {extracted ? <p className="hint" style={{ marginTop: 'var(--space-2)' }}>추출이 끝났습니다. 번역은 [용어 번역]으로 채우세요.</p> : null}
       </section>
 
       {scope === 'selected' ? (
@@ -475,7 +463,7 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
       ))}
       {view && view.duplicates.length > 0 ? (
         <div className="message">
-          glossary.csv 에 같은 용어가 여러 행 있습니다: {view.duplicates.join(', ')} — 첫 행만 여기서 고칠 수 있습니다.
+          같은 용어가 여러 행 있습니다: {view.duplicates.join(', ')} — 첫 행만 고칠 수 있습니다.
         </div>
       ) : null}
 
@@ -595,7 +583,7 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
           <p>선택한 용어 {chosen.length}개를 glossary.csv 에서 지웁니다.</p>
           <p className="confirm-quote">{chosen.slice(0, 20).map((row) => row.base.term).join(', ')}{chosen.length > 20 ? ' …' : ''}</p>
           {approvedChosen > 0 ? (
-            <p className="hint field-error">승인된 용어 {approvedChosen}개가 포함되어 있습니다. 지우면 번역 프롬프트와 QA 에서 빠집니다.</p>
+            <p className="hint field-error">승인된 용어 {approvedChosen}개가 포함되어 있습니다.</p>
           ) : null}
         </ConfirmDialog>
       ) : null}

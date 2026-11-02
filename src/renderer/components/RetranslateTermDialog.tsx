@@ -88,13 +88,10 @@ export function RetranslateTermDialog({ entry, languages, onRun, onCancelRun, on
             value={instruction}
             autoFocus
             disabled={run !== null}
-            placeholder="예: 영어는 더 짧게, 일본어는 가타카나로. 비우면 더 나은 대안을 받습니다"
+            placeholder="예: 더 짧게. 비우면 더 나은 대안을 받습니다"
             onChange={(event) => setInstruction(event.target.value)}
           />
-          <p className="hint">
-            원문에서 이 용어가 쓰인 문장과 기존 번역을 함께 보고 번역을 다시 정하고, 사용 지침도 새 번역에 맞게 다시 씁니다. 품사·분류는 바꾸지 않습니다. 결과는 그 행의
-            칸에 채워지고, 확인한 뒤 [저장]해야 반영됩니다.
-          </p>
+          <p className="hint">결과는 칸에 채워지고, [저장]해야 반영됩니다.</p>
         </div>
 
         {run ? <p className="hint">에이전트가 다시 번역하는 중… {elapsed}초</p> : null}

@@ -57,7 +57,7 @@ MyGame/
     "unity": null,              // 선택. { "projectPath": "../MyGame", "tableCollection": "UI" }
     "template": null            // 선택. { "path": "templates/unity_template.csv", "columns": [{ "name": "Key", "role": "key" }, …] }
   },
-  "translate": { "model": "opus", "effort": "medium" },  // 번역 모델(opus | sonnet | haiku | default=CLI 설정)과 사고 수준(low | medium | high | xhigh | max). 번역 화면·설정 화면에서 고친다
+  "translate": { "model": "opus", "effort": "medium" },  // 번역 모델(opus | sonnet | haiku | default=CLI 설정)과 사고 수준(low | medium | high | xhigh | max). 번역 화면·프로젝트 화면에서 고친다
   "review": { "lowConfidence": 0.7 },   // 검토 화면 "신뢰도 낮음" 필터 기준(이 값 미만)
   "context": { "maxLenRatio": 2.5 }     // 컨텍스트 추정이 제안하는 max_len 의 하한 배수. 원문 표시 길이 × 이 값, 최소 10자. 1~10
 }

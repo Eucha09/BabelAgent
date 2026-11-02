@@ -24,7 +24,7 @@ type Props = {
 
 function requiredWarning(status: ClaudeCliStatus): string | null {
   if (status.meetsRequired !== false || status.requiredVersion === null) return null
-  return `이 버전은 앱이 맞춰진 ${status.requiredVersion} 보다 낮아 일부 기능이 동작하지 않을 수 있습니다.`
+  return `최소 버전 ${status.requiredVersion} 보다 낮아 일부 기능이 동작하지 않을 수 있습니다.`
 }
 
 function doneMessage(result: ClaudeUpdateResult): string {
@@ -130,7 +130,7 @@ export function ClaudeGate({ onFinished }: Props): React.JSX.Element {
         {phase.kind === 'updating' ? (
           <>
             <h3>Claude Code 업데이트 확인 중…</h3>
-            <p className="hint">지금 버전 {phase.status.version}. 끝날 때까지 잠시 기다려 주세요.</p>
+            <p className="hint">지금 버전 {phase.status.version}</p>
             <div className="gate-progress" />
           </>
         ) : null}
@@ -141,15 +141,14 @@ export function ClaudeGate({ onFinished }: Props): React.JSX.Element {
             {phase.status.executable?.source === 'setting' ? (
               <p>
                 설정한 경로의 Claude Code 를 실행하지 못했습니다: <code>{phase.status.executable.path}</code>. 설정 화면에서
-                경로를 비우면 설치된 Claude Code 를 자동으로 찾습니다.
+                경로를 비우면 자동으로 찾습니다.
               </p>
             ) : (
-              <p>번역 에이전트는 Claude Code 로 실행됩니다. 이 PC 에서 Claude Code 를 찾지 못했습니다.</p>
+              <p>이 PC 에서 Claude Code 를 찾지 못했습니다.</p>
             )}
             {phase.status.canInstall ? (
               <p className="hint">
-                [설치]를 누르면 새 창에서 Anthropic 의 공식 설치 스크립트(<code>irm https://claude.ai/install.ps1 | iex</code>)를
-                실행합니다. 관리자 권한은 필요 없고, 설치된 Claude Code 는 스스로 업데이트됩니다.
+                [설치]를 누르면 새 창에서 공식 설치 스크립트를 실행합니다: <code>irm https://claude.ai/install.ps1 | iex</code>
               </p>
             ) : (
               <p className="hint">
@@ -173,8 +172,7 @@ export function ClaudeGate({ onFinished }: Props): React.JSX.Element {
           <>
             <h3>Claude Code 를 실행하지 못했습니다</h3>
             <p>
-              <code>{phase.status.executable?.path}</code> 는 있지만 응답하지 않았습니다. 새로 업데이트된 직후에는 처음 실행이
-              백신 검사 등으로 오래 걸릴 수 있습니다. 잠시 뒤 다시 시도하세요.
+              <code>{phase.status.executable?.path}</code> 가 응답하지 않았습니다. 잠시 뒤 다시 시도하세요.
             </p>
             {phase.status.runError ? <pre className="login-log">{phase.status.runError}</pre> : null}
             <div className="modal-actions">
@@ -191,7 +189,7 @@ export function ClaudeGate({ onFinished }: Props): React.JSX.Element {
         {phase.kind === 'installing' ? (
           <>
             <h3>Claude Code 설치 중</h3>
-            <p className="hint">설치 창에서 진행합니다. 끝나면 그 창에서 Enter 를 눌러 닫으세요. 창이 닫히면 다시 확인합니다.</p>
+            <p className="hint">설치 창에서 진행합니다. 끝나면 그 창에서 Enter 를 눌러 닫으세요.</p>
             <div className="gate-progress" />
             <div className="modal-actions">
               <button type="button" onClick={() => void api.cli.cancelInstall()}>

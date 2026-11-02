@@ -37,13 +37,9 @@ const ORIGIN_LABEL: Record<ExportColumnOrigin, string> = {
 }
 
 const MISSING_OPTIONS: { value: ExportMissing; label: string; hint: string }[] = [
-  { value: 'empty', label: '비우기', hint: 'Unity 에 이미 있는 그 언어의 번역은 빈 값으로 덮입니다.' },
-  { value: 'source', label: '원문 넣기', hint: '번역이 없거나 원문이 바뀐 칸에 원문을 그대로 넣습니다.' },
-  {
-    value: 'skip',
-    label: '행 빼기',
-    hint: '고른 대상 언어 중 하나라도 비는 행을 뺍니다. Import > CSV(Merge)... 로 가져와야 Unity 의 그 행이 남습니다.'
-  }
+  { value: 'empty', label: '비우기', hint: 'Unity 의 기존 번역이 빈 값으로 덮입니다.' },
+  { value: 'source', label: '원문 넣기', hint: '원문을 그대로 넣습니다.' },
+  { value: 'skip', label: '행 빼기', hint: '비는 행을 뺍니다. CSV(Merge)... 로 가져오세요.' }
 ]
 
 const ROLE_LABEL: Record<Exclude<TemplateColumn['role'], 'value' | 'comments'>, string> = {
@@ -253,13 +249,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
   return (
     <div className="export-screen">
       <div className="strings-header">
-        <div>
-          <h2 className="screen-title">내보내기</h2>
-          <p className="screen-desc">
-            Unity Localization 의 String Table 컬렉션으로 가져올 CSV 를 만듭니다. 기본은 Unity CSV 확장의 기본 열 구성으로
-            자동 생성하고, Unity 프로젝트 연결과 템플릿은 필요할 때만 씁니다.
-          </p>
-        </div>
+        <h2 className="screen-title">내보내기</h2>
         <div className="row">
           <button type="button" disabled={loading || busy} onClick={() => void refresh(request)}>
             {loading ? '계산 중…' : '다시 계산'}
@@ -319,7 +309,6 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
               </label>
             ))}
           </div>
-          <p className="hint">빠진 언어의 열은 만들지 않습니다. Unity 는 그 로케일을 건드리지 않습니다.</p>
         </div>
         <div className="check-list">
           <label className="check">
@@ -339,7 +328,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
             <span>언어별 Comments 열에 번역 메모(note) 넣기</span>
           </label>
           {options.sharedComments || options.localeComments ? (
-            <p className="hint">주석 칸이 비어 있으면 Unity 의 기존 주석이 지워집니다. 끄면 열을 만들지 않아 Unity 주석을 그대로 둡니다.</p>
+            <p className="hint">빈 주석 칸은 Unity 의 기존 주석을 지웁니다.</p>
           ) : null}
           <label className="check">
             <input type="checkbox" checked={options.glyphs} onChange={(event) => void saveOptions({ glyphs: event.target.checked })} />
@@ -348,7 +337,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
         </div>
         <div className="form-grid">
           <label className="field">
-            <span className="field-label">번역 없음 · 원문 변경(stale) 칸</span>
+            <span className="field-label">미번역·원문 변경 칸</span>
             <select
               value={options.missing}
               onChange={(event) => {
@@ -372,7 +361,6 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
               onChange={(event) => setFileName(event.target.value)}
               onBlur={() => void saveFileName()}
             />
-            <span className="hint">비우면 연결한 컬렉션 이름, 없으면 프로젝트 이름을 씁니다.</span>
           </label>
         </div>
       </section>
@@ -381,10 +369,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
         <h3>Unity 프로젝트 (선택)</h3>
         {unity === null || unity.state === 'none' ? (
           <>
-            <p className="hint">
-              연결하면 Unity 프로젝트의 로케일 에셋과 String Table 공유 데이터 에셋을 읽어 실제 로케일 코드와 기존 키의 Id 를
-              가져옵니다. 읽기만 하고 Unity 프로젝트에 쓰지 않습니다.
-            </p>
+            <p className="hint">로케일 코드와 기존 키 Id 를 읽어 옵니다. Unity 프로젝트에는 쓰지 않습니다.</p>
             <div className="row" style={{ marginTop: 'var(--space-3)' }}>
               <button type="button" disabled={busy} onClick={() => void projectAction(api.export.linkUnity, 'Unity 프로젝트를 연결했습니다.')}>
                 Unity 프로젝트 연결
@@ -447,7 +432,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
             </dl>
             {unity.unityOnlyKeys > 0 ? (
               <p className="hint field-error">
-                Unity 에만 있는 키 {unity.unityOnlyKeys}개는 Import &gt; CSV... 로 가져오면 지워집니다. CSV(Merge)... 로 가져오세요.
+                Unity 에만 있는 키 {unity.unityOnlyKeys}개는 CSV... 로 가져오면 지워집니다. CSV(Merge)... 로 가져오세요.
               </p>
             ) : null}
             {unity.notices.map((notice) => (
@@ -474,10 +459,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
         <h3>템플릿 (선택)</h3>
         {template === null || template.state === 'none' ? (
           <>
-            <p className="hint">
-              Unity 쪽 CSV 확장에서 열 이름이나 구성을 바꾼 경우에만 필요합니다. Unity 에서 내보낸 CSV 를 등록하면 그 열
-              이름과 순서를 따릅니다.
-            </p>
+            <p className="hint">Unity CSV 확장의 열 구성을 바꾼 경우에만 필요합니다.</p>
             <div className="row" style={{ marginTop: 'var(--space-3)' }}>
               <button type="button" disabled={busy} onClick={() => void projectAction(api.export.setTemplate, '템플릿을 등록했습니다.')}>
                 템플릿 등록
@@ -504,8 +486,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
         ) : (
           <>
             <p className="hint">
-              <code>{template.path}</code> · 열 {template.header.length}개. 열마다 역할을 확인하세요. 모르는 열은 내보내지
-              않습니다 — 빈 칸으로 두면 Unity 가 그 열의 기존 값을 지웁니다.
+              <code>{template.path}</code> · 열 {template.header.length}개
             </p>
             <table className="locale-table template-table">
               <thead>
@@ -550,7 +531,6 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
                 ))}
               </tbody>
             </table>
-            {mappingDirty ? <p className="hint">매핑을 저장하면 미리보기와 내보내기에 반영됩니다.</p> : null}
             <div className="row" style={{ marginTop: 'var(--space-3)' }}>
               <button type="button" className="primary" disabled={busy || !mappingDirty} onClick={() => void saveMapping(mapping)}>
                 매핑 저장
@@ -627,13 +607,10 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
             ) : null}
             <div className="row" style={{ marginTop: 'var(--space-2)' }}>
               <button type="button" className="ghost" onClick={onOpenProjectSettings}>
-                언어별 코드·열 이름 고치기 (프로젝트 화면)
+                코드·열 이름 고치기
               </button>
             </div>
-            <p className="hint">
-              열 이름이 Unity 쪽과 다르면 Unity 는 그 열을 오류 없이 건너뜁니다. 처음 한 번은 Unity 에서 내보낸 CSV 의 첫 줄과
-              비교해 보세요.
-            </p>
+            <p className="hint">열 이름이 Unity 와 다르면 그 열은 무시됩니다.</p>
             {preview.sampleRows.length > 0 ? (
               <div className="sample">
                 <table>
@@ -663,14 +640,10 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
           <section className="card wide">
             <h3>QA</h3>
             {errorCount === 0 ? (
-              <p className="hint">
-                내보내는 번역에 QA 오류가 없습니다 · 경고 {preview.qaWarnings}개(막지 않음)
-              </p>
+              <p className="hint">QA 오류 없음 · 경고 {preview.qaWarnings}개</p>
             ) : (
               <>
-                <p className="hint field-error">
-                  QA 오류가 있어 내보낼 수 없습니다. 검토 화면에서 고치세요 · 경고 {preview.qaWarnings}개
-                </p>
+                <p className="hint field-error">QA 오류가 있어 내보낼 수 없습니다 · 경고 {preview.qaWarnings}개</p>
                 <ul className="export-qa-list">
                   {preview.qaErrors.map((item, index) => (
                     <li key={`${item.language}:${item.key}:${item.ruleId}:${index}`} className="export-qa-item">
@@ -692,19 +665,14 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
                 {notice}
               </p>
             ))}
-            <p className="hint">번역문을 그대로 내보내는 칸만 검사합니다. 비우거나 원문으로 채우는 칸의 옛 번역은 Unity 로 가지 않습니다.</p>
           </section>
 
           <section className="card wide">
             <h3>Smart 항목 {preview.smart.length}개</h3>
-            <p className="hint">
-              Unity CSV 는 Smart 여부를 옮기지 않습니다. 이 목록을 <code>{preview.files.find((file) => file.name.endsWith('_smart.csv'))?.name ?? '{이름}_smart.csv'}</code>
-              로도 쓰니, Unity 에서 이 항목들을 Smart 로 표시하세요.
-            </p>
+            <p className="hint">Unity CSV 는 Smart 여부를 옮기지 않습니다. Unity 에서 직접 표시하세요.</p>
             {preview.smartUnset > 0 ? (
               <p className="hint export-warning">
-                원문에 Smart 구문이 있는데 Smart 칸이 미정인 행이 {preview.smartUnset}개 있습니다. 원문 화면의 [Smart 제안 적용]으로
-                정할 수 있습니다.
+                Smart 여부가 미정인 행이 {preview.smartUnset}개 있습니다(원문 화면의 [Smart 제안 적용]).
               </p>
             ) : null}
             {preview.smart.length > 0 ? (
@@ -750,8 +718,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
               </dd>
             </dl>
             <p className="hint" style={{ marginTop: 'var(--space-3)' }}>
-              Unity 에서 가져오기: Localization Tables 창에서 컬렉션을 고르고 Import 메뉴의 <strong>CSV(Merge)...</strong> 를
-              고르세요. <strong>CSV...</strong> 는 파일에 없는 키를 컬렉션에서 지웁니다.
+              Unity 에서는 <strong>CSV(Merge)...</strong> 로 가져오세요. <strong>CSV...</strong> 는 파일에 없는 키를 지웁니다.
             </p>
           </section>
         </>

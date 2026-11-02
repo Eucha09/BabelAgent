@@ -1,6 +1,6 @@
 import type { TranslateEffort, TranslateModel } from '@shared/schema/jobs'
 
-/** 번역 화면과 설정 화면이 같이 쓰는 선택지 */
+/** 번역 화면과 프로젝트 화면이 같이 쓰는 선택지 */
 export const MODEL_OPTIONS: readonly { value: TranslateModel; label: string }[] = [
   { value: 'opus', label: 'Opus' },
   { value: 'sonnet', label: 'Sonnet' },

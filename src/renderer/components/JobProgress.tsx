@@ -17,14 +17,6 @@ export const JOB_TITLE: Record<JobKind, string> = {
   'term-translate': '용어 번역'
 }
 
-/** 실패한 배치를 다시 돌리는 방법. 작업마다 "남은 행"을 다시 계산하므로 같은 조건으로 다시 실행하면 된다. */
-const RETRY_HINT: Record<JobKind, string> = {
-  translate: '같은 범위로 다시 번역하면 그 행만 다시 돕니다.',
-  context: '다시 추정하면 아직 제안이 없는 행만 돕니다.',
-  terms: '다시 추출하면 이미 있는 용어는 다시 넣지 않습니다.',
-  'term-translate': '다시 번역하면 아직 빈 칸만 채웁니다.'
-}
-
 function countdown(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000))
   const minutes = Math.floor(total / 60)
@@ -85,12 +77,11 @@ export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element 
 
       {snapshot.state === 'waiting-limit' ? (
         <div className="message">
-          <strong>사용량 한도에 걸려 모든 작업자를 멈췄습니다.</strong>
+          <strong>사용량 한도에 걸려 멈췄습니다.</strong>
           <p className="hint">
             {snapshot.resumeAt !== null
-              ? `${countdown(snapshot.resumeAt - now)} 뒤 자동으로 다시 시작합니다.`
-              : '자동 재시도를 멈췄습니다. 한도가 풀린 뒤 직접 다시 시도하세요.'}{' '}
-            진행 중이던 배치는 기록하지 않고 다시 돌립니다.
+              ? `${countdown(snapshot.resumeAt - now)} 뒤 다시 시작합니다.`
+              : '한도가 풀린 뒤 [지금 재시도]를 누르세요.'}
           </p>
         </div>
       ) : null}
@@ -127,7 +118,7 @@ export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element 
               {failure.detail ? <pre>{failure.detail}</pre> : null}
             </div>
           ))}
-          <p className="hint">실패한 배치는 기록되지 않았습니다. {RETRY_HINT[job.kind]}</p>
+          <p className="hint">실패한 배치는 기록하지 않았습니다. 다시 실행하면 남은 것만 처리합니다.</p>
         </div>
       ) : null}
     </div>

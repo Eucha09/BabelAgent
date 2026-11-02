@@ -90,8 +90,7 @@ export function AddTermDialog({
       <div className="modal">
         <h3>용어 추가</h3>
         <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
-          원문에서 이 용어가 쓰인 문장(과 기존 번역)을 찾아 에이전트가 {languages.join(', ') || '대상 언어'} 번역을 채웁니다. 품사·분류와
-          사용 지침은 비워 두면 에이전트가 채웁니다. 결과는 승인 대기로 들어가니 그리드에서 확인하고 승인하세요.
+          에이전트가 {languages.join(', ') || '대상 언어'} 번역을 채워 승인 대기로 넣습니다.
         </p>
         <div className="field">
           <label htmlFor="new-term">원문 용어 *</label>

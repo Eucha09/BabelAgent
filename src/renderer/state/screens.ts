@@ -13,49 +13,49 @@ export const SCREENS: readonly ScreenDef[] = [
     id: 'project',
     label: '프로젝트',
     requiresProject: true,
-    description: 'project.json 의 게임 소개·톤 가이드·언어·스타일 규칙·배치 설정을 정하는 화면입니다.'
+    description: '언어·게임 소개·톤 가이드·스타일 규칙·번역 설정'
   },
   {
     id: 'strings',
     label: '원문',
     requiresProject: true,
-    description: 'strings_master.csv의 원문을 가져오고 편집하는 화면입니다.'
+    description: '원문 가져오기와 편집'
   },
   {
     id: 'context',
     label: '컨텍스트',
     requiresProject: true,
-    description: '에이전트가 원문의 컨텍스트·UI 유형·최대 길이·변수 설명을 제안하고, 고쳐서 승인하는 화면입니다.'
+    description: '컨텍스트·UI 유형·최대 길이·변수 설명 제안과 적용'
   },
   {
     id: 'glossary',
     label: '용어집',
     requiresProject: true,
-    description: 'glossary.csv의 용어와 언어별 확정 번역을 관리하고, 에이전트가 찾은 용어 후보를 승인하는 화면입니다.'
+    description: '용어 추출·번역·승인'
   },
   {
     id: 'translate',
     label: '번역',
     requiresProject: true,
-    description: '배치 번역을 실행하고 진행 상황을 보는 화면입니다.'
+    description: '배치 번역 실행'
   },
   {
     id: 'review',
     label: '검토/QA',
     requiresProject: true,
-    description: '번역을 검토하고 QA 진단을 확인하는 화면입니다.'
+    description: '번역 검토와 QA 진단'
   },
   {
     id: 'export',
     label: '내보내기',
     requiresProject: true,
-    description: 'Unity Localization용 CSV를 내보내는 화면입니다.'
+    description: 'Unity Localization CSV 내보내기'
   },
   {
     id: 'settings',
     label: '설정',
     requiresProject: false,
-    description: 'Claude Code CLI 경로와 인증 방식을 설정합니다.'
+    description: '계정·Claude Code·앱 업데이트'
   }
 ]
 

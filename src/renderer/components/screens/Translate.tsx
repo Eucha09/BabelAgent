@@ -50,7 +50,7 @@ type Props = {
   job: JobView | null
   jobLog: readonly JobLogEntry[]
   onMessage: (text: string) => void
-  /** 모델·사고 수준을 고르면 바로 project.json 에 저장한다. 설정 화면과 같은 값이다. */
+  /** 모델·사고 수준을 고르면 바로 project.json 에 저장한다. 프로젝트 화면과 같은 값이다. */
   onSettings: (patch: ProjectSettingsPatch) => void
 }
 
@@ -152,7 +152,7 @@ export function Translate({ project, job, jobLog, onMessage, onSettings }: Props
         <h2 className="screen-title">번역</h2>
         <div className="card">
           <h3>대상 언어가 없습니다</h3>
-          <p className="hint">project.json 의 targetLanguages 에 번역할 언어를 넣어 주세요.</p>
+          <p className="hint">프로젝트 화면에서 대상 언어를 정하세요.</p>
         </div>
       </div>
     )
@@ -161,10 +161,6 @@ export function Translate({ project, job, jobLog, onMessage, onSettings }: Props
   return (
     <div className="translate-screen">
       <h2 className="screen-title">번역</h2>
-      <p className="screen-desc">
-        배치마다 새 에이전트 세션을 열어 번역하고, 검증을 통과한 배치만 번역 파일에 한 번에 기록합니다.
-        승인된 행은 어느 범위에서도 건드리지 않습니다.
-      </p>
 
       <div className="card">
         <div className="translate-form">
@@ -232,7 +228,7 @@ export function Translate({ project, job, jobLog, onMessage, onSettings }: Props
 
         <p className="hint">
           배치 {config.batch.maxRows}행 / {config.batch.maxSourceChars.toLocaleString()}자 · 작업자{' '}
-          {clampConcurrency(config.batch.concurrency)} — project.json 의 batch 에서 바꿀 수 있습니다.
+          {clampConcurrency(config.batch.concurrency)}
         </p>
 
         <div className="row" style={{ marginTop: 'var(--space-3)' }}>
@@ -246,7 +242,7 @@ export function Translate({ project, job, jobLog, onMessage, onSettings }: Props
           </button>
           <span className="hint">
             {plan.rows}행 · 배치 {plan.batches}개{plan.skipped > 0 ? ` · 승인 ${plan.skipped}행 제외` : ''}
-            {running && job.kind !== 'translate' ? ` — ${JOB_TITLE[job.kind]}이 끝나면 시작할 수 있습니다` : ''}
+            {running && job.kind !== 'translate' ? ` — ${JOB_TITLE[job.kind]} 중` : ''}
           </span>
         </div>
 

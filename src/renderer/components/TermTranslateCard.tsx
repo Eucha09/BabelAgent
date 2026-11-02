@@ -56,14 +56,10 @@ export function TermTranslateCard({ config, entries, languages, chosenTerms, dis
   return (
     <section className="card">
       <h3>용어 번역</h3>
-      <p className="hint" style={{ marginBottom: 'var(--space-2)' }}>
-        에이전트가 용어집의 빈 번역 칸을 채웁니다. 원문 예문과 다른 언어의 번역을 참고하고, 이미 있는 번역은 덮지 않습니다(다시
-        받으려면 [선택 재번역]). 승인된 용어에 채운 언어는 승인 대기로 표시되어 [선택 승인] 전까지 번역과 QA 에 쓰이지 않습니다.
-      </p>
       {languages.length === 0 ? (
-        <p className="hint">대상 언어가 없습니다. 프로젝트 화면에서 대상 언어를 정하세요.</p>
+        <p className="hint">대상 언어가 없습니다. 프로젝트 화면에서 정하세요.</p>
       ) : (
-        <div className="check-row" style={{ margin: 'var(--space-3) 0 var(--space-2)' }}>
+        <div className="check-row" style={{ margin: '0 0 var(--space-2)' }}>
           {languages.map((language) => (
             <label key={language} className="check">
               <input
@@ -97,8 +93,8 @@ export function TermTranslateCard({ config, entries, languages, chosenTerms, dis
         </label>
       </div>
       <p className="hint">
-        배치 용어 {TERMS_PER_BATCH}개 · 작업자 {clampConcurrency(config.batch.concurrency)} · 모델 {modelLabel(config.translate.model)} ·
-        사고 {effortLabel(config.translate.effort)} — 프로젝트 화면의 번역 설정을 따릅니다.
+        모델 {modelLabel(config.translate.model)} · 사고 {effortLabel(config.translate.effort)} · 배치 용어 {TERMS_PER_BATCH}개 ·
+        작업자 {clampConcurrency(config.batch.concurrency)}
       </p>
       <div className="row" style={{ marginTop: 'var(--space-3)' }}>
         <button
@@ -111,7 +107,7 @@ export function TermTranslateCard({ config, entries, languages, chosenTerms, dis
         </button>
         <span className="hint">
           {targets.length > 0 ? `용어 ${targets.length}개 · 칸 ${cells}개 · 배치 ${batches}개` : '고른 언어에 빈 칸이 없습니다'}
-          {blockedBy ? ` — ${blockedBy}이 끝나면 시작할 수 있습니다` : ''}
+          {blockedBy ? ` — ${blockedBy} 중` : ''}
         </span>
       </div>
     </section>

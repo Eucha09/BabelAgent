@@ -139,13 +139,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
   return (
     <div className="project-screen">
       <div className="strings-header project-header">
-        <div>
-          <h2 className="screen-title">프로젝트</h2>
-          <p className="screen-desc">
-            project.json 에 저장되는 설정입니다. 게임 소개·톤 가이드·스타일 규칙은 번역 프롬프트의 고정 부분에 그대로
-            들어가고, 저장하면 다음 번역 작업부터 반영됩니다.
-          </p>
-        </div>
+        <h2 className="screen-title">프로젝트</h2>
         <div className="row">
           <button type="button" disabled={saving || !dirty} onClick={discard}>
             변경 취소
@@ -163,10 +157,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
       </div>
 
       {externalChange ? (
-        <div className="message">
-          project.json 이 앱 밖에서 바뀌었습니다. 저장하면 이 화면에서 고친 묶음만 덮어쓰고, 밖에서 고친 다른 묶음은
-          그대로 남습니다. [변경 취소]를 누르면 바뀐 내용으로 다시 채웁니다.
-        </div>
+        <div className="message">project.json 이 앱 밖에서 바뀌었습니다. [변경 취소]를 누르면 다시 읽습니다.</div>
       ) : null}
       {error ? (
         <div className="message error">
@@ -193,10 +184,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             />
             <FieldError problems={problems} field="sourceLanguage" />
             {form.sourceLanguage.trim() !== base.sourceLanguage ? (
-              <p className="hint">
-                원문 언어는 번역 프롬프트, 에이전트 메모 언어, 용어집 매칭 방식에 쓰입니다. 원문 파일 내용은 바뀌지
-                않습니다.
-              </p>
+              <p className="hint">원문 파일 내용은 바뀌지 않습니다.</p>
             ) : null}
           </div>
           <div className="field">
@@ -210,8 +198,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             <FieldError problems={problems} field="targetLanguages" />
             {removedTargets.length > 0 ? (
               <p className="hint">
-                목록에서 빼도 {removedTargets.map((code) => `translations_${code}.csv`).join(', ')} 파일은 지우지
-                않습니다. 다시 넣으면 그대로 이어서 씁니다.
+                {removedTargets.map((code) => `translations_${code}.csv`).join(', ')} 파일은 지우지 않습니다.
               </p>
             ) : null}
           </div>
@@ -236,7 +223,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             rows={5}
             value={form.intro}
             onChange={(event) => update('intro', event.target.value)}
-            placeholder="세계관, 주요 인물, 플레이어가 하는 일 등. 번역가가 알아야 할 배경을 적습니다."
+            placeholder="세계관, 주요 인물 등 번역에 필요한 배경"
           />
         </div>
         <div className="field">
@@ -246,16 +233,13 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             rows={4}
             value={form.toneGuide}
             onChange={(event) => update('toneGuide', event.target.value)}
-            placeholder="예: 간결하고 경쾌하게. UI 는 명사형으로 짧게, NPC 대사는 캐릭터 말투를 살린다."
+            placeholder="예: 간결하고 경쾌하게"
           />
         </div>
       </section>
 
       <section className="card">
         <h3>스타일 규칙</h3>
-        <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
-          모든 번역 배치에 들어가는 지속 지시입니다. 한 줄에 규칙 하나를 적습니다.
-        </p>
         {form.styleRules.length === 0 ? <p className="hint">아직 규칙이 없습니다.</p> : null}
         <ol className="style-rules">
           {form.styleRules.map((rule, index) => (
@@ -340,7 +324,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
         </div>
         <div className="form-grid three">
           <div className="field">
-            <label htmlFor="batch-rows">배치 최대 행 수</label>
+            <label htmlFor="batch-rows">배치 행 수</label>
             <input
               id="batch-rows"
               type="number"
@@ -352,7 +336,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             <FieldError problems={problems} field="batch.maxRows" />
           </div>
           <div className="field">
-            <label htmlFor="batch-chars">배치 최대 원문 글자 수</label>
+            <label htmlFor="batch-chars">배치 글자 수</label>
             <input
               id="batch-chars"
               type="number"
@@ -377,10 +361,6 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             <FieldError problems={problems} field="batch.concurrency" />
           </div>
         </div>
-        <p className="hint">
-          배치는 행 수와 원문 글자 수 중 먼저 닿는 쪽에서 끊습니다. 배치가 클수록 세션 수는 줄지만 한 번 실패할 때 다시
-          돌릴 양이 늘어납니다. {EFFORT_HINT}
-        </p>
       </section>
 
       <section className="card">
@@ -398,16 +378,18 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             style={{ maxWidth: 160 }}
           />
           <FieldError problems={problems} field="review.lowConfidence" />
-          <p className="hint">
-            에이전트 신뢰도가 이 값보다 낮은 행을 검토 화면의 "신뢰도 낮음" 필터로 모으고, 초안 일괄 승인에서 뺍니다.
-          </p>
         </div>
       </section>
 
       <section className="card">
         <h3>컨텍스트 추정</h3>
         <div className="field">
-          <label htmlFor="max-len-ratio">최대 길이 여유 배수 (1~{MAX_LEN_RATIO_LIMIT})</label>
+          <label
+            htmlFor="max-len-ratio"
+            title={`에이전트가 제안하는 최대 길이의 하한: 원문 길이 × 배수(최소 ${MIN_SUGGESTED_MAX_LEN}자)`}
+          >
+            최대 길이 배수 (1~{MAX_LEN_RATIO_LIMIT})
+          </label>
           <input
             id="max-len-ratio"
             type="number"
@@ -419,20 +401,11 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             style={{ maxWidth: 160 }}
           />
           <FieldError problems={problems} field="context.maxLenRatio" />
-          <p className="hint">
-            에이전트가 제안하는 최대 길이는 원문 길이 × 이 배수(최소 {MIN_SUGGESTED_MAX_LEN}자) 아래로 내려가지 않습니다. 최대 길이는
-            번역문의 한도라서, 원문보다 번역이 길어지는 언어 조합이면 값을 키우세요.
-          </p>
         </div>
       </section>
 
       <section className="card" id="project-export-card">
         <h3>내보내기</h3>
-        <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
-          Unity CSV 의 언어 열입니다. 열 이름이 Unity 쪽과 한 글자라도 다르면 Unity 가 그 열을 조용히 무시합니다. 빈 칸은
-          자동입니다 — 로케일 코드는 프로젝트 언어 코드(Unity 프로젝트를 연결했으면 그 프로젝트의 로케일), 열 이름은{' '}
-          <code>{'{영어 언어명}({코드})'}</code>입니다.
-        </p>
         <table className="locale-table">
           <thead>
             <tr>
@@ -475,10 +448,6 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
           </tbody>
         </table>
         <FieldError problems={problems} field="export.locales" />
-        <p className="hint">
-          만들어질 헤더 전체와 Unity 연결·템플릿·옵션은 <strong>내보내기</strong> 화면에서 봅니다. 처음 한 번은 Unity 에서
-          내보낸 CSV 의 첫 줄과 눈으로 비교해 보세요.
-        </p>
       </section>
 
       <section className="card">
@@ -487,12 +456,12 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             <h3 className="summary-title">고급: Smart Strings</h3>
           </summary>
           <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
-            Unity 프로젝트의 SmartFormat 설정과 같게 맞추세요. QA 의 중괄호·변수·포매터 검사가 이 값을 따릅니다.
+            Unity 프로젝트의 SmartFormat 설정과 같게 맞추세요.
           </p>
           <div className="check-list">
             <label className="check">
               <input type="checkbox" checked={form.smartEnabled} onChange={(event) => update('smartEnabled', event.target.checked)} />
-              <span>Smart Strings 사용 (끄면 포매터 이름 경고만 끕니다)</span>
+              <span>Smart Strings 사용</span>
             </label>
             <label className="check">
               <input
@@ -500,7 +469,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
                 checked={form.alternativeEscaping}
                 onChange={(event) => update('alternativeEscaping', event.target.checked)}
               />
-              <span>대체 이스케이프 (alternativeEscaping) — 켜면 이스케이프 문자 + 중괄호가 리터럴, 끄면 {'{{ }}'}</span>
+              <span>대체 이스케이프 (alternativeEscaping)</span>
             </label>
             <label className="check">
               <input
@@ -508,11 +477,11 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
                 checked={form.convertCharacterStringLiterals}
                 onChange={(event) => update('convertCharacterStringLiterals', event.target.checked)}
               />
-              <span>문자 리터럴 변환 (convertCharacterStringLiterals) — \n, \t 를 문자로</span>
+              <span>문자 리터럴 변환 (convertCharacterStringLiterals)</span>
             </label>
             <label className="check">
               <input type="checkbox" checked={form.caseSensitive} onChange={(event) => update('caseSensitive', event.target.checked)} />
-              <span>대소문자 구분 (caseSensitive) — 변수·포매터 이름 비교</span>
+              <span>대소문자 구분 (caseSensitive)</span>
             </label>
           </div>
           <div className="field">
@@ -536,7 +505,6 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
               onChange={(event) => update('formatters', event.target.value)}
             />
             <FieldError problems={problems} field="smartStrings.formatters" />
-            <p className="hint">목록에 없는 포매터 이름은 경고로 표시합니다. 커스텀 포매터를 등록했다면 여기에 더하세요.</p>
           </div>
         </details>
       </section>

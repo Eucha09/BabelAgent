@@ -55,10 +55,7 @@ export function ImportDialog({ preview, busy, onCancel, onConfirm }: Props): Rea
           ))}
         </div>
 
-        <p className="hint">
-          매핑하지 않은 열은 기존 값을 그대로 둡니다. 이번 파일에 없는 키는 지우지 않고 목록으로만
-          알려 드립니다.
-        </p>
+        <p className="hint">매핑하지 않은 열과 이 파일에 없는 키는 그대로 둡니다.</p>
 
         <div className="sample">
           <table>

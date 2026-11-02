@@ -85,7 +85,7 @@ const api = {
     open: (dir: string): Promise<IpcResult<OpenProject>> =>
       ipcRenderer.invoke(IPC.projectOpen, { dir }),
     close: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.projectClose),
-    /** project.json 의 화면 설정(프로젝트·번역·설정 화면)을 고친다 */
+    /** project.json 의 화면 설정(프로젝트·번역·내보내기 화면)을 고친다 */
     setSettings: (patch: ProjectSettingsPatch): Promise<IpcResult<OpenProject>> =>
       ipcRenderer.invoke(IPC.projectSettingsSet, patch),
     /** 에이전트 패널의 규칙 카드에서 [저장]을 눌렀을 때 */

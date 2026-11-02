@@ -377,7 +377,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
         <h2 className="screen-title">검토/QA</h2>
         <div className="card">
           <h3>대상 언어가 없습니다</h3>
-          <p className="hint">project.json 의 targetLanguages 에 번역할 언어를 넣어 주세요.</p>
+          <p className="hint">프로젝트 화면에서 대상 언어를 정하세요.</p>
         </div>
       </div>
     )
@@ -386,13 +386,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
   return (
     <div className="review-screen">
       <div className="strings-header">
-        <div>
-          <h2 className="screen-title">검토/QA</h2>
-          <p className="screen-desc">
-            번역을 검토하고 QA 진단을 확인합니다. 번역 칸을 고치면 그 행만 바로 저장되고 초안이 됩니다. 오류가 있는
-            행은 승인할 수 없고, 내보내기에서도 막힙니다.
-          </p>
-        </div>
+        <h2 className="screen-title">검토/QA</h2>
         <div className="row">
           <select
             value={language}
@@ -417,10 +411,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
       </div>
 
       {jobRunningHere ? (
-        <div className="message">
-          이 언어의 번역 작업이 진행 중입니다. 배치가 기록될 때마다 다시 읽습니다. 작업이 시작된 뒤 여기서 고친 행은
-          작업이 덮어쓰지 않습니다.
-        </div>
+        <div className="message">번역 작업이 진행 중입니다. 배치가 기록될 때마다 다시 읽습니다.</div>
       ) : null}
       {externalChange ? (
         <div className="message">{externalChange} 이 바뀌었습니다. 편집을 마치면 다시 읽습니다.</div>
@@ -446,7 +437,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
               className={filter.quick === quick ? 'filter-chip selected' : 'filter-chip'}
               title={
                 quick === 'low-confidence'
-                  ? `${QUICK_LABEL[quick].hint} (기준 ${lowConfidence} — project.json 의 review.lowConfidence)`
+                  ? `${QUICK_LABEL[quick].hint} (기준 ${lowConfidence})`
                   : QUICK_LABEL[quick].hint
               }
               onClick={() => changeFilter({ quick })}
@@ -504,7 +495,6 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
           {loading ? ' · 읽는 중…' : ''}
         </div>
         <div className="row">
-          <span className="hint">↑↓ 이동 · Enter 편집 · Ctrl+Enter 저장 · Esc 취소</span>
           <button
             type="button"
             disabled={bulkTargets.length === 0 || saving || loading || editing !== null}
@@ -557,7 +547,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
           onDiscardCandidate={discardCandidate}
         />
       ) : loaded && items.length > 0 ? (
-        <p className="hint review-detail-empty">행을 고르면 원문·진단·재번역이 여기에 나옵니다.</p>
+        <p className="hint review-detail-empty">행을 고르세요.</p>
       ) : null}
 
       {confirmApply ? (
@@ -585,7 +575,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
           onCancel={() => setConfirmBulk(false)}
           onConfirm={() => void approveBulk()}
         >
-          <p>지금 목록에 보이는 행 중 아래 조건을 모두 만족하는 초안 {bulkTargets.length}행을 승인합니다.</p>
+          <p>보이는 행 중 아래 조건에 맞는 초안 {bulkTargets.length}행을 승인합니다.</p>
           <ul className="confirm-list">
             <li>상태가 초안</li>
             <li>QA 오류·경고가 하나도 없음</li>
@@ -600,10 +590,6 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
               .map((item) => item.key)
               .join(', ')}
             {bulkTargets.length > BULK_PREVIEW ? ` 외 ${bulkTargets.length - BULK_PREVIEW}행` : ''}
-          </p>
-          <p className="hint">
-            저장 직전에 파일을 다시 읽어 조건을 다시 확인하고, 그 사이 바뀐 행은 건너뜁니다. 승인한 행은 배치 번역이
-            덮어쓰지 않습니다. 되돌리려면 행을 골라 [초안]이나 [검토]로 바꾸세요.
           </p>
         </ConfirmDialog>
       ) : null}

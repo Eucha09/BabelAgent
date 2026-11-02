@@ -61,7 +61,7 @@ const GrammarSettings = z.object({
 const DEFAULT_GRAMMAR: z.infer<typeof GrammarSettings> = { enabled: false, tables: [] }
 
 /**
- * 번역 모델과 사고 수준. 배치 번역과 행 재번역이 쓴다. 번역 화면과 설정 화면이 같은 값을 고친다.
+ * 번역 모델과 사고 수준. 배치 번역과 행 재번역이 쓴다. 번역 화면과 프로젝트 화면이 같은 값을 고친다.
  * 값이 빠진 옛 project.json 도 열리도록 필드마다 기본값을 둔다.
  */
 export const TranslateSettings = z.object({

@@ -68,15 +68,15 @@ function RuleProposal({
               무시
             </button>
           </div>
-          <p className="hint">저장하면 project.json 의 스타일 규칙에 들어가 다음 번역 배치부터 반영됩니다.</p>
+          <p className="hint">저장하면 다음 번역부터 반영됩니다.</p>
         </>
       ) : (
         <p className="hint">
           {card.state === 'saving'
             ? '저장 중…'
             : card.state === 'saved'
-              ? `저장했습니다${card.ruleId ? ` (${card.ruleId})` : ''}. 프로젝트 화면에서 고치거나 지울 수 있습니다.`
-              : '무시했습니다. 이 지시는 번역 배치에 반영되지 않습니다.'}
+              ? `저장했습니다${card.ruleId ? ` (${card.ruleId})` : ''}.`
+              : '무시했습니다.'}
         </p>
       )}
     </div>
@@ -176,7 +176,7 @@ export function AgentPanel({
         {turns.length === 0 ? (
           <p className="hint">
             {projectOpen
-              ? '프로젝트에 대해 묻거나, "앞으로 NPC 대사는 반말로"처럼 지속 지시를 주세요. 지속 지시는 규칙 카드에서 [저장]을 눌러야 번역 배치에 반영됩니다.'
+              ? '프로젝트에 대해 묻거나 지시를 주세요. 예: "앞으로 NPC 대사는 반말로"'
               : '프로젝트를 열면 에이전트를 사용할 수 있습니다.'}
           </p>
         ) : null}

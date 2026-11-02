@@ -49,8 +49,7 @@ export function AddRowDialog({
             </>
           ) : (
             '맨 끝에 넣습니다.'
-          )}{' '}
-          저장하기 전에는 [행 삭제]로 바로 지울 수 있습니다.
+          )}
         </p>
 
         <div className="field">
@@ -73,7 +72,7 @@ export function AddRowDialog({
             }}
           />
           {touched && problem ? <p className="hint field-error">{PROBLEM_TEXT[problem]}</p> : null}
-          <p className="hint">저장한 뒤에는 키를 바꿀 수 없습니다. 번역과 내보내기가 키로 연결됩니다.</p>
+          <p className="hint">저장한 뒤에는 키를 바꿀 수 없습니다.</p>
         </div>
 
         <div className="field">

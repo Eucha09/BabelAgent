@@ -329,13 +329,7 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
   return (
     <div className="strings-screen">
       <div className="strings-header">
-        <div>
-          <h2 className="screen-title">원문</h2>
-          <p className="screen-desc">
-            strings_master.csv가 원본입니다. 원문과 메타데이터를 고치고 저장하면 CSV에 바로
-            반영됩니다.
-          </p>
-        </div>
+        <h2 className="screen-title">원문</h2>
         <div className="row">
           {view && view.languages.length > 0 ? (
             <select
@@ -384,8 +378,7 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
 
       {externalChange ? (
         <div className="message error">
-          {externalChange} 이 앱 밖에서 바뀌었습니다. 편집 중이라 자동으로 다시 읽지 않았습니다.
-          저장하면 충돌을 확인합니다.
+          {externalChange} 이 앱 밖에서 바뀌었습니다. 편집 중이라 다시 읽지 않았습니다.
         </div>
       ) : null}
 
@@ -427,8 +420,7 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
           {view.masterExists ? (
             <>
               <h3>원문이 비어 있습니다</h3>
-              <p className="hint">[행 추가]로 한 줄씩 넣거나 [원문 가져오기]로 CSV를 불러오세요.</p>
-              <div className="row" style={{ marginTop: 'var(--space-3)' }}>
+              <div className="row">
                 <button type="button" className="primary" onClick={() => setAdding(true)} disabled={busy}>
                   행 추가
                 </button>
@@ -437,11 +429,7 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
           ) : (
             <>
               <h3>원문 파일이 없습니다</h3>
-              <p className="hint">
-                빈 strings_master.csv를 만들어 행을 직접 추가하거나, [원문 가져오기]로 기존 CSV를
-                불러올 수 있습니다. 행을 추가하고 저장해도 파일이 만들어집니다.
-              </p>
-              <div className="row" style={{ marginTop: 'var(--space-3)' }}>
+              <div className="row">
                 <button type="button" className="primary" onClick={() => void createMaster()} disabled={busy}>
                   빈 원문 파일 만들기
                 </button>
@@ -469,7 +457,7 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
               <button
                 type="button"
                 disabled={busy || smartSuggestions === 0}
-                title="원문에 Smart 구문(플레이스홀더)이 있는데 Smart 칸이 미정인 행을 Smart 로 둡니다. 일반으로 둔 행은 건드리지 않습니다."
+                title="Smart 구문이 있고 Smart 칸이 미정인 행을 Smart 로 둡니다"
                 onClick={applySmartSuggestions}
               >
                 Smart 제안 적용 ({smartSuggestions})
@@ -537,10 +525,7 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
           {pendingRow?.status === 'approved' ? (
             <p className="hint field-error">승인된 번역이 함께 지워집니다.</p>
           ) : null}
-          <p className="hint">
-            저장하면 strings_master.csv와 폴더의 모든 번역 파일(translations_*.csv)에서 이 키의 행을
-            지웁니다. 저장하기 전에는 [변경 취소]로 되돌릴 수 있습니다.
-          </p>
+          <p className="hint">저장하면 원문과 모든 번역 파일에서 이 키를 지웁니다.</p>
         </ConfirmDialog>
       ) : null}
 
@@ -556,10 +541,7 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
             void load(language)
           }}
         >
-          <p className="hint">
-            저장하지 않은 편집, 추가한 행, 순서 변경, 삭제 대기를 모두 버리고 디스크의 파일을 다시
-            읽습니다.
-          </p>
+          <p className="hint">저장하지 않은 변경을 모두 버리고 파일을 다시 읽습니다.</p>
         </ConfirmDialog>
       ) : null}
 

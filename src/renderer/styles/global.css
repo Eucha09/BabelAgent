@@ -424,7 +424,7 @@ code,
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.2px;
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-4);
 }
 
 .screen-desc {
@@ -672,17 +672,18 @@ code,
 
 .strings-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
+  margin-bottom: var(--space-4);
 }
 
 .strings-header > .row {
   flex: none;
 }
 
-.strings-header .screen-desc {
-  margin-bottom: var(--space-3);
+.strings-header .screen-title {
+  margin: 0;
 }
 
 select {
@@ -1634,7 +1635,9 @@ button.danger:disabled {
   z-index: 5;
   max-width: 760px;
   margin-top: calc(var(--space-5) * -1);
+  margin-bottom: 0;
   padding-top: var(--space-5);
+  padding-bottom: var(--space-4);
   background: var(--bg-app);
 }
 

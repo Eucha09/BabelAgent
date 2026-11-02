@@ -72,7 +72,7 @@ export function AppUpdateCard({ status, jobRunning, onCheck, onDownload, onCance
 
       {state?.kind === 'error' && state.detail ? <pre className="login-log">{state.detail}</pre> : null}
 
-      <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
+      <div className="row">
         <button type="button" disabled={!canCheck} onClick={onCheck}>
           {state?.kind === 'checking' ? '확인 중…' : '업데이트 확인'}
         </button>
@@ -103,11 +103,6 @@ export function AppUpdateCard({ status, jobRunning, onCheck, onDownload, onCance
           </a>
         ) : null}
       </div>
-
-      <p className="hint">
-        켤 때와 켜 둔 동안 6시간마다 GitHub Releases 에서 새 버전을 확인합니다. 받기는 [받기]를 눌러야 시작합니다. 받아 둔
-        업데이트는 [다시 시작해 설치]를 누르거나 앱을 끌 때 설치됩니다.
-      </p>
     </div>
   )
 }

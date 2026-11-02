@@ -42,7 +42,7 @@ function fieldHint(field: ContextField, maxLenRatio: number): string {
     case 'ui_type':
       return 'dialogue, button, tooltip 같은 분류. 이미 쓰는 값을 따릅니다'
     case 'max_len':
-      return `버튼·탭처럼 길이 제한이 분명한 짧은 UI 문구에만 제안합니다. 번역문의 한도라서 원문 길이 × ${maxLenRatio}(최소 ${MIN_SUGGESTED_MAX_LEN}자) 아래로는 제안하지 않습니다 — 배수는 프로젝트 화면에서 바꿉니다`
+      return `버튼·탭 같은 짧은 UI 문구에만 제안합니다. 원문 길이 × ${maxLenRatio}(최소 ${MIN_SUGGESTED_MAX_LEN}자) 이상`
     case 'vars':
       return '원문의 변수마다 종류·의미·예시. 변수가 없는 행은 묻지 않습니다'
   }
@@ -307,16 +307,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
 
   return (
     <div className="workbench-screen">
-      <div className="strings-header">
-        <div>
-          <h2 className="screen-title">컨텍스트</h2>
-          <p className="screen-desc">
-            에이전트가 원문의 빈 메타데이터 칸을 제안합니다. 제안은 context_suggestions.csv 에 쌓이고, 여기서 고치고
-            승인한 행만 strings_master.csv 에 들어갑니다. 이미 채워진 칸은 건드리지 않고, 메타데이터는 번역 상태를 바꾸지
-            않습니다.
-          </p>
-        </div>
-      </div>
+      <h2 className="screen-title">컨텍스트</h2>
 
       <section className="card">
         <h3>컨텍스트 추정</h3>
@@ -341,11 +332,8 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
           </label>
         </div>
         <p className="hint">
-          배치 {config.batch.maxRows}행 / {config.batch.maxSourceChars.toLocaleString()}자 · 작업자 {clampConcurrency(config.batch.concurrency)} ·
-          모델 {modelLabel(config.translate.model)} · 사고 {effortLabel(config.translate.effort)} — 프로젝트 화면의 번역 설정을 따릅니다.
-          {fields.has('max_len')
-            ? ` 최대 길이는 원문 길이 × ${config.context.maxLenRatio}(최소 ${MIN_SUGGESTED_MAX_LEN}자) 이상으로 넉넉하게 제안합니다.`
-            : ''}
+          모델 {modelLabel(config.translate.model)} · 사고 {effortLabel(config.translate.effort)} · 배치 {config.batch.maxRows}행 /{' '}
+          {config.batch.maxSourceChars.toLocaleString()}자 · 작업자 {clampConcurrency(config.batch.concurrency)}
         </p>
         <div className="row" style={{ marginTop: 'var(--space-3)' }}>
           <button type="button" className="primary" disabled={running || busy || plan.rows === 0} onClick={() => void start()}>
@@ -353,7 +341,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
           </button>
           <span className="hint">
             {plan.rows}행 · 배치 {plan.batches}개{plan.skipped > 0 ? ` · 제안 대기 ${plan.skipped}행 제외` : ''}
-            {running && job.kind !== 'context' ? ` — ${JOB_TITLE[job.kind]}이 끝나면 시작할 수 있습니다` : ''}
+            {running && job.kind !== 'context' ? ` — ${JOB_TITLE[job.kind]} 중` : ''}
           </span>
         </div>
       </section>
@@ -362,7 +350,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
         <section className="card">
           <div className="row checklist-toolbar">
             <strong>추정할 행</strong>
-            <span className="hint">선택 {scopeKeys.size} · 고른 필드가 모두 채워진 행은 건너뜁니다</span>
+            <span className="hint">선택 {scopeKeys.size}</span>
             <span className="spacer" />
             <button type="button" disabled={running} onClick={() => setScopeKeys(new Set(master.map((row) => row.key)))}>
               모두
@@ -440,8 +428,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
           onCancel={() => setConfirmDiscard(false)}
           onConfirm={() => void discard()}
         >
-          <p>선택한 제안 {chosen.length}행을 context_suggestions.csv 에서 지웁니다. 원문은 바뀌지 않습니다.</p>
-          <p className="hint">다시 추정하면 그 행을 다시 제안받을 수 있습니다(사용량을 다시 씁니다).</p>
+          <p>선택한 제안 {chosen.length}행을 버립니다. 원문은 바뀌지 않습니다.</p>
         </ConfirmDialog>
       ) : null}
     </div>

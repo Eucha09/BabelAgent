@@ -130,7 +130,7 @@ export function ReviewDetail({
           </div>
           {stale ? (
             <div className="detail-block">
-              <div className="detail-label">원문 변경 — 번역할 때 본 원문과 지금 원문</div>
+              <div className="detail-label">원문 변경</div>
               <SourceDiff before={row.source_snapshot} after={row.source} />
             </div>
           ) : null}
@@ -193,7 +193,7 @@ export function ReviewDetail({
               rows={2}
               value={instruction}
               disabled={rerollStartedAt !== null}
-              placeholder="추가 지시(선택). 예: 더 짧게, 존댓말로, 용어 '바벨탑' 유지"
+              placeholder="추가 지시(선택). 예: 더 짧게"
               onChange={(event) => setInstruction(event.target.value)}
             />
             <div className="row detail-actions">

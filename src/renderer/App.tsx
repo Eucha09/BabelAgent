@@ -420,14 +420,14 @@ export function App(): React.JSX.Element {
     }
   }, [refreshAuth, refreshCli])
 
-  /** project.json 부분 갱신. 프로젝트·번역·설정 화면이 같이 쓴다. 저장되면 열린 프로젝트 상태도 맞춘다. */
+  /** project.json 부분 갱신. 프로젝트·번역·내보내기 화면이 같이 쓴다. 저장되면 열린 프로젝트 상태도 맞춘다. */
   const updateProject = useCallback(async (patch: ProjectSettingsPatch): Promise<IpcResult<OpenProject>> => {
     const result = await api.project.setSettings(patch)
     if (result.ok) setProject(result.value)
     return result
   }, [])
 
-  /** 번역 화면과 설정 화면의 번역 모델·사고 수준 저장 */
+  /** 번역 화면의 번역 모델·사고 수준 저장 */
   const saveTranslateSettings = useCallback(
     async (patch: ProjectSettingsPatch) => {
       const result = await updateProject(patch)
@@ -562,8 +562,6 @@ export function App(): React.JSX.Element {
             onLoginStart={(method) => void startLogin(method)}
             onLoginCancel={cancelLogin}
             onLogout={logout}
-            project={project}
-            onProjectSettings={(patch) => void saveTranslateSettings(patch)}
             cli={cliStatus}
             cliBusy={cliBusy}
             jobRunning={job !== null && job.snapshot.state !== 'done' && job.snapshot.state !== 'cancelled'}
@@ -671,16 +669,7 @@ export function App(): React.JSX.Element {
             else setScreen(leave.id)
           }}
         >
-          <p className="hint">
-            {findScreen(screen).label} 화면에 저장하지 않은 변경이 있습니다.{' '}
-            {pendingLeave.kind === 'close'
-              ? '프로젝트를 닫으면'
-              : pendingLeave.kind === 'update'
-                ? '업데이트를 설치하려고 다시 시작하면'
-                : '다른 화면으로 가면'}{' '}
-            그
-            변경은 사라집니다.
-          </p>
+          <p className="hint">{findScreen(screen).label} 화면에 저장하지 않은 변경이 있습니다. 계속하면 사라집니다.</p>
         </ConfirmDialog>
       ) : null}
 

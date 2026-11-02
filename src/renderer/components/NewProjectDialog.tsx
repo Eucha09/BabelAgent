@@ -38,7 +38,6 @@ export function NewProjectDialog({ dir, busy, onCancel, onSubmit }: Props): Reac
         <div className="field">
           <label htmlFor="source-language">원문 언어</label>
           <LanguageSelect id="source-language" value={sourceLanguage} exclude={targetLanguages} onChange={setSourceLanguage} />
-          <p className="hint">project.json 에 저장되고, 나중에 프로젝트 화면에서 바꿀 수 있습니다.</p>
         </div>
 
         <div className="field">

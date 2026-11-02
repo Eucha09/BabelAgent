@@ -22,19 +22,16 @@ export function ConflictDialog({
         <h3>파일 충돌</h3>
         <p className="screen-desc">{message}</p>
         {detail ? <pre className="login-log">{detail}</pre> : null}
-        <p className="hint">
-          내 변경으로 덮어쓰면 앱 밖에서 바뀐 내용이 사라집니다. 다시 불러오면 지금 편집 중인 내용이
-          사라집니다.
-        </p>
+        <p className="hint">덮어쓰면 앱 밖의 변경이, 다시 불러오면 내 편집이 사라집니다.</p>
         <div className="modal-actions">
           <button type="button" onClick={onCancel} disabled={busy}>
             취소
           </button>
           <button type="button" onClick={onReload} disabled={busy}>
-            디스크 내용 다시 불러오기
+            다시 불러오기
           </button>
           <button type="button" className="primary" onClick={onKeepMine} disabled={busy}>
-            내 변경 유지(덮어쓰기)
+            덮어쓰기
           </button>
         </div>
       </div>

@@ -12,12 +12,7 @@ export function SourceDiff({ before, after }: Props): React.JSX.Element {
   const parts = useMemo(() => diffWords(before, after), [before, after])
 
   if (before === '') {
-    return (
-      <p className="hint">
-        이전 원문 기록이 없습니다. 이전 원문은 번역을 기록할 때 함께 남기는데, 이 기능이 생기기 전에 번역한
-        행이거나 번역 파일을 앱 밖에서 고친 경우입니다.
-      </p>
-    )
+    return <p className="hint">이전 원문 기록이 없습니다.</p>
   }
 
   return (

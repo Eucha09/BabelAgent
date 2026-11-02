@@ -46,7 +46,7 @@
 | `project:pick` | 폴더 선택 대화상자 |
 | `project:open` | 프로젝트 로드, schemaVersion 확인·마이그레이션 |
 | `project:rules:apply` | 에이전트 패널의 스타일 규칙 카드에서 [저장]. 메인이 지금 규칙에 다시 적용해 보고(`core/project/rules.ts`) 설정 검증을 통과하면 project.json 에 쓴다. 저장한 규칙 id 와 새 설정을 돌려준다 |
-| `project:settings:set` | project.json 부분 갱신. 프로젝트·번역·설정 화면이 바뀐 묶음(name, sourceLanguage, targetLanguages, game, styleRules, batch, translate, review, context, smartStrings)만 보내면, 메인이 지금 설정에 합치고 `core/project/settings.ts`의 검증을 통과해야 쓴다. schemaVersion·grammar 는 받지 않는다. export 는 경로가 아닌 값(언어별 로케일 코드·열 이름, 내보내기 옵션)만 받는다 — Unity 프로젝트 경로와 템플릿 경로는 대화상자 채널로만 정한다. 같은 값이면 쓰지 않는다 |
+| `project:settings:set` | project.json 부분 갱신. 프로젝트·번역·내보내기 화면이 바뀐 묶음(name, sourceLanguage, targetLanguages, game, styleRules, batch, translate, review, context, smartStrings)만 보내면, 메인이 지금 설정에 합치고 `core/project/settings.ts`의 검증을 통과해야 쓴다. schemaVersion·grammar 는 받지 않는다. export 는 경로가 아닌 값(언어별 로케일 코드·열 이름, 내보내기 옵션)만 받는다 — Unity 프로젝트 경로와 템플릿 경로는 대화상자 채널로만 정한다. 같은 값이면 쓰지 않는다 |
 | `strings:list` | 원문 + 선택 언어 번역 조인 결과, 원문 파일 존재 여부 |
 | `strings:save` | 원문 전체 저장(편집·행 추가·순서 변경·삭제). 키 검사 후 해시 재계산, 충돌 감지, 모든 번역 파일의 stale 갱신과 `deletedKeys` 행 삭제 |
 | `strings:create` | 헤더만 있는 빈 `strings_master.csv` 생성 |
