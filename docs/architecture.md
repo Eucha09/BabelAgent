@@ -56,7 +56,8 @@
 | `translation:approve` | 초안 일괄 승인. 화면이 고른 키와 그때 본 행을 받아, 메인이 번역 파일을 다시 읽고 조건(초안·QA 진단 없음·신뢰도 기준 이상)을 행마다 다시 확인한 뒤 통과한 행만 한 번에 쓴다. 승인·건너뜀(이유) 목록을 돌려준다 |
 | `glossary:list` | 용어집 화면용 항목(승인 대기 포함). 같은 용어(대소문자 무시)가 여러 행이면 첫 행만 담고 알린다 |
 | `glossary:update` | 용어 추가·수정·삭제·승인을 한 번에. 행마다 화면이 본 값(`expected`)을 받아, 메인이 파일을 다시 읽어 그 행이 바뀌었으면 건너뛰고 나머지만 원자적으로 쓴다 |
-| `glossary:extract` | 용어 추출 작업 시작(전체 원문 / 선택 행) |
+| `glossary:extract` | 용어 추출 작업 시작(전체 원문 / 선택 행). 후보만 찾는다 |
+| `glossary:translate` | 용어 번역 작업 시작(언어 목록, 빈 칸 전체 / 고른 용어). 빈 칸만 채운다 |
 | `glossary:add` | 용어 하나를 에이전트로 채워 승인 대기로 추가(일회성 세션). 원문에 없거나 이미 있는 용어는 거부. 추가한 항목, 원문에서 찾은 행 수, 기존 번역과 어긋나는 행을 돌려준다 |
 | `glossary:retranslate` | 용어 하나 재번역(일회성 세션, 지시 포함). 결과는 쓰지 않고 새 번역·근거·신뢰도와 기존 번역과 어긋나는 행을 돌려준다 — 화면이 그 행의 칸에 미저장 편집으로 채운다 |
 | `glossary:agent:cancel` | 진행 중인 용어 추가·재번역 취소 |
@@ -66,7 +67,7 @@
 | `context:discard` | 제안 버리기 |
 | `qa:run` | 언어 하나 전체 QA. 진단이 있는 키만 돌려준다 |
 | `job:start` | 배치 번역 시작(대상 언어·범위·선택 키·모델). 고른 모델은 project.json 에 기억 |
-| `job:control` | `pause` / `resume` / `cancel` / `retry`(한도 대기 건너뛰기). 번역·컨텍스트 추정·용어 추출 공통 |
+| `job:control` | `pause` / `resume` / `cancel` / `retry`(한도 대기 건너뛰기). 번역·컨텍스트 추정·용어 추출·용어 번역 공통 |
 | `job:current` | 진행 중이거나 마지막 작업의 상태. 화면을 다시 열 때 이어 보기용 |
 | `usage:read` | 구독 사용량 한도(`/usage`). 화면은 구독 로그인일 때만 부른다 |
 | `auth:status` | `claude auth status --json`. `null` 필드도 "없음"으로 받는다(Console 로그인의 `subscriptionType`) |
@@ -93,7 +94,7 @@
 
 | 채널 | 페이로드 |
 |---|---|
-| `job:update` | 작업 전체 상태(`JobView`): 종류(`kind`: translate / context / terms), running / paused / waiting-limit / done / cancelled, 행·배치 수, 자동 재개 시각, 실패 사유 |
+| `job:update` | 작업 전체 상태(`JobView`): 종류(`kind`: translate / context / terms / term-translate), running / paused / waiting-limit / done / cancelled, 행·배치 수, 자동 재개 시각, 실패 사유 |
 | `job:log` | 작업 로그 한 줄(배치 시작·제출 통과/실패·기록·한도·끝, 행 재번역). 번역 화면과 에이전트 패널이 같이 쓴다 |
 | `project:changed` | `project.json`이 앱 밖에서 바뀌어 메인이 다시 읽은 설정. 읽기에 실패하면 보내지 않고 이전 설정을 유지한다 |
 | `data:written` | 작업이나 패널 도구가 프로젝트 파일(glossary.csv, context_suggestions.csv)을 썼다. 앱이 쓴 파일은 감시자가 알려 주지 않으므로 그 파일을 보는 화면이 이 이벤트로 다시 읽는다 |
@@ -118,19 +119,20 @@
 | `validate_translation` | 읽기 | 단일 번역안 QA 검사 결과 반환. 에이전트의 자기 점검용 |
 | `submit_translations` | 쓰기 | 번역 결과 제출. 키 검사 → 행별 QA 후 보관, 세션 끝에 배치 단위로 기록. 수정 제출 1회 — **구현(배치·행 재번역)** |
 | `submit_context` | 쓰기 | 메타데이터 제안 제출. 키·요청 필드·vars 이름 집합(원문 재추출과 같아야 함) 검사, 수정 제출 1회, 마지막 제출은 문제없는 행만 받아 context_suggestions.csv 에 쌓는다 — **구현(컨텍스트 추정 배치)** |
-| `submit_terms` | 쓰기 | 용어 후보 제출. 배치 원문에 실제로 나오는지·겹침·언어 코드 검사, 이미 있는 용어는 조용히 뺀다. glossary.csv 에 pending 으로 붙는다 — **구현(용어 추출 배치)** |
+| `submit_terms` | 쓰기 | 용어 후보 제출(번역 없음). 배치 원문에 실제로 나오는지·겹침 검사, 이미 있는 용어는 조용히 뺀다. glossary.csv 에 번역 칸이 빈 pending 으로 붙는다 — **구현(용어 추출 배치)** |
+| `submit_term_translations` | 쓰기 | 용어 번역 제출. 배치 용어를 빠짐없이·채울 언어마다 번역이 있는지 검사, 수정 제출 1회, 마지막 제출은 문제없는 용어만 받아 빈 칸만 채운다. 승인된 용어에 채운 언어는 `pending_languages` — **구현(용어 번역 배치)** |
 | `submit_glossary_entry` | 쓰기 | 용어집 화면 [용어 추가]·[선택 재번역]의 항목 하나 제출. 같은 용어인지·대상 언어마다 번역이 있는지 검사, 수정 제출 1회. 추가는 사용자가 준 품사·지침·strict 가 앞서고 결과는 pending 으로 붙는다. 재번역은 번역과 지침을 다시 받아 화면에 돌려준다(품사는 그대로) — **구현(용어 추가·재번역)** |
 | `update_project_rules` | 쓰기 | 스타일 규칙 추가·수정·삭제 제안. 저장하지 않고 패널에 확인 카드를 띄운다 — 사용자가 [저장]을 눌러야 `project:rules:apply` 로 저장된다(사용자 결정, 2026-10-22) — **구현(패널)** |
 | `propose_glossary_terms` | 쓰기 | 용어 후보 제출(대상 언어별 번역 포함). glossary.csv 에 pending 으로 붙고, 용어집 화면에서 승인해야 쓰인다 — **구현(패널)** |
 
 - 쓰기 도구는 "요청"이지 "기록"이 아니다. 기록 여부는 항상 코드가 결정한다.
-- 배치 세션에는 그 작업의 제출 도구 하나만(`submit_translations` / `submit_context` / `submit_terms`), 패널 채팅에는 읽기 도구 셋과 쓰기 요청 도구 둘을 붙인다. 제출 서버는 도구 이름·입력 스키마·판정 함수를 받는 하나의 구현(`createSubmitServer`)이고, 세션마다 새로 만들어 배치 문맥(기대 키 목록 등)을 클로저로 묶는다(`src/main/agent/tools.ts`).
+- 배치 세션에는 그 작업의 제출 도구 하나만(`submit_translations` / `submit_context` / `submit_terms` / `submit_term_translations`), 패널 채팅에는 읽기 도구 셋과 쓰기 요청 도구 둘을 붙인다. 제출 서버는 도구 이름·입력 스키마·판정 함수를 받는 하나의 구현(`createSubmitServer`)이고, 세션마다 새로 만들어 배치 문맥(기대 키 목록 등)을 클로저로 묶는다(`src/main/agent/tools.ts`).
 - 패널 도구는 부를 때마다 지금 열린 프로젝트 설정을 읽는다. 같은 세션 안에서 규칙이 바뀔 수 있다.
 - 도구 응답은 간결한 JSON으로 돌려준다. 긴 설명 문장을 담지 않는다 — 토큰 낭비.
 
 ## 작업 스케줄러
 
-- 작업(job) 하나 = 대상 행 집합 + 작업 종류(번역 · 컨텍스트 추정 · 용어 추출). 작업은 배치 큐로 쪼개진다.
+- 작업(job) 하나 = 대상 행 집합 + 작업 종류(번역 · 컨텍스트 추정 · 용어 추출 · 용어 번역). 용어 번역은 원문 행 대신 용어를 센다. 작업은 배치 큐로 쪼개진다.
 - 작업은 종류와 상관없이 **한 번에 하나**만 돈다(`src/main/jobs/runner.ts`). 같은 사용량 한도를 나눠 쓰고, 진행 카드·로그·제어를 같이 쓴다. 배치 세션 공통 부분(SDK 로드·옵션·한도·중단 판정)은 `src/main/jobs/agent-batch.ts` 하나다.
 - 작업자(worker)는 기본 2개, 상한 3개. 각 작업자는 배치 하나를 새 `query()`로 처리한다.
 - 상태: `idle → running → (paused | waiting-limit | error) → running → done/cancelled`.

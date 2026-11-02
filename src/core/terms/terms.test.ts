@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultProjectConfig } from '@shared/schema/project'
 import type { MasterRow } from '@shared/schema/strings'
 import { buildTermsBatchPrompt, buildTermsSystemPrompt, TERMS_TOOL } from './prompt'
-import { checkTerms, judgeTerms, type SubmittedTerm } from './submission'
+import { checkTerms, ExtractedTerm, judgeTerms, type SubmittedTerm } from './submission'
 
 const config = createDefaultProjectConfig({ name: 'p', sourceLanguage: 'ko', targetLanguages: ['en', 'ja'], schemaVersion: 1 })
 
@@ -19,11 +19,19 @@ const row = (key: string, source: string, context = ''): MasterRow => ({
 })
 
 describe('프롬프트', () => {
-  it('고정 부분은 같은 설정이면 같고, 대상 언어·도구 이름을 밝힌다', () => {
+  it('고정 부분은 같은 설정이면 같고, 도구 이름을 밝히며, 번역은 받지 않는다', () => {
     const prompt = buildTermsSystemPrompt(config)
     expect(prompt).toBe(buildTermsSystemPrompt(config))
-    expect(prompt).toContain('en (English), ja (Japanese)')
     expect(prompt).toContain(TERMS_TOOL)
+    expect(prompt).toContain('Do not translate the terms')
+    expect(prompt).not.toContain('translations:')
+    // 대상 언어를 바꿔도 고정 부분은 그대로다(캐시)
+    expect(buildTermsSystemPrompt({ ...config, targetLanguages: ['en', 'ja', 'fr'] })).toBe(prompt)
+  })
+
+  it('배치 추출 스키마는 번역을 받지 않는다(보내도 버린다)', () => {
+    const parsed = ExtractedTerm.parse({ term: '바벨탑', confidence: 1, translations: [{ language: 'en', text: 'Babel' }] })
+    expect(parsed).toEqual({ term: '바벨탑', confidence: 1 })
   })
 
   it('가변 부분은 이미 있는 용어와 문자열을 담는다', () => {

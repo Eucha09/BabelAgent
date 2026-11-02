@@ -4,6 +4,7 @@ import {
   AddTermInput,
   RetranslateTermInput,
   StartTermsInput,
+  StartTermTranslateInput,
   TermAgentCancelInput,
   UpdateGlossaryInput,
   type AddTermResult,
@@ -14,6 +15,7 @@ import {
 import type { JobLogEntry, JobView } from '@shared/schema/jobs'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { cancelTermSession, runTermAddition, runTermRetranslation } from '../jobs/term-add'
+import { startTermTranslateJob } from '../jobs/term-translate-job'
 import { startTermsJob } from '../jobs/terms-job'
 import { loadGlossary, updateGlossary } from '../project/store'
 import { agentAuth, jobSink, send } from './jobs'
@@ -48,6 +50,14 @@ export function registerGlossaryIpc(): void {
     const project = currentProject()
     if (!project) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
     return startTermsJob(project, parsed.data, agentAuth(), jobSink(event.sender))
+  })
+
+  ipcMain.handle(IPC.glossaryTranslate, (event, raw: unknown): IpcResult<JobView> => {
+    const parsed = StartTermTranslateInput.safeParse(raw)
+    if (!parsed.success) return fail('invalid-input', '용어 번역 요청 형식이 올바르지 않습니다.', parsed.error.message)
+    const project = currentProject()
+    if (!project) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+    return startTermTranslateJob(project, parsed.data, agentAuth(), jobSink(event.sender))
   })
 
   ipcMain.handle(IPC.glossaryAdd, async (event, raw: unknown): Promise<IpcResult<AddTermResult>> => {

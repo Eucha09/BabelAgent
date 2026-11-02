@@ -2182,3 +2182,10 @@ a:hover {
 .app-update-track {
   margin-bottom: var(--space-3);
 }
+
+/* 용어집: 승인을 기다리는 언어의 번역 칸(용어 번역이 채운 칸) */
+.grid-input.pending,
+.grid-input.pending:hover {
+  border-color: var(--status-review);
+  border-style: dashed;
+}

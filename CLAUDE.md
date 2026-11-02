@@ -43,7 +43,7 @@
 - Claude Code 실행 파일은 한 곳(`src/main/agent/claude-cli.ts`)에서 정하고, 로그인·상태 조회·에이전트 세션이 모두 같은 것을 쓴다. 순서: 설정한 경로 → 공식 설치(`%USERPROFILE%\.local\bin`) → PATH → Agent SDK 내장(개발 중에만). 세션에는 항상 `pathToClaudeCodeExecutable`로 넘긴다.
 - 설치판에는 Agent SDK 내장 Claude Code(플랫폼 패키지)를 넣지 않는다. 앱을 켤 때 확인 창이 Claude Code 를 찾아 `claude update`로 최신으로 맞추고, 끝날 때까지 앱을 가린다. 업데이트 결과는 출력 문장이 아니라 앞뒤 `--version`으로 판단한다. 최소 버전은 Agent SDK `package.json`의 `claudeCodeVersion`이다.
 - Claude Code 가 없으면 사용자가 [설치]를 눌렀을 때만 공식 설치 스크립트를 **보이는 창**에서 돌린다. 인터넷에서 받은 스크립트를 몰래 실행하지 않는다.
-- 배치 작업(번역, 컨텍스트 추정, 용어 추출)은 배치마다 새 `query()`로 실행한다. 세션 재사용 금지. 행 단위 리롤도 일회성 세션.
+- 배치 작업(번역, 컨텍스트 추정, 용어 추출, 용어 번역)은 배치마다 새 `query()`로 실행한다. 세션 재사용 금지. 행 단위 리롤도 일회성 세션.
 - 배치 크기는 30행 또는 원문 3,000자 중 먼저 도달하는 쪽. 둘 다 project.json에서 조정 가능하게 둔다.
 - 동시 실행은 기본 2, 상한 3. 상한을 넘기는 설정값은 코드에서 잘라낸다.
 - 프롬프트는 고정 부분(역할, 게임 소개, 톤 가이드) → 가변 부분(이번 배치 문자열, 배치에 등장하는 용어만 필터링한 용어집) 순서로 조립한다. 프롬프트 캐싱이 깨지므로 고정 부분에 타임스탬프 등 매번 바뀌는 값을 넣지 않는다.
@@ -62,7 +62,7 @@
 - `project.json` — schemaVersion, 설정, sourceLanguage, 대상 언어, 톤 가이드, 스타일 규칙
 - `strings_master.csv` — 원문. `smart` 열(선택)에 Unity Smart String 여부
 - `translations_{lang}.csv` — 언어별 번역
-- `glossary.csv` — 용어집
+- `glossary.csv` — 용어집. 용어 추출은 후보만 넣고, 용어 번역이 빈 칸만 채운다. 승인된 용어에 새로 채운 언어는 `pending_languages`로 승인을 기다린다
 - `grammar_*.csv` — 어픽스 조합용 문법 테이블. 동적 텍스트 조합이 필요한 프로젝트에서만 쓰는 선택 기능
 
 규칙:

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { JobControlInput, JobKind, JobState, JobView } from '@shared/schema/jobs'
+import { JOB_UNIT, type JobControlInput, type JobKind, type JobState, type JobView } from '@shared/schema/jobs'
 import { effortLabel, modelLabel } from '../state/translate-options'
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -13,14 +13,16 @@ const STATE_LABEL: Record<JobState, string> = {
 export const JOB_TITLE: Record<JobKind, string> = {
   translate: '번역 작업',
   context: '컨텍스트 추정',
-  terms: '용어 추출'
+  terms: '용어 추출',
+  'term-translate': '용어 번역'
 }
 
 /** 실패한 배치를 다시 돌리는 방법. 작업마다 "남은 행"을 다시 계산하므로 같은 조건으로 다시 실행하면 된다. */
 const RETRY_HINT: Record<JobKind, string> = {
   translate: '같은 범위로 다시 번역하면 그 행만 다시 돕니다.',
   context: '다시 추정하면 아직 제안이 없는 행만 돕니다.',
-  terms: '다시 추출하면 이미 있는 용어는 다시 넣지 않습니다.'
+  terms: '다시 추출하면 이미 있는 용어는 다시 넣지 않습니다.',
+  'term-translate': '다시 번역하면 아직 빈 칸만 채웁니다.'
 }
 
 function countdown(ms: number): string {
@@ -69,7 +71,8 @@ export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element 
       </div>
       <div className="job-stats">
         <span>
-          {snapshot.doneRows} / {snapshot.totalRows}행
+          {snapshot.doneRows} / {snapshot.totalRows}
+          {JOB_UNIT[job.kind]}
         </span>
         <span className="hint">
           배치 완료 {batchCount('done')} ·{' '}

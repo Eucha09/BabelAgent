@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { buildBatches, clampConcurrency, type TranslateBatch } from '@core/translate/batches'
+import { filterTermsForTexts } from '@core/translate/glossary'
 import { rowFingerprint } from '@core/translate/merge'
 import { buildSystemPrompt } from '@core/translate/prompt'
 import { selectRows } from '@core/translate/scope'
@@ -7,7 +8,7 @@ import type { JobView, StartTranslateInput } from '@shared/schema/jobs'
 import type { OpenProject } from '@shared/schema/project'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { qaContext } from '../project/qa'
-import { loadGlossaryTerms, loadMaster, loadTranslations } from '../project/store'
+import { loadGlossaryTerms, loadMaster, loadTermsWithoutConfirmedTranslation, loadTranslations } from '../project/store'
 import { ensureNoRunningJob, launchJob, makeLog, type JobSink } from './runner'
 import { runTranslateBatch } from './translate-batch'
 
@@ -97,6 +98,23 @@ export function startTranslateJob(
     message: `번역 시작: ${input.language} · ${SCOPE_LABEL[input.scope]} · ${scoped.rows.length}행 · 배치 ${batches.length}개 · 작업자 ${concurrency} · 모델 ${input.model} · 사고 ${input.effort} · 승인된 용어 ${terms.length}개 중 배치마다 나오는 것만 넣음`
   })
   if (skipped > 0) log({ level: 'info', batchId: null, message: `승인된 ${skipped}행은 건너뜁니다.` })
+  // 대상 언어를 새로 늘리고 용어집을 채우기 전에 번역부터 돌리는 경우를 알린다. 이런 용어는 번역 없이(지침만) 들어가고 QA 도 보지 않는다
+  const unconfirmed = loadTermsWithoutConfirmedTranslation(dir, input.language)
+  if (unconfirmed.ok) {
+    const used = filterTermsForTexts(
+      unconfirmed.value.map((term) => ({ term })),
+      scoped.rows.map((row) => row.source),
+      config.sourceLanguage
+    )
+    if (used.length > 0) {
+      log({
+        level: 'warn',
+        batchId: null,
+        message: `이 범위에 나오는 승인된 용어 ${used.length}개는 ${input.language} 확정 번역이 없어 번역 없이 들어갑니다. 용어집 화면의 [용어 번역]과 [선택 승인]으로 채우면 다음 번역부터 반영됩니다.`,
+        detail: used.map((term) => term.term).join(', ')
+      })
+    }
+  }
 
   return ok(
     launchJob({

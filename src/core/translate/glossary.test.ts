@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeInjectedTerms, filterTermsForTexts, parseGlossary } from './glossary'
+import { describeInjectedTerms, filterTermsForTexts, parseGlossary, termsWithoutConfirmedTranslation } from './glossary'
 
 const records = [
   { term: 'Babel', translation_en: 'Babel', status: 'approved', note: '고유명사', strict: 'true' },
@@ -22,6 +22,26 @@ describe('parseGlossary', () => {
 
   it('승인 전 상태(pending 외 다른 값 포함)는 넣지 않는다', () => {
     expect(parseGlossary([{ term: '검', translation_ja: '剣', status: 'rejected' }], 'ja')).toEqual([])
+  })
+
+  it('그 언어가 승인 대기면 번역은 빼고 지침만, 다른 언어는 그대로', () => {
+    const record = { term: '검', translation_en: 'Sword', translation_ja: '剣', status: 'approved', pending_languages: 'ja', note: '무기' }
+    expect(parseGlossary([record], 'en')[0]?.translation).toBe('Sword')
+    expect(parseGlossary([record], 'ja')).toEqual([{ term: '검', translation: '', note: '무기', strict: false }])
+    expect(parseGlossary([{ ...record, note: '' }], 'ja')).toEqual([])
+  })
+})
+
+describe('termsWithoutConfirmedTranslation', () => {
+  it('승인된 용어 중 그 언어 칸이 비었거나 승인 대기인 용어', () => {
+    const rows: Record<string, string>[] = [
+      { term: '검', translation_ja: '剣', status: 'approved' },
+      { term: '방패', translation_ja: '', status: 'approved' },
+      { term: '물약', translation_ja: 'ポーション', status: '', pending_languages: 'ja' },
+      { term: '활', translation_ja: '', status: 'pending' }
+    ]
+    expect(termsWithoutConfirmedTranslation(rows, 'ja')).toEqual(['방패', '물약'])
+    expect(termsWithoutConfirmedTranslation(rows, 'en')).toEqual(['검', '방패', '물약'])
   })
 })
 

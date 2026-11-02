@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { fromProjectForm, toProjectForm, type ProjectForm } from '@core/project/form'
 import { MIN_SUGGESTED_MAX_LEN } from '@core/context/submission'
 import { defaultColumnName } from '@core/export/locales'
+import { findTranslateTargets } from '@core/terms/translation'
 import {
   buildSettingsPatch,
   isLanguageTag,
@@ -15,6 +16,21 @@ import { MAX_CONCURRENCY, type OpenProject, type ProjectConfig, type ProjectSett
 import type { IpcError, IpcResult } from '@shared/types'
 import { EFFORT_HINT, EFFORT_OPTIONS, MODEL_OPTIONS } from '../../state/translate-options'
 import { LanguageMultiSelect, LanguageSelect } from '../LanguagePicker'
+
+const api = window.babel
+
+/**
+ * 대상 언어를 늘렸을 때 용어집에서 그 언어 칸이 빈 용어 수. 다시 추출하지 않고 [용어 번역]으로 채우라고 알린다.
+ * 용어집을 읽지 못하면 알리지 않는다(저장은 이미 끝났다).
+ */
+async function glossaryGapNotice(added: readonly string[]): Promise<string | null> {
+  if (added.length === 0) return null
+  const glossary = await api.glossary.list()
+  if (!glossary.ok) return null
+  const empty = findTranslateTargets(glossary.value.entries, added).length
+  if (empty === 0) return null
+  return `용어집에 ${added.join(', ')} 번역이 빈 용어가 ${empty}개 있습니다 — 용어집 화면의 [용어 번역]으로 채우세요.`
+}
 
 type Props = {
   project: OpenProject
@@ -92,7 +108,9 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
       setExternalChange(false)
       setBase(result.value.config)
       setForm(toProjectForm(result.value.config))
-      onMessage('프로젝트 설정을 저장했습니다.')
+      const added = result.value.config.targetLanguages.filter((code) => !base.targetLanguages.includes(code))
+      const gap = await glossaryGapNotice(added)
+      onMessage(gap ? `프로젝트 설정을 저장했습니다. ${gap}` : '프로젝트 설정을 저장했습니다.')
     } finally {
       setSaving(false)
     }

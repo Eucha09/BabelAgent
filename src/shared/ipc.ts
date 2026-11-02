@@ -16,6 +16,7 @@ export const IPC = {
   glossaryList: 'glossary:list',
   glossaryUpdate: 'glossary:update',
   glossaryExtract: 'glossary:extract',
+  glossaryTranslate: 'glossary:translate',
   glossaryAdd: 'glossary:add',
   glossaryRetranslate: 'glossary:retranslate',
   glossaryAgentCancel: 'glossary:agent:cancel',

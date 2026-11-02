@@ -3,9 +3,12 @@ import type { GlossaryEntry } from '@shared/schema/glossary'
 import {
   appendCandidates,
   applyGlossaryChanges,
+  formatPendingLanguages,
   fromGlossaryEntry,
   glossaryHeader,
   glossaryStatusOf,
+  isTranslationConfirmed,
+  parsePendingLanguages,
   toGlossaryEntries,
   toGlossaryEntry
 } from './entries'
@@ -26,6 +29,7 @@ function entry(term: string, patch: Partial<GlossaryEntry> = {}): GlossaryEntry 
     note: '',
     strict: false,
     status: 'approved',
+    pendingLanguages: [],
     reason: '',
     confidence: '',
     ...patch
@@ -41,6 +45,37 @@ describe('glossaryStatusOf', () => {
   })
 })
 
+describe('pending_languages', () => {
+  it('구분자(; , 공백)를 모두 받고 겹친 코드는 하나로', () => {
+    expect(parsePendingLanguages(' ja; fr ,ja  zh-Hans ')).toEqual(['ja', 'fr', 'zh-Hans'])
+    expect(parsePendingLanguages('')).toEqual([])
+    expect(formatPendingLanguages(['ja', 'fr', 'ja'])).toBe('ja;fr')
+  })
+
+  it('확정 번역으로 쓸 수 있는지: 승인 용어이고 그 언어가 대기가 아니어야 한다', () => {
+    expect(isTranslationConfirmed({ status: 'approved', pending_languages: 'ja' }, 'en')).toBe(true)
+    expect(isTranslationConfirmed({ status: 'approved', pending_languages: 'ja' }, 'ja')).toBe(false)
+    expect(isTranslationConfirmed({ status: '' }, 'ja')).toBe(true)
+    expect(isTranslationConfirmed({ status: 'pending' }, 'en')).toBe(false)
+  })
+
+  it('읽고 되돌려 쓸 때 뜻이 같으면 원래 표기를 지키고, 바뀌면 ; 로 쓴다', () => {
+    const base = { term: '물약', translation_en: 'Potion', translation_ja: 'ポーション', status: 'approved', pending_languages: 'ja , en' }
+    const read = toGlossaryEntry(base, languages)
+    expect(read.pendingLanguages).toEqual(['ja', 'en'])
+    expect(fromGlossaryEntry({ ...read, pendingLanguages: ['en', 'ja'] }, base)['pending_languages']).toBe('ja , en')
+    expect(fromGlossaryEntry({ ...read, pendingLanguages: ['ja'] }, base)['pending_languages']).toBe('ja')
+    expect(fromGlossaryEntry({ ...read, pendingLanguages: [] }, base)['pending_languages']).toBe('')
+  })
+
+  it('화면이 본 행과 비교할 때 대기 언어가 다르면 바뀐 것으로 본다', () => {
+    const current = records().map((record, index) => (index === 1 ? { ...record, pending_languages: 'ja' } : record))
+    const seen = toGlossaryEntry(records()[1] ?? {}, languages)
+    const result = applyGlossaryChanges(current, [{ original: '물약', next: { ...seen, note: '고침' }, expected: seen }], languages)
+    expect(result.skipped).toEqual([{ term: '물약', reason: 'changed' }])
+  })
+})
+
 describe('glossaryHeader', () => {
   it('파일이 없으면 용어 → 대상 언어 → 나머지 열', () => {
     expect(glossaryHeader([], languages)).toEqual([
@@ -51,6 +86,7 @@ describe('glossaryHeader', () => {
       'note',
       'strict',
       'status',
+      'pending_languages',
       'reason',
       'confidence'
     ])
@@ -66,6 +102,7 @@ describe('glossaryHeader', () => {
       'pos',
       'strict',
       'status',
+      'pending_languages',
       'reason',
       'confidence'
     ])

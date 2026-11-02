@@ -1,4 +1,4 @@
-import { glossaryStatusOf, isStrict, translationColumn } from '../glossary/entries'
+import { glossaryStatusOf, isStrict, isTranslationConfirmed, translationColumn } from '../glossary/entries'
 import { findTermsInSource } from '../qa/glossary'
 
 /** 번역 프롬프트에 넣을 용어 하나. */
@@ -13,6 +13,7 @@ export type GlossaryTerm = {
  * glossary.csv 레코드에서 해당 언어의 용어를 읽는다.
  * status 가 pending 인 항목(에이전트 제안, 승인 전)은 넣지 않는다.
  * status 열이 없거나 비어 있으면 사람이 직접 쓴 용어로 보고 승인된 것으로 친다.
+ * 승인된 용어라도 이 언어가 pending_languages 에 있으면(용어 번역이 채우고 아직 승인 전) 번역은 빼고 지침만 쓴다.
  */
 export function parseGlossary(records: readonly Record<string, string>[], language: string): GlossaryTerm[] {
   const terms: GlossaryTerm[] = []
@@ -20,11 +21,26 @@ export function parseGlossary(records: readonly Record<string, string>[], langua
     const term = (record['term'] ?? '').trim()
     if (term === '') continue
     if (glossaryStatusOf(record['status'] ?? '') !== 'approved') continue
-    const translation = (record[translationColumn(language)] ?? '').trim()
+    const translation = isTranslationConfirmed(record, language) ? (record[translationColumn(language)] ?? '').trim() : ''
     const note = (record['note'] ?? '').trim()
     // 확정 번역도 지침도 없으면 프롬프트에 넣어 봐야 쓸 정보가 없다
     if (translation === '' && note === '') continue
     terms.push({ term, translation, note, strict: isStrict(record['strict'] ?? '') })
+  }
+  return terms
+}
+
+/**
+ * 승인된 용어 중 이 언어의 확정 번역이 없는 용어(칸이 비었거나 그 언어가 승인 대기). 번역 작업을 시작할 때
+ * "용어집을 먼저 채우라"고 알리는 데 쓴다 — 이런 용어는 번역 프롬프트에 번역 없이(지침만) 들어가고 QA 도 보지 않는다.
+ */
+export function termsWithoutConfirmedTranslation(records: readonly Record<string, string>[], language: string): string[] {
+  const terms: string[] = []
+  for (const record of records) {
+    const term = (record['term'] ?? '').trim()
+    if (term === '' || glossaryStatusOf(record['status'] ?? '') !== 'approved') continue
+    const translation = (record[translationColumn(language)] ?? '').trim()
+    if (translation === '' || !isTranslationConfirmed(record, language)) terms.push(term)
   }
   return terms
 }

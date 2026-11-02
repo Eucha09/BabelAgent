@@ -51,8 +51,11 @@ export type JobSnapshot = {
  * 배치 작업 종류. 종류와 상관없이 한 번에 하나만 돈다 — 같은 사용량 한도를 나눠 쓰고,
  * 진행 카드·로그·제어를 같이 쓴다.
  */
-export const JobKind = z.enum(['translate', 'context', 'terms'])
+export const JobKind = z.enum(['translate', 'context', 'terms', 'term-translate'])
 export type JobKind = z.infer<typeof JobKind>
+
+/** 작업이 세는 단위. 용어 번역은 원문 행이 아니라 용어를 센다 */
+export const JOB_UNIT: Record<JobKind, string> = { translate: '행', context: '행', terms: '행', 'term-translate': '개' }
 
 export type JobView = {
   id: string

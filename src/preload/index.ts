@@ -31,6 +31,7 @@ import type {
   RetranslateTermResult,
   GlossaryView,
   StartTermsInput,
+  StartTermTranslateInput,
   UpdateGlossaryInput,
   UpdateGlossaryResult
 } from '@shared/schema/glossary'
@@ -115,6 +116,8 @@ const api = {
     update: (input: UpdateGlossaryInput): Promise<IpcResult<UpdateGlossaryResult>> =>
       ipcRenderer.invoke(IPC.glossaryUpdate, input),
     extract: (input: StartTermsInput): Promise<IpcResult<JobView>> => ipcRenderer.invoke(IPC.glossaryExtract, input),
+    /** 용어 번역 작업. 고른 언어의 빈 칸만 채운다 */
+    translate: (input: StartTermTranslateInput): Promise<IpcResult<JobView>> => ipcRenderer.invoke(IPC.glossaryTranslate, input),
     /** 용어 하나를 에이전트로 채워 승인 대기로 추가한다 */
     add: (input: AddTermInput): Promise<IpcResult<AddTermResult>> => ipcRenderer.invoke(IPC.glossaryAdd, input),
     /** 용어 하나를 다시 번역한다. 결과는 쓰지 않고 돌려준다 */

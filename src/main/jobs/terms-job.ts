@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { termKey } from '@core/glossary/entries'
 import { findTermsInSource } from '@core/qa/glossary'
 import { buildTermsBatchPrompt, buildTermsSystemPrompt, TERMS_TOOL } from '@core/terms/prompt'
-import { judgeTerms, TERMS_INPUT_SHAPE } from '@core/terms/submission'
+import { judgeTerms, TERMS_EXTRACT_SHAPE } from '@core/terms/submission'
 import { buildBatches, clampConcurrency, type TranslateBatch } from '@core/translate/batches'
 import type { StartTermsInput } from '@shared/schema/glossary'
 import type { JobView } from '@shared/schema/jobs'
@@ -54,7 +54,7 @@ async function runTermsBatch(ctx: TermsJobContext, batch: TermsBatch, signal: Ab
           tool: TERMS_TOOL,
           description:
             'Submit the new glossary candidates found in this batch (an empty list if none). Call once; if problems are reported, fix them and call once more.',
-          shape: TERMS_INPUT_SHAPE,
+          shape: TERMS_EXTRACT_SHAPE,
           read: (args) => args.terms,
           judge: (items, final) =>
             judgeTerms({
@@ -103,8 +103,8 @@ async function runTermsBatch(ctx: TermsJobContext, batch: TermsBatch, signal: Ab
 }
 
 /**
- * 용어 후보 추출 작업. 후보는 glossary.csv 에 status: pending 으로 들어가고,
- * 사람이 용어집 화면에서 승인해야 번역 프롬프트와 QA 에 쓰인다.
+ * 용어 후보 추출 작업. 후보만 찾는다 — 번역은 용어 번역 작업(term-translate-job.ts)이 빈 칸을 채운다.
+ * 후보는 glossary.csv 에 status: pending 으로 들어가고, 사람이 용어집 화면에서 승인해야 번역 프롬프트와 QA 에 쓰인다.
  */
 export function startTermsJob(
   project: OpenProject,
@@ -115,7 +115,6 @@ export function startTermsJob(
   const idle = ensureNoRunningJob()
   if (!idle.ok) return idle
   const { dir, config } = project
-  if (config.targetLanguages.length === 0) return fail('invalid-input', '대상 언어가 없습니다. 프로젝트 화면에서 먼저 정하세요.')
 
   const master = loadMaster(dir)
   if (!master.ok) return master

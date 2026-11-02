@@ -9,7 +9,8 @@ import {
   findTermUsages,
   judgeTermEntry,
   pickTermExamples,
-  TERM_ENTRY_TOOL
+  TERM_ENTRY_TOOL,
+  TERM_STYLE_LINE
 } from './addition'
 
 const config = createDefaultProjectConfig({ name: 'p', sourceLanguage: 'ko', targetLanguages: ['en', 'ja'], schemaVersion: 1 })
@@ -79,6 +80,23 @@ describe('프롬프트', () => {
     expect(prompt).toContain('en (English), ja (Japanese)')
     expect(prompt).toContain(TERM_ENTRY_TOOL)
     expect(prompt).toContain('ko (Korean)')
+  })
+
+  it('톤 가이드와 스타일 규칙(id 순)을 넣고, 용어 표기에 해당하는 규칙만 따르라고 한다', () => {
+    const styled = {
+      ...config,
+      game: { ...config.game, toneGuide: '담담하게' },
+      styleRules: [
+        { id: 'r2', text: '영어 고유명사는 Title Case', createdAt: '2026-11-02' },
+        { id: 'r1', text: 'NPC 대사는 반말', createdAt: '2026-11-01' }
+      ]
+    }
+    const prompt = buildTermEntrySystemPrompt(styled)
+    expect(prompt).toContain('담담하게')
+    expect(prompt).toContain('# Style rules')
+    expect(prompt.indexOf('NPC 대사는 반말')).toBeLessThan(prompt.indexOf('영어 고유명사는 Title Case'))
+    expect(prompt).toContain(TERM_STYLE_LINE)
+    expect(buildTermEntrySystemPrompt(config)).toContain('# Style rules\n(not provided)')
   })
 
   it('가변 부분은 용어, 사용자가 준 값(빈 칸 표시), 예문과 기존 번역을 담는다', () => {

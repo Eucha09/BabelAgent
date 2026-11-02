@@ -9,6 +9,8 @@ import type { MasterRow } from '@shared/schema/strings'
 import {
   appendGlossaryCandidates,
   applyContextSuggestions,
+  fillGlossaryTranslations,
+  loadTermsWithoutConfirmedTranslation,
   approveTranslationRows,
   discardContextSuggestions,
   GLOSSARY_FILE,
@@ -492,7 +494,7 @@ describe('용어집 화면 저장', () => {
       [
         {
           original: null,
-          next: { term: '바벨탑', translations: { en: 'Tower of Babel', ja: '' }, pos: '', note: '', strict: true, status: 'approved', reason: '', confidence: '' },
+          next: { term: '바벨탑', translations: { en: 'Tower of Babel', ja: '' }, pos: '', note: '', strict: true, status: 'approved', pendingLanguages: [], reason: '', confidence: '' },
           expected: null
         }
       ],
@@ -501,7 +503,7 @@ describe('용어집 화면 저장', () => {
     if (!result.ok) throw new Error(result.error.message)
     expect(result.value.applied).toEqual(['바벨탑'])
     expect(readFileSync(join(dir, GLOSSARY_FILE), 'utf8').split('\n')[0]).toBe(
-      'term,translation_en,translation_ja,pos,note,strict,status,reason,confidence'
+      'term,translation_en,translation_ja,pos,note,strict,status,pending_languages,reason,confidence'
     )
     const terms = loadGlossaryTerms(dir, 'en')
     expect(terms.ok && terms.value).toEqual([{ term: '바벨탑', translation: 'Tower of Babel', note: '', strict: true }])
@@ -548,6 +550,37 @@ describe('용어집 화면 저장', () => {
     expect(view.ok && view.value.entries.map((entry) => `${entry.term}:${entry.status}`)).toEqual(['물약:approved', '마나:pending'])
     const terms = loadGlossaryTerms(dir, 'en')
     expect(terms.ok && terms.value.map((term) => term.term)).toEqual(['물약'])
+  })
+
+  it('용어 번역은 빈 칸만 채우고, 승인된 용어의 새 언어는 승인 전까지 번역 프롬프트에 안 들어간다', () => {
+    write('term,translation_en,status,memo\n물약,Potion,approved,사용자 열\n마나,,pending,\n')
+    const filled = fillGlossaryTranslations(
+      dir,
+      [
+        { term: '물약', translations: { en: 'Elixir', ja: 'ポーション' } },
+        { term: '마나', translations: { en: 'Mana', ja: 'マナ' } }
+      ],
+      languages
+    )
+    expect(filled.ok && filled.value.filled).toEqual([
+      { term: '물약', languages: ['ja'] },
+      { term: '마나', languages: ['en', 'ja'] }
+    ])
+    const text = readFileSync(join(dir, GLOSSARY_FILE), 'utf8')
+    // 새 언어 열은 번역 열 뒤에, pending_languages 는 끝에 붙고, 사용자 열은 남는다
+    expect(text.split('\n')[0]).toBe('term,translation_en,translation_ja,status,memo,pos,note,strict,pending_languages,reason,confidence')
+    const view = loadGlossary(dir, languages)
+    expect(view.ok && view.value.entries.map((entry) => [entry.term, entry.translations, entry.pendingLanguages])).toEqual([
+      ['물약', { en: 'Potion', ja: 'ポーション' }, ['ja']],
+      ['마나', { en: 'Mana', ja: 'マナ' }, []]
+    ])
+    // en 은 이미 확정 번역이 있어 그대로 쓰이고, 새로 채운 ja 는 승인 전이라 들어가지 않는다
+    const en = loadGlossaryTerms(dir, 'en')
+    expect(en.ok && en.value.map((term) => term.translation)).toEqual(['Potion'])
+    const ja = loadGlossaryTerms(dir, 'ja')
+    expect(ja.ok && ja.value).toEqual([])
+    const missing = loadTermsWithoutConfirmedTranslation(dir, 'ja')
+    expect(missing.ok && missing.value).toEqual(['물약'])
   })
 })
 

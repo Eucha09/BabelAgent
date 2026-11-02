@@ -27,7 +27,8 @@ import {
 import { hasErrors } from '@core/qa/check'
 import { applyManualUpdate, type ManualUpdate } from '@core/status'
 import { applyStale } from '@core/strings/stale'
-import { parseGlossary, type GlossaryTerm } from '@core/translate/glossary'
+import { parseGlossary, termsWithoutConfirmedTranslation, type GlossaryTerm } from '@core/translate/glossary'
+import { fillTermTranslations, type TermTranslationResult } from '@core/terms/translation'
 import { mergeTranslations, type MasterSource } from '@core/translate/merge'
 import type { SubmittedTranslation } from '@core/translate/submission'
 import {
@@ -375,6 +376,32 @@ export function appendGlossaryCandidates(
     if (!write.ok) return write
   }
   return ok({ added: result.added, existing: result.existing })
+}
+
+/**
+ * 용어 번역 결과로 빈 칸만 채운다. 다시 읽기 → 합치기 → 원자적 쓰기가 동기 함수 하나라 병렬 배치·화면 저장과 겹쳐도
+ * 그 사이 채워진 칸을 덮지 않는다. 승인된 용어에 채운 언어는 승인 대기로 표시된다(fillTermTranslations).
+ */
+export function fillGlossaryTranslations(
+  dir: string,
+  results: readonly Pick<TermTranslationResult, 'term' | 'translations'>[],
+  languages: readonly string[]
+): IpcResult<{ filled: { term: string; languages: string[] }[]; skipped: string[] }> {
+  const loaded = readGlossary(dir, languages)
+  if (!loaded.ok) return loaded
+  const result = fillTermTranslations(loaded.value.records, results)
+  if (result.filled.length > 0) {
+    const write = writeGlossary(dir, loaded.value.header, result.records, languages)
+    if (!write.ok) return write
+  }
+  return ok({ filled: result.filled, skipped: result.skipped })
+}
+
+/** 승인된 용어 중 이 언어의 확정 번역이 없는 용어. 파일이 없으면 빈 목록 */
+export function loadTermsWithoutConfirmedTranslation(dir: string, language: string): IpcResult<string[]> {
+  const loaded = loadCsv(glossaryPath(dir))
+  if (!loaded.ok) return loaded
+  return ok(loaded.value === null ? [] : termsWithoutConfirmedTranslation(loaded.value.records, language))
 }
 
 /** 용어집에 있는 모든 용어(승인 대기 포함). 추출 배치가 이미 있는 용어를 다시 내지 않게 쓴다. */

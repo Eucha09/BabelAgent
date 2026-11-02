@@ -14,8 +14,13 @@ export const SubmittedTerm = z.object({
 })
 export type SubmittedTerm = z.infer<typeof SubmittedTerm>
 
-/** 도구 입력 모양(zod raw shape) */
+/** 도구 입력 모양(zod raw shape). 패널의 propose_glossary_terms 가 쓴다 — 사용자가 번역을 말할 수 있어 번역은 선택이다 */
 export const TERMS_INPUT_SHAPE = { terms: z.array(SubmittedTerm) }
+
+/** 배치 추출(submit_terms)이 내는 후보. 후보만 찾고 번역은 용어 번역 작업이 한다 */
+export const ExtractedTerm = SubmittedTerm.omit({ translations: true })
+
+export const TERMS_EXTRACT_SHAPE = { terms: z.array(ExtractedTerm) }
 
 /** 자리표시자·태그는 용어가 아니다. 들어가면 QA 의 용어 탐지가 엉뚱하게 걸린다. */
 const MARKUP = /[{}<>]/

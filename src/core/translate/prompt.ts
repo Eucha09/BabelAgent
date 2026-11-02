@@ -25,15 +25,22 @@ export function gameSection(config: ProjectConfig): string {
 }
 
 /**
- * 고정 부분. 프로젝트 설정과 대상 언어가 같으면 문자 하나까지 같아야 한다(프롬프트 캐싱).
- * 시각·배치 번호·진행률처럼 매번 바뀌는 값을 넣지 않는다. 스타일 규칙은 id 순으로 정렬한다.
+ * 스타일 규칙 절. 추가 순서가 아니라 id 순으로 넣는다 — 같은 규칙이면 문자 하나까지 같아야 캐시가 걸린다.
+ * 문장 번역과 용어 번역·[용어 추가]·[선택 재번역]이 같이 쓴다.
  */
-export function buildSystemPrompt(config: ProjectConfig, language: string): string {
+export function styleRulesSection(config: ProjectConfig): string {
   const rules = [...config.styleRules]
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((rule) => `- ${rule.text}`)
     .join('\n')
+  return section('Style rules', rules)
+}
 
+/**
+ * 고정 부분. 프로젝트 설정과 대상 언어가 같으면 문자 하나까지 같아야 한다(프롬프트 캐싱).
+ * 시각·배치 번호·진행률처럼 매번 바뀌는 값을 넣지 않는다. 스타일 규칙은 id 순으로 정렬한다.
+ */
+export function buildSystemPrompt(config: ProjectConfig, language: string): string {
   return [
     'You are a professional game localization translator.',
     `Translate each source string from ${languageLabel(config.sourceLanguage)} into ${languageLabel(language)}.`,
@@ -56,7 +63,7 @@ export function buildSystemPrompt(config: ProjectConfig, language: string): stri
     '',
     section('Tone guide', config.game.toneGuide),
     '',
-    section('Style rules', rules)
+    styleRulesSection(config)
   ].join('\n')
 }
 

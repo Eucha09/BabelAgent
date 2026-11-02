@@ -39,6 +39,8 @@ function TextCell({
   value,
   mono = false,
   invalid = false,
+  pending = false,
+  title,
   disabled,
   placeholder,
   onChange
@@ -46,6 +48,9 @@ function TextCell({
   value: string
   mono?: boolean
   invalid?: boolean
+  /** 승인 대기 언어의 번역(용어 번역이 채운 칸) */
+  pending?: boolean
+  title?: string
   disabled: boolean
   placeholder?: string
   onChange: (value: string) => void
@@ -53,16 +58,23 @@ function TextCell({
   const classes = ['grid-input']
   if (mono) classes.push('mono')
   if (invalid) classes.push('invalid')
+  if (pending) classes.push('pending')
   return (
     <textarea
       rows={1}
       className={classes.join(' ')}
       value={value}
+      title={title}
       disabled={disabled}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
     />
   )
+}
+
+/** 승인된 용어에서 승인을 기다리는 언어 중 화면에 보이는 것 */
+function waitingLanguages(entry: GlossaryEntry, languages: readonly string[]): string[] {
+  return entry.status === 'approved' ? entry.pendingLanguages.filter((language) => languages.includes(language)) : []
 }
 
 export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onEdit }: Props): React.JSX.Element {
@@ -91,15 +103,29 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
       helper.display({
         id: 'status',
         header: '상태',
-        size: 64,
-        cell: (info) =>
-          info.row.original.entry.status === 'pending' ? (
-            <span className="status-badge review" title="에이전트 후보. 승인해야 번역과 QA 에 쓰입니다">
-              대기
-            </span>
-          ) : (
-            <span className="status-badge approved">승인</span>
-          )
+        size: 76,
+        cell: (info) => {
+          const { entry } = info.row.original
+          if (entry.status === 'pending') {
+            return (
+              <span className="status-badge review" title="에이전트 후보. 승인해야 번역과 QA 에 쓰입니다">
+                대기
+              </span>
+            )
+          }
+          const waiting = waitingLanguages(entry, languages)
+          if (waiting.length > 0) {
+            return (
+              <span
+                className="status-badge review"
+                title={`승인 대기 언어: ${waiting.join(', ')} — [선택 승인]을 눌러야 그 언어의 번역이 번역과 QA 에 쓰입니다`}
+              >
+                일부 대기
+              </span>
+            )
+          }
+          return <span className="status-badge approved">승인</span>
+        }
       }),
       helper.display({
         id: 'term',
@@ -127,9 +153,12 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
           size: 160,
           cell: (info) => {
             const row = info.row.original
+            const waiting = waitingLanguages(row.entry, languages).includes(language)
             return (
               <TextCell
                 value={row.entry.translations[language] ?? ''}
+                pending={waiting}
+                title={waiting ? '용어 번역이 채운 번역입니다. [선택 승인]을 눌러야 번역과 QA 에 쓰입니다' : undefined}
                 disabled={disabled}
                 placeholder="확정 번역"
                 onChange={(value) =>

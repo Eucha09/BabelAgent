@@ -15,6 +15,11 @@ export const GlossaryEntry = z.object({
   note: z.string(),
   strict: z.boolean(),
   status: GlossaryStatus,
+  /**
+   * 승인된 용어에서 아직 승인을 기다리는 언어. 용어 번역 작업이 승인된 용어의 빈 칸을 채우면 그 언어가 들어간다.
+   * 이 언어의 번역은 승인 전까지 번역 프롬프트와 QA 에 쓰지 않는다. 승인 대기 용어에서는 쓰지 않는다(용어 전체가 대기)
+   */
+  pendingLanguages: z.array(z.string()),
   /** 에이전트가 후보로 낸 근거. 사람이 추가한 용어는 비어 있다 */
   reason: z.string(),
   /** 에이전트가 보고한 신뢰도(0~1). 사람이 추가한 용어는 비어 있다 */
@@ -66,6 +71,18 @@ export const StartTermsInput = z.object({
   keys: z.array(z.string())
 })
 export type StartTermsInput = z.infer<typeof StartTermsInput>
+
+/**
+ * 용어 번역 작업. 고른 언어의 빈 칸만 채운다(덮어쓰기는 [선택 재번역]).
+ * - scope all: 빈 칸이 있는 모든 용어, selected: terms 에 든 용어(용어집 그리드에서 고른 것)
+ */
+export const StartTermTranslateInput = z.object({
+  languages: z.array(z.string().min(1)).min(1),
+  scope: TermsScope,
+  /** scope 가 selected 일 때만 쓴다 */
+  terms: z.array(z.string())
+})
+export type StartTermTranslateInput = z.infer<typeof StartTermTranslateInput>
 
 /**
  * 용어 하나를 에이전트로 채워 추가한다. 원문에서 그 용어가 쓰인 행을 코드가 찾아 예문으로 주고,

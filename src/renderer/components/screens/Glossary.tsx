@@ -9,6 +9,7 @@ import type {
   GlossaryEntry,
   GlossarySkipReason,
   GlossaryView,
+  StartTermTranslateInput,
   TermsScope
 } from '@shared/schema/glossary'
 import type { JobControlInput, JobLogEntry, JobView } from '@shared/schema/jobs'
@@ -23,6 +24,7 @@ import { GlossaryGrid, type EditEntry, type GlossaryGridRow } from '../GlossaryG
 import { JobLog } from '../JobLog'
 import { JOB_TITLE, JobProgress } from '../JobProgress'
 import { KeyChecklist, type ChecklistItem } from '../KeyChecklist'
+import { TermTranslateCard } from '../TermTranslateCard'
 
 const api = window.babel
 
@@ -55,6 +57,11 @@ function toMaster(row: StringsRow): MasterRow {
 }
 
 const sameEntry = (a: GlossaryEntry, b: GlossaryEntry): boolean => JSON.stringify(a) === JSON.stringify(b)
+
+/** 승인이 필요한 용어: 용어 전체가 승인 대기이거나, 승인된 용어에 승인 대기 언어(용어 번역이 채운 칸)가 있다 */
+function needsApproval(entry: GlossaryEntry, languages: readonly string[]): boolean {
+  return entry.status === 'pending' || entry.pendingLanguages.some((language) => languages.includes(language))
+}
 
 function matches(entry: GlossaryEntry, search: string): boolean {
   const needle = search.trim().toLowerCase()
@@ -160,21 +167,19 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
   const rows = useMemo(
     () =>
       allRows.filter(
-        (row) => (row.selected || filter === 'all' || row.entry.status === filter) && matches(row.entry, search)
+        (row) =>
+          (row.selected || filter === 'all' || (filter === 'pending') === needsApproval(row.entry, languages)) &&
+          matches(row.entry, search)
       ),
-    [allRows, filter, search]
+    [allRows, filter, languages, search]
   )
-  const counts = useMemo(
-    () => ({
-      all: allRows.length,
-      pending: allRows.filter((row) => row.entry.status === 'pending').length,
-      approved: allRows.filter((row) => row.entry.status === 'approved').length
-    }),
-    [allRows]
-  )
+  const counts = useMemo(() => {
+    const pending = allRows.filter((row) => needsApproval(row.entry, languages)).length
+    return { all: allRows.length, pending, approved: allRows.length - pending }
+  }, [allRows, languages])
   const dirtyRows = allRows.filter((row) => row.dirty)
   const chosen = allRows.filter((row) => row.selected)
-  const chosenPending = chosen.filter((row) => row.base.status === 'pending')
+  const chosenPending = chosen.filter((row) => needsApproval(row.base, languages))
   const blocked = (list: readonly GlossaryGridRow[]): boolean => list.some((row) => row.problem !== null)
 
   useEffect(() => {
@@ -253,7 +258,16 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
     send(
       chosenPending.map((row) => ({
         row,
-        change: { original: row.base.term, next: { ...row.entry, status: 'approved' }, expected: row.base }
+        change: {
+          original: row.base.term,
+          // 용어 전체와 승인 대기 언어를 함께 확정한다. 화면에 없는 언어(대상에서 뺀 언어)의 표시는 남긴다
+          next: {
+            ...row.entry,
+            status: 'approved',
+            pendingLanguages: row.entry.pendingLanguages.filter((language) => !languages.includes(language))
+          },
+          expected: row.base
+        }
       })),
       '승인했습니다'
     )
@@ -332,15 +346,31 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
     }
   }
 
+  const startTranslate = async (input: StartTermTranslateInput): Promise<void> => {
+    setBusy(true)
+    try {
+      const result = await api.glossary.translate(input)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setError(null)
+      onMessage(`용어 번역을 시작했습니다: 용어 ${result.value.snapshot.totalRows}개 (${input.languages.join(', ')})`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const control = async (action: JobControlInput['action']): Promise<void> => {
     const result = await api.jobs.control(action)
     if (!result.ok) setError(result.error)
   }
 
   const retranslateRow = retranslateId === null ? null : (allRows.find((row) => row.id === retranslateId) ?? null)
-  const ownJob = job !== null && job.kind === 'terms'
+  const ownJob = job !== null && (job.kind === 'terms' || job.kind === 'term-translate')
   const ownLog = ownJob ? jobLog.filter((entry) => entry.at >= job.startedAt) : []
-  const approvedChosen = chosen.length - chosenPending.length
+  const approvedChosen = chosen.filter((row) => row.base.status === 'approved').length
+  const extracted = job !== null && job.kind === 'terms' && job.snapshot.state === 'done'
 
   return (
     <div className="workbench-screen">
@@ -361,8 +391,8 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
       <section className="card">
         <h3>용어 추출</h3>
         <p className="hint" style={{ marginBottom: 'var(--space-2)' }}>
-          에이전트가 원문에서 고유명사·게임 용어 후보를 찾아 대상 언어별 번역과 함께 제안합니다. 후보는 승인 대기로
-          들어가고, 이미 있는 용어는 다시 넣지 않습니다.
+          에이전트가 원문에서 고유명사·게임 용어 후보를 찾습니다. 후보는 번역 없이 승인 대기로 들어가고, 이미 있는 용어는
+          다시 넣지 않습니다. 번역은 아래 [용어 번역]으로 채웁니다.
         </p>
         <div className="scope-options">
           <label className={scope === 'all' ? 'scope-option selected' : 'scope-option'}>
@@ -384,7 +414,7 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
           <button
             type="button"
             className="primary"
-            disabled={running || busy || plan.rows === 0 || config.targetLanguages.length === 0}
+            disabled={running || busy || plan.rows === 0}
             onClick={() => void startExtract()}
           >
             추출 시작
@@ -394,6 +424,7 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
             {running && job.kind !== 'terms' ? ` — ${JOB_TITLE[job.kind]}이 끝나면 시작할 수 있습니다` : ''}
           </span>
         </div>
+        {extracted ? <p className="hint" style={{ marginTop: 'var(--space-2)' }}>추출이 끝났습니다. 새 후보의 번역은 [용어 번역]으로 채우세요.</p> : null}
       </section>
 
       {scope === 'selected' ? (
@@ -412,6 +443,16 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
           <KeyChecklist items={checklist} selected={scopeKeys} disabled={running} onChange={setScopeKeys} />
         </section>
       ) : null}
+
+      <TermTranslateCard
+        config={config}
+        entries={entries}
+        languages={languages}
+        chosenTerms={chosen.map((row) => row.base.term)}
+        disabled={running || busy}
+        blockedBy={running && job.kind !== 'term-translate' ? JOB_TITLE[job.kind] : null}
+        onStart={(input) => void startTranslate(input)}
+      />
 
       {ownJob ? <JobProgress job={job} busy={busy} onControl={(action) => void control(action)} /> : null}
       {ownLog.length > 0 ? (
@@ -495,7 +536,7 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
           <button
             type="button"
             disabled={busy || chosenPending.length === 0 || blocked(chosenPending)}
-            title="선택한 승인 대기 용어를 승인합니다. 고친 칸이 있으면 함께 저장합니다"
+            title="선택한 승인 대기 용어와 승인 대기 언어를 승인합니다. 고친 칸이 있으면 함께 저장합니다"
             onClick={() => void approve()}
           >
             선택 승인 ({chosenPending.length})

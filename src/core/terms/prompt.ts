@@ -7,11 +7,11 @@ export const TERMS_TOOL = 'submit_terms'
 
 /**
  * 용어 추출의 고정 부분. 프로젝트 설정이 같으면 문자 하나까지 같다(프롬프트 캐싱).
- * 대상 언어마다 번역 제안을 받는다 — 사람은 고치고 승인만 하면 된다(사용자 결정, 2026-10-22).
+ * 후보만 찾는다. 번역은 용어 번역 작업이 따로 한다 — 대상 언어를 늘려도 다시 추출하지 않고 빈 칸만 채우게
+ * (사용자 결정, 2026-11-02. 그 전에는 추출하면서 번역 제안도 받았다). 대상 언어도 넣지 않아 언어를 바꿔도 캐시가 남는다.
  */
 export function buildTermsSystemPrompt(config: ProjectConfig): string {
   const source = languageLabel(config.sourceLanguage)
-  const targets = config.targetLanguages.map(languageLabel).join(', ')
   return [
     'You are a terminology specialist for game localization.',
     `Find glossary candidates in the ${source} source strings: terms that must be translated the same way everywhere.`,
@@ -21,11 +21,11 @@ export function buildTermsSystemPrompt(config: ProjectConfig): string {
     '- Game-specific terms: skills, stats, currencies, game modes, and mechanics.',
     '- Recurring UI terms that should stay consistent across screens.',
     'Do not extract ordinary words, whole sentences, placeholders such as {name}, or rich text tags.',
+    'Do not translate the terms. Translations are added in a separate step.',
     '',
     'For each candidate:',
     '- term: exactly as written in the source strings, in its base form without attached particles or endings.',
     '- pos: a short category such as character, place, item, skill, stat, ui, or noun.',
-    `- translations: one suggested translation for each target language: ${targets || '(none)'}. Use the language codes as given.`,
     `- note: an optional usage rule for translators, such as "keep in Latin letters" or "do not translate". Write it in ${source}.`,
     `- reason: why this should be a glossary term. Write it in ${source}.`,
     '- confidence: 0 to 1.',

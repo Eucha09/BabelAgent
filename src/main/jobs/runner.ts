@@ -1,4 +1,4 @@
-import type { JobKind, JobLogEntry, JobView } from '@shared/schema/jobs'
+import { JOB_UNIT, type JobKind, type JobLogEntry, type JobView } from '@shared/schema/jobs'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { JobScheduler, type JobSnapshot, type RunBatch, type SchedulerBatch } from './scheduler'
 
@@ -25,7 +25,8 @@ type ActiveJob = {
 const KIND_LABEL: Record<JobKind, string> = {
   translate: '번역',
   context: '컨텍스트 추정',
-  terms: '용어 추출'
+  terms: '용어 추출',
+  'term-translate': '용어 번역'
 }
 
 let active: ActiveJob | null = null
@@ -89,10 +90,11 @@ export function launchJob<B extends SchedulerBatch>(input: {
 
   void scheduler.whenSettled().then((final: JobSnapshot) => {
     const verb = final.state === 'cancelled' ? '취소됨' : '끝'
+    const unit = JOB_UNIT[view.kind]
     log({
       level: final.failedRows > 0 ? 'warn' : 'ok',
       batchId: null,
-      message: `${KIND_LABEL[view.kind]} ${verb}: 완료 ${final.doneRows}행 · 실패 ${final.failedRows}행 · 남음 ${final.totalRows - final.doneRows - final.failedRows}행`
+      message: `${KIND_LABEL[view.kind]} ${verb}: 완료 ${final.doneRows}${unit} · 실패 ${final.failedRows}${unit} · 남음 ${final.totalRows - final.doneRows - final.failedRows}${unit}`
     })
   })
 

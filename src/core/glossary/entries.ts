@@ -5,8 +5,13 @@ import type { GlossaryEntry, GlossarySkipReason, GlossaryStatus } from '@shared/
  * 레코드를 통째로 다시 만들지 않고 바뀐 칸만 고쳐 쓴다 — 사용자가 더한 열과 손대지 않은 칸의 표기가 남는다.
  */
 
-/** 대상 언어 열 뒤에 오는 열. reason·confidence 는 에이전트 후보의 근거와 신뢰도다. */
-export const GLOSSARY_TAIL_COLUMNS = ['pos', 'note', 'strict', 'status', 'reason', 'confidence'] as const
+/**
+ * 대상 언어 열 뒤에 오는 열. reason·confidence 는 에이전트 후보의 근거와 신뢰도다.
+ * pending_languages 는 승인된 용어에서 아직 승인을 기다리는 언어(용어 번역 작업이 빈 칸을 채운 언어)다.
+ */
+export const GLOSSARY_TAIL_COLUMNS = ['pos', 'note', 'strict', 'status', 'pending_languages', 'reason', 'confidence'] as const
+
+export const PENDING_LANGUAGES_COLUMN = 'pending_languages'
 
 export function translationColumn(language: string): string {
   return `translation_${language}`
@@ -25,6 +30,28 @@ export function glossaryStatusOf(raw: string): GlossaryStatus {
 
 export function isStrict(raw: string): boolean {
   return raw.trim().toLowerCase() === 'true'
+}
+
+/** pending_languages 칸을 언어 코드 목록으로. `;`·`,`·공백으로 나눈 것을 모두 받고 겹친 코드는 하나로 친다. */
+export function parsePendingLanguages(raw: string): string[] {
+  const codes = raw
+    .split(/[;,\s]+/)
+    .map((code) => code.trim())
+    .filter((code) => code !== '')
+  return [...new Set(codes)]
+}
+
+export function formatPendingLanguages(languages: readonly string[]): string {
+  return [...new Set(languages)].join(';')
+}
+
+/**
+ * 이 언어의 확정 번역을 번역 프롬프트와 QA 에 쓸 수 있는지. 용어가 승인되어 있고 그 언어가 승인 대기가 아니어야 한다.
+ * 승인 대기 용어는 언어와 상관없이 쓰지 않는다.
+ */
+export function isTranslationConfirmed(record: Readonly<Record<string, string>>, language: string): boolean {
+  if (glossaryStatusOf(record['status'] ?? '') !== 'approved') return false
+  return !parsePendingLanguages(record[PENDING_LANGUAGES_COLUMN] ?? '').includes(language)
 }
 
 /**
@@ -57,6 +84,7 @@ export function toGlossaryEntry(record: Readonly<Record<string, string>>, langua
     note: record['note'] ?? '',
     strict: isStrict(record['strict'] ?? ''),
     status: glossaryStatusOf(record['status'] ?? ''),
+    pendingLanguages: parsePendingLanguages(record[PENDING_LANGUAGES_COLUMN] ?? ''),
     reason: record['reason'] ?? '',
     confidence: record['confidence'] ?? ''
   }
@@ -79,9 +107,21 @@ export function fromGlossaryEntry(
   record['strict'] = rawStrict !== undefined && isStrict(rawStrict) === entry.strict ? rawStrict : String(entry.strict)
   const rawStatus = base?.['status']
   record['status'] = rawStatus !== undefined && glossaryStatusOf(rawStatus) === entry.status ? rawStatus : entry.status
+  const rawPending = base?.[PENDING_LANGUAGES_COLUMN]
+  record[PENDING_LANGUAGES_COLUMN] =
+    rawPending !== undefined && samePendingLanguages(parsePendingLanguages(rawPending), entry.pendingLanguages)
+      ? rawPending
+      : formatPendingLanguages(entry.pendingLanguages)
   record['reason'] = entry.reason
   record['confidence'] = entry.confidence
   return record
+}
+
+/** 순서와 겹침을 무시하고 같은 언어 목록인지 */
+function samePendingLanguages(a: readonly string[], b: readonly string[]): boolean {
+  const left = new Set(a)
+  const right = new Set(b)
+  return left.size === right.size && [...left].every((code) => right.has(code))
 }
 
 /** 화면이 본 행과 지금 행이 같은지. 번역은 화면이 본 언어만 비교한다(그 사이 대상 언어가 늘었을 수 있다). */
@@ -92,6 +132,7 @@ export function sameEntry(current: GlossaryEntry, expected: GlossaryEntry): bool
     current.note !== expected.note ||
     current.strict !== expected.strict ||
     current.status !== expected.status ||
+    !samePendingLanguages(current.pendingLanguages, expected.pendingLanguages) ||
     current.reason !== expected.reason ||
     current.confidence !== expected.confidence
   ) {
@@ -253,6 +294,7 @@ export function appendCandidates(
         note: candidate.note,
         strict: candidate.strict ?? false,
         status: 'pending',
+        pendingLanguages: [],
         reason: candidate.reason,
         confidence: String(Math.round(candidate.confidence * 100) / 100)
       })

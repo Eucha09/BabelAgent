@@ -5,7 +5,7 @@ import type { MasterRow, TranslationRow } from '@shared/schema/strings'
 import { termKey, type GlossaryCandidate } from '../glossary/entries'
 import { findTermsInSource, usesTranslation } from '../qa/glossary'
 import { settleItems, type SubmitVerdict } from '../submit'
-import { gameSection, languageLabel, section } from '../translate/prompt'
+import { gameSection, languageLabel, section, styleRulesSection } from '../translate/prompt'
 import { checkTerms, SubmittedTerm } from './submission'
 
 /**
@@ -67,6 +67,13 @@ export function pickTermExamples(
     .map((item) => item.example)
 }
 
+/**
+ * 용어 프롬프트(용어 번역·[용어 추가]·[선택 재번역])가 톤 가이드·스타일 규칙을 따르는 범위. 규칙은 문장 번역과 같은 목록이라
+ * 반말·존댓말처럼 문장에만 맞는 규칙도 섞여 있다 — 용어 표기에 해당하는 것만 따르게 한다(사용자 요청, 2026-11-02).
+ */
+export const TERM_STYLE_LINE =
+  '- Follow the tone guide and the style rules below where they concern how names and terms are written, such as capitalization, transliteration, or script. Ignore rules that only apply to whole sentences, such as speech level or sentence punctuation.'
+
 /** 고정 부분. 프로젝트 설정이 같으면 문자 하나까지 같다(프롬프트 캐싱). */
 export function buildTermEntrySystemPrompt(config: ProjectConfig): string {
   const source = languageLabel(config.sourceLanguage)
@@ -79,6 +86,7 @@ export function buildTermEntrySystemPrompt(config: ProjectConfig): string {
     `- translations: one translation for each target language: ${targets || '(none)'}. Use the language codes as given.`,
     '- Read the example strings to understand what the term means in this game before translating it.',
     '- If the existing translations of the examples already render the term consistently, especially approved ones, use that rendering. If they disagree, choose the best one and explain why in reason.',
+    TERM_STYLE_LINE,
     `- pos and note: keep any value the user gave. Fill in the ones marked as empty or marked to rewrite. note is an optional usage rule for translators; write it in ${source}.`,
     `- reason: why you chose these translations, written in ${source}.`,
     '- confidence: 0 to 1.',
@@ -89,7 +97,9 @@ export function buildTermEntrySystemPrompt(config: ProjectConfig): string {
     '',
     gameSection(config),
     '',
-    section('Tone guide', config.game.toneGuide)
+    section('Tone guide', config.game.toneGuide),
+    '',
+    styleRulesSection(config)
   ].join('\n')
 }
 
