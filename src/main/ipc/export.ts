@@ -26,6 +26,7 @@ import { saveProjectConfig } from '../project/open'
 import { loadQaContext, toQaInput } from '../project/qa'
 import { loadMaster, loadTranslations } from '../project/store'
 import { currentProject, replaceCurrentConfig } from './project'
+import { msg } from '../i18n'
 
 /** 출력 폴더(프로젝트 폴더 기준) */
 const OUTPUT_DIR = 'export'
@@ -61,11 +62,11 @@ function readTemplate(project: OpenProject): TemplateReadResult {
   const template = project.config.export.template
   if (!template) return { state: 'none' }
   const path = insideProject(project.dir, template.path)
-  if (path === null) return { state: 'failed', path: template.path, reason: '프로젝트 폴더 밖의 경로입니다. 템플릿을 다시 등록하세요.' }
-  if (!existsSync(path)) return { state: 'failed', path: template.path, reason: '파일이 없습니다. 템플릿을 다시 등록하세요.' }
+  if (path === null) return { state: 'failed', path: template.path, reason: msg().exportMain.templateOutside }
+  if (!existsSync(path)) return { state: 'failed', path: template.path, reason: msg().exportMain.templateMissing }
   try {
     const header = parseCsvTable(readTextFile(path).text).header
-    if (header.length === 0) return { state: 'failed', path: template.path, reason: '헤더(첫 줄)를 읽지 못했습니다.' }
+    if (header.length === 0) return { state: 'failed', path: template.path, reason: msg().exportMain.templateNoHeader }
     return { state: 'ok', path: template.path, header }
   } catch (error) {
     return { state: 'failed', path: template.path, reason: describeIoError(error, template.path) }
@@ -95,7 +96,7 @@ async function gather(project: OpenProject, request: ExportRequest): Promise<Ipc
     translations,
     unity: await unityScan(project, false),
     template: readTemplate(project)
-  })
+  }, msg())
 
   // QA: 번역문을 그대로 내보내는 칸만 본다. 비우거나 원문으로 채우는 칸의 옛 번역은 Unity 로 가지 않는다
   const byKey = new Map(master.value.rows.map((row) => [row.key, row]))
@@ -110,7 +111,7 @@ async function gather(project: OpenProject, request: ExportRequest): Promise<Ipc
     for (const key of keys) {
       const row = byKey.get(key)
       if (!row) continue
-      const diagnostics = checkRow(toQaInput(row, rows?.get(key)), ctx)
+      const diagnostics = checkRow(toQaInput(row, rows?.get(key)), ctx, msg())
       if (!hasErrors(diagnostics)) {
         qaWarnings += diagnostics.length
         continue
@@ -125,7 +126,7 @@ async function gather(project: OpenProject, request: ExportRequest): Promise<Ipc
       }
     }
   }
-  if (qaErrorCount > qaErrors.length) qaNotices.push(`QA 오류 ${qaErrorCount}개 중 앞의 ${qaErrors.length}개만 보여 줍니다.`)
+  if (qaErrorCount > qaErrors.length) qaNotices.push(msg().exportMain.qaShownFirst(qaErrorCount, qaErrors.length))
 
   return ok({ plan, qaErrors, qaErrorCount, qaWarnings, qaNotices: [...new Set(qaNotices)] })
 }
@@ -169,12 +170,12 @@ async function pick(sender: WebContents, options: OpenDialogOptions): Promise<st
   return result.canceled || !path ? null : path
 }
 
-const noProject = <T>(): IpcResult<T> => fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+const noProject = <T>(): IpcResult<T> => fail('not-a-project', msg().errors.notAProject)
 
 export function registerExportIpc(): void {
   ipcMain.handle(IPC.exportPreview, async (_event, raw: unknown): Promise<IpcResult<ExportPreview>> => {
     const parsed = ExportRequest.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '내보내기 요청 형식이 올바르지 않습니다.', parsed.error.message)
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest, parsed.error.message)
     const project = currentProject()
     if (!project) return noProject()
     const gathered = await gather(project, parsed.data)
@@ -185,19 +186,19 @@ export function registerExportIpc(): void {
   /** 쓰기 직전에 다시 읽고 다시 검사한다. 막는 문제가 있거나, 덮어쓸 파일을 확인받지 않았으면 쓰지 않는다. */
   ipcMain.handle(IPC.exportRun, async (_event, raw: unknown): Promise<IpcResult<ExportResult>> => {
     const parsed = ExportRunInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '내보내기 요청 형식이 올바르지 않습니다.', parsed.error.message)
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest, parsed.error.message)
     const project = currentProject()
     if (!project) return noProject()
     const gathered = await gather(project, parsed.data.request)
     if (!gathered.ok) return gathered
     const { plan, qaErrorCount } = gathered.value
-    if (plan.problems.length > 0) return fail('invalid-input', '내보내기를 막는 문제가 있습니다.', plan.problems.join('\n'))
-    if (qaErrorCount > 0) return fail('invalid-input', `QA 오류 ${qaErrorCount}개가 있어 내보내지 않았습니다. 진단 목록에서 고치세요.`)
+    if (plan.problems.length > 0) return fail('invalid-input', msg().exportMain.blocked, plan.problems.join('\n'))
+    if (qaErrorCount > 0) return fail('invalid-input', msg().exportMain.qaBlocked(qaErrorCount))
 
     const outputDir = join(project.dir, OUTPUT_DIR)
     const existing = plan.files.filter((name) => existsSync(join(outputDir, name)))
     if (existing.length > 0 && !parsed.data.overwrite) {
-      return fail('conflict', '이미 있는 파일을 덮어써야 합니다.', existing.join('\n'))
+      return fail('conflict', msg().exportMain.overwriteNeeded, existing.join('\n'))
     }
 
     const contents = new Map<string, string>()
@@ -221,8 +222,8 @@ export function registerExportIpc(): void {
         writeTextFile(join(outputDir, name), text)
         written.push(name)
       } catch (error) {
-        const done = written.length > 0 ? ` 이미 쓴 파일: ${written.join(', ')}` : ''
-        return fail('io', describeIoError(error, `${OUTPUT_DIR}/${name}`), `파일마다 따로 교체하므로 쓴 파일은 온전합니다.${done}`)
+        const done = written.length > 0 ? msg().exportMain.alreadyWritten(written.join(', ')) : ''
+        return fail('io', describeIoError(error, `${OUTPUT_DIR}/${name}`), msg().exportMain.writtenIntact(done))
       }
     }
     return ok({ outputDir: OUTPUT_DIR, files: written, summary: plan.build.summary, smartCount: plan.smart.length })
@@ -232,19 +233,19 @@ export function registerExportIpc(): void {
     const project = currentProject()
     if (!project) return noProject()
     const dir = join(project.dir, OUTPUT_DIR)
-    if (!existsSync(dir)) return fail('io', `${OUTPUT_DIR} 폴더가 아직 없습니다. 먼저 내보내세요.`)
+    if (!existsSync(dir)) return fail('io', msg().exportMain.noOutputDir(OUTPUT_DIR))
     const error = await shell.openPath(dir)
-    return error === '' ? ok(null) : fail('io', `폴더를 열지 못했습니다: ${error}`)
+    return error === '' ? ok(null) : fail('io', msg().exportMain.openFolderFailed(error))
   })
 
   /** Unity 프로젝트 폴더를 고른다. 대화상자로만 정하고, 읽기만 한다. */
   ipcMain.handle(IPC.exportUnityLink, async (event): Promise<IpcResult<OpenProject>> => {
     const project = currentProject()
     if (!project) return noProject()
-    const dir = await pick(event.sender, { title: 'Unity 프로젝트 폴더 선택', properties: ['openDirectory'], buttonLabel: '연결' })
-    if (dir === null) return fail('cancelled', '폴더 선택을 취소했습니다.')
+    const dir = await pick(event.sender, { title: msg().dialogs.unityFolder, properties: ['openDirectory'], buttonLabel: msg().dialogs.link })
+    if (dir === null) return fail('cancelled', msg().errors.folderPickCancelled)
     const problem = checkUnityProject(dir)
-    if (problem !== null) return fail('invalid-input', `Unity 프로젝트 폴더가 아닙니다: ${problem}`, dir)
+    if (problem !== null) return fail('invalid-input', msg().exportMain.notUnityProject(problem), dir)
 
     const projectPath = toStoredUnityPath(project.dir, dir)
     const previous = project.config.export.unity
@@ -270,11 +271,11 @@ export function registerExportIpc(): void {
 
   ipcMain.handle(IPC.exportUnityCollection, (_event, raw: unknown): IpcResult<OpenProject> => {
     const parsed = SelectCollectionInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '컬렉션 선택 형식이 올바르지 않습니다.', parsed.error.message)
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest, parsed.error.message)
     const project = currentProject()
     if (!project) return noProject()
     const link = project.config.export.unity
-    if (!link) return fail('invalid-input', 'Unity 프로젝트를 먼저 연결하세요.')
+    if (!link) return fail('invalid-input', msg().exportMain.linkUnityFirst)
     return saveConfig(project, {
       ...project.config,
       export: { ...project.config.export, unity: { ...link, tableCollection: parsed.data.tableCollection } }
@@ -289,12 +290,12 @@ export function registerExportIpc(): void {
     const project = currentProject()
     if (!project) return noProject()
     const file = await pick(event.sender, {
-      title: 'Unity 에서 내보낸 CSV 선택',
+      title: msg().dialogs.templateCsv,
       properties: ['openFile'],
       filters: [{ name: 'CSV', extensions: ['csv'] }],
-      buttonLabel: '등록'
+      buttonLabel: msg().dialogs.register
     })
-    if (file === null) return fail('cancelled', '파일 선택을 취소했습니다.')
+    if (file === null) return fail('cancelled', msg().errors.filePickCancelled)
 
     let text: string
     try {
@@ -303,7 +304,7 @@ export function registerExportIpc(): void {
       return fail('io', describeIoError(error, basename(file)))
     }
     const header = parseCsvTable(text).header
-    if (header.length === 0) return fail('invalid-input', '헤더(첫 줄)를 읽지 못했습니다. Unity 에서 내보낸 CSV 인지 확인하세요.')
+    if (header.length === 0) return fail('invalid-input', msg().exportMain.templateNoHeaderHint)
 
     const inside = relative(project.dir, file)
     let path = inside.split('\\').join('/')
@@ -321,7 +322,7 @@ export function registerExportIpc(): void {
     const { config } = project
     const scan = await unityScan(project, false)
     const unityLocales = scan.state === 'ok' ? uniqueLocales(scan.locales) : null
-    const { locales } = resolveLocales([config.sourceLanguage, ...config.targetLanguages], config.sourceLanguage, config.export.locales, unityLocales)
+    const { locales } = resolveLocales([config.sourceLanguage, ...config.targetLanguages], config.sourceLanguage, config.export.locales, unityLocales, msg())
     const columns = inferTemplateColumns(header, locales)
     return saveConfig(project, { ...config, export: { ...config.export, template: { path, columns } } })
   })

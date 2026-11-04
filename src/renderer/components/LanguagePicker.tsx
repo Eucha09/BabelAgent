@@ -2,11 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildLanguageOptions,
   customLanguageCode,
+  englishLanguageName,
   filterLanguageOptions,
   koreanLanguageName,
   type LanguageOption
 } from '@core/project/languages'
 import { isLanguageTag } from '@core/project/settings'
+import type { UiLanguage } from '@shared/i18n'
+import { useI18n } from '../i18n'
+
+/** 언어 이름은 화면 언어로 보여 준다. 찾기는 두 이름 모두로 된다 */
+function nameIn(code: string, language: UiLanguage): string {
+  return language === 'ko' ? koreanLanguageName(code) : englishLanguageName(code)
+}
 
 /** 고를 수 있는 언어 목록. 한 번만 만든다. */
 const OPTIONS: readonly LanguageOption[] = buildLanguageOptions()
@@ -27,6 +35,7 @@ type MenuProps = {
  * 목록에 없는 코드는 BCP 47 태그일 때만 "직접 추가"로 넣을 수 있다.
  */
 function LanguageMenu({ boundaryRef, exclude, onPick, onClose }: MenuProps): React.JSX.Element {
+  const { language, t } = useI18n()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const activeRef = useRef<HTMLLIElement>(null)
@@ -73,8 +82,8 @@ function LanguageMenu({ boundaryRef, exclude, onPick, onClose }: MenuProps): Rea
       <input
         autoFocus
         value={query}
-        placeholder="언어 이름이나 코드로 찾기"
-        aria-label="언어 찾기"
+        placeholder={t.languagePicker.search}
+        aria-label={t.languagePicker.searchLabel}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown') {
@@ -94,7 +103,7 @@ function LanguageMenu({ boundaryRef, exclude, onPick, onClose }: MenuProps): Rea
         }}
       />
       <ul className="language-menu-list" role="listbox">
-        {items.length === 0 ? <li className="language-menu-empty">맞는 언어가 없습니다. 코드(예: en-GB)로 찾아 보세요.</li> : null}
+        {items.length === 0 ? <li className="language-menu-empty">{t.languagePicker.empty}</li> : null}
         {items.map((item, index) => (
           <li
             key={`${item.custom ? 'custom:' : ''}${item.code}`}
@@ -114,8 +123,14 @@ function LanguageMenu({ boundaryRef, exclude, onPick, onClose }: MenuProps): Rea
             }}
           >
             <code>{item.code}</code>
-            <span>{item.custom ? `직접 추가${item.name ? ` · ${item.name}` : ''}` : item.name}</span>
-            {item.englishName ? <span className="language-menu-english">{item.englishName}</span> : null}
+            <span>
+              {item.custom
+                ? `${t.languagePicker.custom}${nameIn(item.code, language) ? ` · ${nameIn(item.code, language)}` : ''}`
+                : language === 'ko'
+                  ? item.name
+                  : item.englishName}
+            </span>
+            {language === 'ko' && item.englishName ? <span className="language-menu-english">{item.englishName}</span> : null}
           </li>
         ))}
       </ul>
@@ -123,9 +138,10 @@ function LanguageMenu({ boundaryRef, exclude, onPick, onClose }: MenuProps): Rea
   )
 }
 
-/** 코드와 한국어 이름. 잘못된 코드는 오류 색 */
+/** 코드와 화면 언어의 이름. 잘못된 코드는 오류 색 */
 function LanguageLabel({ code }: { code: string }): React.JSX.Element {
-  const name = koreanLanguageName(code)
+  const { language } = useI18n()
+  const name = nameIn(code, language)
   return (
     <>
       <code>{code}</code>
@@ -147,6 +163,7 @@ export function LanguageSelect({ id, value, exclude = [], onChange }: SelectProp
   const [open, setOpen] = useState(false)
   const boundaryRef = useRef<HTMLDivElement>(null)
   const excluded = useMemo(() => new Set([value, ...exclude]), [value, exclude])
+  const { t } = useI18n()
   const valid = value === '' || isLanguageTag(value)
   return (
     <div className="language-picker" ref={boundaryRef}>
@@ -158,7 +175,7 @@ export function LanguageSelect({ id, value, exclude = [], onChange }: SelectProp
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
       >
-        {value === '' ? <span className="language-placeholder">언어 고르기</span> : <LanguageLabel code={value} />}
+        {value === '' ? <span className="language-placeholder">{t.languagePicker.choose}</span> : <LanguageLabel code={value} />}
         <span className="language-caret">▾</span>
       </button>
       {open ? (
@@ -189,6 +206,7 @@ export function LanguageMultiSelect({ id, values, exclude = [], onChange }: Mult
   const [open, setOpen] = useState(false)
   const boundaryRef = useRef<HTMLDivElement>(null)
   const excluded = useMemo(() => new Set([...values, ...exclude]), [values, exclude])
+  const { t } = useI18n()
   return (
     <div className="language-picker" ref={boundaryRef}>
       <div className="language-chips">
@@ -198,8 +216,8 @@ export function LanguageMultiSelect({ id, values, exclude = [], onChange }: Mult
             <button
               type="button"
               className="chip-remove"
-              title={`${code} 빼기`}
-              aria-label={`${code} 빼기`}
+              title={t.languagePicker.remove(code)}
+              aria-label={t.languagePicker.remove(code)}
               onClick={() => onChange(values.filter((item) => item !== code))}
             >
               ×
@@ -207,7 +225,7 @@ export function LanguageMultiSelect({ id, values, exclude = [], onChange }: Mult
           </span>
         ))}
         <button id={id} type="button" className="language-add" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((prev) => !prev)}>
-          + 언어 추가
+          {t.languagePicker.add}
         </button>
       </div>
       {open ? (

@@ -6,6 +6,7 @@ import { sourceHash } from '../hash'
 import { autoColumns } from './header'
 import { resolveLocales } from './locales'
 import { buildExportTable, sanitizeFileName, usableTranslation, type ExportTranslations } from './rows'
+import { ko } from '@shared/i18n/ko'
 
 const master = (key: string, source: string, context = ''): MasterRow => ({
   key,
@@ -39,7 +40,7 @@ const translations = (en: TranslationRow[], ja: TranslationRow[] = []): ExportTr
     ['ja', new Map(ja.map((row) => [row.key, row]))]
   ])
 
-const { locales } = resolveLocales(['ko', 'en'], 'ko', {}, null)
+const { locales } = resolveLocales(['ko', 'en'], 'ko', {}, null, ko)
 const columns = autoColumns(locales, { sharedComments: true, localeComments: true })
 
 const build = (missing: ExportMissing, data = translations([translation(a, 'Start', 'approved', '버튼'), translation(b, '{count} acquired', 'stale')])) =>

@@ -19,6 +19,7 @@ import { loadQaContext, runQa, toQaInput } from '../project/qa'
 import { approveTranslationRows, loadMaster, trustedSnapshot, updateTranslationRow } from '../project/store'
 import { loadAppSettings } from '../store/app-settings'
 import { currentProject } from './project'
+import { msg } from '../i18n'
 
 function send(sender: WebContents, channel: string, payload: unknown): void {
   if (!sender.isDestroyed()) sender.send(channel, payload)
@@ -27,29 +28,29 @@ function send(sender: WebContents, channel: string, payload: unknown): void {
 export function registerReviewIpc(): void {
   ipcMain.handle(IPC.qaRun, (_event, raw: unknown): IpcResult<QaReport> => {
     const parsed = QaRunInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', 'QA 요청 형식이 올바르지 않습니다.')
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest)
     const project = currentProject()
-    if (!project) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+    if (!project) return fail('not-a-project', msg().errors.notAProject)
     if (!project.config.targetLanguages.includes(parsed.data.language)) {
-      return fail('invalid-input', `${parsed.data.language} 은 이 프로젝트의 대상 언어가 아닙니다.`)
+      return fail('invalid-input', msg().errors.notTargetLanguage(parsed.data.language))
     }
     return runQa(project, parsed.data.language)
   })
 
   ipcMain.handle(IPC.translationUpdate, (_event, raw: unknown): IpcResult<UpdateTranslationResult> => {
     const parsed = UpdateTranslationInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '저장 요청 형식이 올바르지 않습니다.', parsed.error.message)
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest, parsed.error.message)
     const project = currentProject()
-    if (!project) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+    if (!project) return fail('not-a-project', msg().errors.notAProject)
     const input = parsed.data
     if (!project.config.targetLanguages.includes(input.language)) {
-      return fail('invalid-input', `${input.language} 은 이 프로젝트의 대상 언어가 아닙니다.`)
+      return fail('invalid-input', msg().errors.notTargetLanguage(input.language))
     }
 
     const master = loadMaster(project.dir)
     if (!master.ok) return master
     const row = master.value.rows.find((item) => item.key === input.key)
-    if (!row) return fail('invalid-input', `원문에 없는 키입니다: ${input.key}`)
+    if (!row) return fail('invalid-input', msg().errors.keyNotInSource(input.key))
 
     const { ctx } = loadQaContext(project, input.language)
     const change = {
@@ -62,7 +63,7 @@ export function registerReviewIpc(): void {
       project.dir,
       input.language,
       { key: input.key, master: row, change, expected: input.expected, force: input.force },
-      (next) => checkRow(toQaInput(row, next), ctx)
+      (next) => checkRow(toQaInput(row, next), ctx, msg())
     )
     if (!result.ok) return result
     const saved = result.value.row
@@ -81,12 +82,12 @@ export function registerReviewIpc(): void {
 
   ipcMain.handle(IPC.translationApprove, (_event, raw: unknown): IpcResult<BulkApproveResult> => {
     const parsed = BulkApproveInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '일괄 승인 요청 형식이 올바르지 않습니다.', parsed.error.message)
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest, parsed.error.message)
     const project = currentProject()
-    if (!project) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+    if (!project) return fail('not-a-project', msg().errors.notAProject)
     const { language, rows } = parsed.data
     if (!project.config.targetLanguages.includes(language)) {
-      return fail('invalid-input', `${language} 은 이 프로젝트의 대상 언어가 아닙니다.`)
+      return fail('invalid-input', msg().errors.notTargetLanguage(language))
     }
 
     const master = loadMaster(project.dir)
@@ -98,7 +99,7 @@ export function registerReviewIpc(): void {
     // 화면이 고른 조건을 믿지 않고 지금 디스크의 행으로 다시 확인한다
     return approveTranslationRows(project.dir, language, rows, masterByKey, (current) => {
       const row = masterByKey.get(current.key)
-      const diagnostics = row ? checkRow(toQaInput(row, current), ctx) : []
+      const diagnostics = row ? checkRow(toQaInput(row, current), ctx, msg()) : []
       return bulkApproveBlocker(
         { status: current.status, translation: current.text, confidence: current.confidence, diagnostics },
         lowConfidence
@@ -108,9 +109,9 @@ export function registerReviewIpc(): void {
 
   ipcMain.handle(IPC.rowReroll, async (event, raw: unknown): Promise<IpcResult<RerollCandidate>> => {
     const parsed = RerollInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '재번역 요청 형식이 올바르지 않습니다.', parsed.error.message)
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest, parsed.error.message)
     const project = currentProject()
-    if (!project) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+    if (!project) return fail('not-a-project', msg().errors.notAProject)
     const { cliPath, claudeConfigDir } = loadAppSettings()
     const sender = event.sender
     // 재번역 로그는 번역 작업 로그와 같은 곳(번역 화면·에이전트 패널)에 남긴다
@@ -123,7 +124,7 @@ export function registerReviewIpc(): void {
 
   ipcMain.handle(IPC.rowRerollCancel, (_event, raw: unknown): IpcResult<boolean> => {
     const parsed = RerollCancelInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '취소 요청 형식이 올바르지 않습니다.')
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest)
     return ok(cancelReroll(parsed.data.requestId))
   })
 }

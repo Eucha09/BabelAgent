@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { QaRuleId } from '@shared/schema/qa'
 import { DEFAULT_SMART_FORMATTERS } from './formatters'
 import { checkRow, hasErrors, type QaContext, type QaRowInput } from './check'
+import { ko } from '@shared/i18n/ko'
+import { en } from '@shared/i18n/en'
 
 const ctx: QaContext = {
   smart: {
@@ -32,11 +34,11 @@ function row(source: string, text: string | null, extra: Partial<QaRowInput> = {
   }
 }
 
-const rules = (input: QaRowInput, context = ctx): QaRuleId[] => checkRow(input, context).map((item) => item.ruleId)
+const rules = (input: QaRowInput, context = ctx): QaRuleId[] => checkRow(input, context, ko).map((item) => item.ruleId)
 
 describe('checkRow', () => {
   it('문제가 없으면 진단이 없다', () => {
-    expect(checkRow(row('Hi {name}, <b>go</b>', '안녕 {name}, <b>가자</b>'), ctx)).toEqual([])
+    expect(checkRow(row('Hi {name}, <b>go</b>', '안녕 {name}, <b>가자</b>'), ctx, ko)).toEqual([])
   })
 
   it('번역이 없는 행은 원문 메타만 본다', () => {
@@ -49,7 +51,7 @@ describe('checkRow', () => {
   })
 
   it('text.empty: 상태가 untranslated 가 아닌데 비었다', () => {
-    const result = checkRow(row('Hi', '  '), ctx)
+    const result = checkRow(row('Hi', '  '), ctx, ko)
     expect(result.map((item) => [item.ruleId, item.severity])).toEqual([['text.empty', 'error']])
   })
 
@@ -59,7 +61,7 @@ describe('checkRow', () => {
   })
 
   it('var.missing / var.extra 는 오류', () => {
-    const result = checkRow(row('{a} {b}', '{a} {c}'), ctx)
+    const result = checkRow(row('{a} {b}', '{a} {c}'), ctx, ko)
     expect(result.map((item) => [item.ruleId, item.severity, item.items])).toEqual([
       ['var.missing', 'error', ['b']],
       ['var.extra', 'error', ['c']]
@@ -75,7 +77,7 @@ describe('checkRow', () => {
   })
 
   it('smart.brace_unbalanced', () => {
-    const result = checkRow(row('{a}', '{a'), ctx)
+    const result = checkRow(row('{a}', '{a'), ctx, ko)
     expect(result.map((item) => item.ruleId)).toEqual(['smart.brace_unbalanced'])
     expect(result[0]?.detail).toContain('닫히지 않은 {')
   })
@@ -85,7 +87,7 @@ describe('checkRow', () => {
   })
 
   it('smart.unknown_formatter 는 경고, 목록은 project 설정을 따른다', () => {
-    const result = checkRow(row('{0:myfmt:x}', '{0:myfmt:y}'), ctx)
+    const result = checkRow(row('{0:myfmt:x}', '{0:myfmt:y}'), ctx, ko)
     expect(result.map((item) => [item.ruleId, item.severity])).toEqual([['smart.unknown_formatter', 'warning']])
     expect(rules(row('{0:myfmt:x}', '{0:myfmt:y}'), { ...ctx, smart: { ...ctx.smart, formatters: ['myfmt'] } })).toEqual([])
   })
@@ -122,27 +124,35 @@ describe('checkRow', () => {
       maxLen: '8',
       vars: '[{"name":"name","example":"바벨"}]'
     })
-    const result = checkRow(input, ctx)
+    const result = checkRow(input, ctx, ko)
     expect(result.map((item) => item.message)).toEqual(['길이 초과: 9 / 8자'])
     expect(result[0]?.detail).toContain('{name} = "바벨"')
     expect(rules({ ...input, maxLen: '9' })).toEqual([])
   })
 
+  it('진단 문구는 넘긴 카탈로그의 언어로 쓴다', () => {
+    const input = row('Hi {name}', '안녕하세요 {name}님', { maxLen: '8', vars: '[{"name":"name","example":"바벨"}]' })
+    expect(checkRow(input, ctx, en).map((item) => item.message)).toEqual(['Too long: 9 / 8 chars'])
+    expect(checkRow(row('Hi {name}', '안녕'), ctx, en).map((item) => item.message)).toEqual([
+      'Source variables missing from the translation: {name}'
+    ])
+  })
+
   it('glossary.violation 은 경고, strict 면 오류', () => {
-    const result = checkRow(row('Babel Potion', '바벨의 포션'), ctx)
+    const result = checkRow(row('Babel Potion', '바벨의 포션'), ctx, ko)
     expect(result.map((item) => [item.ruleId, item.severity])).toEqual([['glossary.violation', 'warning']])
-    const strict = checkRow(row('Babel Potion', '탑의 물약'), ctx)
+    const strict = checkRow(row('Babel Potion', '탑의 물약'), ctx, ko)
     expect(strict.map((item) => [item.ruleId, item.severity])).toEqual([['glossary.violation_strict', 'error']])
   })
 
   it('var.meta_invalid / var.meta_mismatch 는 경고', () => {
-    const invalid = checkRow(row('{a}', '{a}', { vars: 'not json' }), ctx)
+    const invalid = checkRow(row('{a}', '{a}', { vars: 'not json' }), ctx, ko)
     expect(invalid.map((item) => [item.ruleId, item.severity])).toEqual([['var.meta_invalid', 'warning']])
     expect(rules(row('{a}', '{a}', { vars: '[{"name":"a"}]' }))).toEqual([])
   })
 
   it('hasErrors', () => {
-    expect(hasErrors(checkRow(row('{a}', '{b}'), ctx))).toBe(true)
-    expect(hasErrors(checkRow(row('Potion', '포션'), ctx))).toBe(false)
+    expect(hasErrors(checkRow(row('{a}', '{b}'), ctx, ko))).toBe(true)
+    expect(hasErrors(checkRow(row('Potion', '포션'), ctx, ko))).toBe(false)
   })
 })

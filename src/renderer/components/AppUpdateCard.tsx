@@ -1,4 +1,6 @@
+import type { Messages } from '@shared/i18n'
 import type { AppUpdateState, AppUpdateStatus } from '@shared/schema/app-update'
+import { useI18n } from '../i18n'
 
 type Props = {
   /** 메인에서 읽기 전에는 null */
@@ -15,24 +17,24 @@ function megabytes(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(1)
 }
 
-function describeState(state: AppUpdateState): string {
+function describeState(state: AppUpdateState, t: Messages, locale: string): string {
   switch (state.kind) {
     case 'disabled':
       return state.reason
     case 'idle':
-      return '아직 확인하지 않았습니다.'
+      return t.appUpdate.idle
     case 'checking':
-      return '확인 중…'
+      return t.appUpdate.checking
     case 'current':
-      return `최신 버전입니다 (${new Date(state.checkedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 확인).`
+      return t.appUpdate.current(new Date(state.checkedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }))
     case 'available':
-      return `새 버전 ${state.version} 이 있습니다.`
+      return t.appUpdate.available(state.version)
     case 'downloading':
       return state.total > 0
-        ? `${state.version} 받는 중 ${state.percent}% (${megabytes(state.transferred)} / ${megabytes(state.total)} MB)`
-        : `${state.version} 받는 중…`
+        ? t.appUpdate.downloading(state.version, state.percent, megabytes(state.transferred), megabytes(state.total))
+        : t.appUpdate.downloadingUnknown(state.version)
     case 'downloaded':
-      return `${state.version} 을 받아 두었습니다. 다시 시작하면 설치됩니다.`
+      return t.appUpdate.downloaded(state.version)
     case 'error':
       return state.message
   }
@@ -47,21 +49,26 @@ function pendingVersion(state: AppUpdateState): string | null {
 
 /** 설정 화면의 앱 업데이트 카드. 새 버전은 GitHub Releases 에서 확인하고, [받기]를 눌러야 내려받는다. */
 export function AppUpdateCard({ status, jobRunning, onCheck, onDownload, onCancel, onInstall }: Props): React.JSX.Element {
+  const { t, locale } = useI18n()
   const state = status?.state ?? null
   const version = state ? pendingVersion(state) : null
   const canCheck = state !== null && (state.kind === 'idle' || state.kind === 'current' || state.kind === 'available' || state.kind === 'error')
   const downloadLabel =
-    state?.kind === 'available' ? '받기' : state?.kind === 'error' && state.version !== null ? '다시 받기' : null
+    state?.kind === 'available'
+      ? t.appUpdate.download
+      : state?.kind === 'error' && state.version !== null
+        ? t.appUpdate.downloadAgain
+        : null
 
   return (
     <div className="card">
-      <h3>앱 업데이트</h3>
+      <h3>{t.appUpdate.title}</h3>
 
       <dl className="dl" style={{ marginBottom: 'var(--space-3)' }}>
-        <dt>지금 버전</dt>
+        <dt>{t.appUpdate.currentVersion}</dt>
         <dd>{status?.currentVersion ?? '-'}</dd>
-        <dt>상태</dt>
-        <dd className={state?.kind === 'error' ? 'field-error' : undefined}>{state ? describeState(state) : '확인 중…'}</dd>
+        <dt>{t.appUpdate.status}</dt>
+        <dd className={state?.kind === 'error' ? 'field-error' : undefined}>{state ? describeState(state, t, locale) : t.appUpdate.checking}</dd>
       </dl>
 
       {state?.kind === 'downloading' ? (
@@ -74,7 +81,7 @@ export function AppUpdateCard({ status, jobRunning, onCheck, onDownload, onCance
 
       <div className="row">
         <button type="button" disabled={!canCheck} onClick={onCheck}>
-          {state?.kind === 'checking' ? '확인 중…' : '업데이트 확인'}
+          {state?.kind === 'checking' ? t.appUpdate.checking : t.appUpdate.check}
         </button>
         {downloadLabel ? (
           <button type="button" className="primary" onClick={onDownload}>
@@ -83,7 +90,7 @@ export function AppUpdateCard({ status, jobRunning, onCheck, onDownload, onCance
         ) : null}
         {state?.kind === 'downloading' ? (
           <button type="button" onClick={onCancel}>
-            받기 멈춤
+            {t.appUpdate.cancelDownload}
           </button>
         ) : null}
         {state?.kind === 'downloaded' ? (
@@ -91,15 +98,15 @@ export function AppUpdateCard({ status, jobRunning, onCheck, onDownload, onCance
             type="button"
             className="primary"
             disabled={jobRunning}
-            title={jobRunning ? '작업이 끝난 뒤에 다시 시작할 수 있습니다' : undefined}
+            title={jobRunning ? t.appUpdate.installAfterJob : undefined}
             onClick={onInstall}
           >
-            다시 시작해 설치
+            {t.appUpdate.install}
           </button>
         ) : null}
         {status ? (
           <a href={version ? `${status.releasesUrl}/tag/v${version}` : status.releasesUrl} target="_blank" rel="noreferrer">
-            {version ? '변경 내용 보기' : '릴리스 목록'}
+            {version ? t.appUpdate.releaseNotes : t.appUpdate.releases}
           </a>
         ) : null}
       </div>

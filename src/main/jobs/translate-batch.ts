@@ -8,6 +8,7 @@ import { toQaInput } from '../project/qa'
 import { writeBatchTranslations } from '../project/store'
 import { logSubmitFailure, runAgentBatch, type AgentJobContext } from './agent-batch'
 import type { BatchOutcome } from './scheduler'
+import { msg } from '../i18n'
 
 export { MAX_TURNS } from './agent-batch'
 
@@ -28,13 +29,13 @@ export async function runTranslateBatch(
   signal: AbortSignal
 ): Promise<BatchOutcome> {
   const batchId = batch.id
-  const label = `배치 ${batchId}`
+  const label = msg().jobLog.batch(batchId)
   const terms = filterTermsForTexts(ctx.glossary, batch.rows.map((row) => row.source), ctx.sourceLanguage)
-  const injected = describeInjectedTerms(terms)
+  const injected = describeInjectedTerms(terms, msg())
   ctx.log({
     level: 'info',
     batchId,
-    message: `${label} 시작 (${batch.rows.length}행) · ${injected.text}`,
+    message: msg().jobLog.translateBatchStart(label, batch.rows.length, injected.text),
     ...(injected.detail ? { detail: injected.detail } : {})
   })
 
@@ -65,7 +66,7 @@ export async function runTranslateBatch(
                 mode: 'batch',
                 qa: (item) => {
                   const row = rowsByKey.get(item.key)
-                  return row ? checkRow(toQaInput(row, { text: item.text, status: 'draft', source_hash: row.source_hash }), ctx.qa) : []
+                  return row ? checkRow(toQaInput(row, { text: item.text, status: 'draft', source_hash: row.source_hash }), ctx.qa, msg()) : []
                 }
               }),
               items
@@ -76,8 +77,12 @@ export async function runTranslateBatch(
             logSubmitFailure(ctx.log, batchId, label, SUBMIT_TOOL, event)
             return
           }
-          const note = event.remarkCount > 0 ? ` · 남은 길이·용어 오류 ${event.remarkCount}건은 검토 화면에서 확인` : ''
-          ctx.log({ level: event.remarkCount > 0 ? 'warn' : 'ok', batchId, message: `${label} · ${SUBMIT_TOOL} → ${event.count}행 통과${note}` })
+          const note = event.remarkCount > 0 ? msg().jobLog.remainingIssues(event.remarkCount) : ''
+          ctx.log({
+            level: event.remarkCount > 0 ? 'warn' : 'ok',
+            batchId,
+            message: `${msg().jobLog.passedRows(label, SUBMIT_TOOL, event.count)}${note}`
+          })
         }
       )
   })
@@ -86,8 +91,8 @@ export async function runTranslateBatch(
   // 통과한 제출이 있으면 기록한다. 배치는 온전하므로 그 뒤에 중단 신호가 왔어도 버리지 않는다.
   const write = writeBatchTranslations(ctx.dir, ctx.language, result.items, rowsByKey, ctx.baseline)
   if (!write.ok) {
-    ctx.log({ level: 'error', batchId, message: `${label} 기록 실패`, detail: write.error.message })
-    return { kind: 'failed', reason: '번역 파일에 기록하지 못했습니다.', detail: write.error.message }
+    ctx.log({ level: 'error', batchId, message: msg().jobLog.writeFailed(label), detail: write.error.message })
+    return { kind: 'failed', reason: msg().jobLog.translationsWriteFailed, detail: write.error.message }
   }
   const skipped = write.value.skippedChanged
   ctx.log(
@@ -95,10 +100,10 @@ export async function runTranslateBatch(
       ? {
           level: 'warn',
           batchId,
-          message: `${label} 기록 완료 (${write.value.written}행) · 작업 중 사람이 고친 ${skipped.length}행은 덮지 않음`,
+          message: msg().jobLog.writtenKept(label, write.value.written, skipped.length),
           detail: skipped.join(', ')
         }
-      : { level: 'ok', batchId, message: `${label} 기록 완료 (${write.value.written}행)` }
+      : { level: 'ok', batchId, message: msg().jobLog.written(label, write.value.written) }
   )
   return { kind: 'done', written: write.value.written }
 }

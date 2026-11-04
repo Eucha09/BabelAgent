@@ -52,6 +52,7 @@ import {
 import { fail, ok, type IpcResult } from '@shared/types'
 import { describeIoError } from '../fs'
 import { diskHash, readTextFile, writeTextFile, type TextEncoding } from '../fs/text'
+import { msg } from '../i18n'
 
 export const MASTER_FILE = 'strings_master.csv'
 
@@ -110,11 +111,11 @@ function checkConflict(path: string, force: boolean): IpcResult<null> {
     if (actual === null) return ok(null)
     return fail(
       'conflict',
-      `${basename(path)} 파일이 이미 있습니다. 앱에서 읽지 않은 파일이라 덮어쓰기 전에 확인이 필요합니다.`
+      msg().errors.fileExistsUnread(basename(path))
     )
   }
   if (expected !== actual) {
-    return fail('conflict', `${basename(path)} 파일이 앱 밖에서 바뀌었습니다.`)
+    return fail('conflict', msg().errors.fileChangedOutside(basename(path)))
   }
   return ok(null)
 }
@@ -154,7 +155,7 @@ export function loadMaster(dir: string): IpcResult<LoadedMaster> {
   if (parsed.missingColumns.length > 0) {
     return fail(
       'invalid-project',
-      `${MASTER_FILE} 에 필수 열이 없습니다: ${parsed.missingColumns.join(', ')}`
+      msg().errors.missingColumns(MASTER_FILE, parsed.missingColumns.join(', '))
     )
   }
   return ok({
@@ -266,7 +267,7 @@ export function saveMaster(
   const partial = (file: string, error: { message: string; detail?: string }): IpcResult<SaveResult> =>
     fail(
       'io',
-      `원문은 저장했지만 ${file} 을 고치지 못했습니다. 원인을 해결한 뒤 다시 저장하세요.`,
+      msg().errors.sourceSavedPartly(file),
       error.detail ? `${error.message} ${error.detail}` : error.message
     )
 
@@ -459,14 +460,14 @@ export function discardContextSuggestions(dir: string, keys: readonly string[]):
 export function applyContextSuggestions(dir: string, items: readonly ApplyContextItem[]): IpcResult<ApplyContextResult> {
   const master = loadMaster(dir)
   if (!master.ok) return master
-  if (!master.value.exists) return fail('invalid-input', `${MASTER_FILE} 이 없습니다.`)
-  const result = applySuggestionValues(master.value.rows, items)
+  if (!master.value.exists) return fail('invalid-input', msg().errors.fileMissing(MASTER_FILE))
+  const result = applySuggestionValues(master.value.rows, items, msg())
   if (result.applied.length > 0) {
     const saved = saveMaster(dir, result.rows, false)
     if (!saved.ok) return saved
     const removed = discardContextSuggestions(dir, result.applied)
     if (!removed.ok) {
-      return fail('io', `원문에는 넣었지만 ${CONTEXT_SUGGESTIONS_FILE} 에서 적용한 제안을 지우지 못했습니다.`, removed.error.message)
+      return fail('io', msg().errors.suggestionsNotCleared(CONTEXT_SUGGESTIONS_FILE), removed.error.message)
     }
   }
   return ok({ applied: result.applied, skipped: result.skipped })
@@ -539,16 +540,16 @@ export function updateTranslationRow(
   const current = index === -1 ? undefined : rows[index]
 
   if (!update.force && !sameState(current, update.expected)) {
-    const now = current ? `[${current.status}] ${current.text}` : '(번역 행 없음)'
-    return fail('conflict', `${update.key} 행이 편집하는 사이에 바뀌었습니다(번역 작업 기록 또는 앱 밖 편집).`, `지금 파일의 내용: ${now}`)
+    const now = current ? `[${current.status}] ${current.text}` : msg().errors.noTranslationRow
+    return fail('conflict', msg().errors.rowChanged(update.key), msg().errors.currentContent(now))
   }
 
-  const decision = applyManualUpdate(update.key, current, update.change, update.master)
+  const decision = applyManualUpdate(update.key, current, update.change, update.master, msg())
   if (!decision.ok) return fail('invalid-input', decision.reason)
   const diagnostics = qa(decision.row)
   if (update.change.status === 'approved' && hasErrors(diagnostics)) {
     const errors = diagnostics.filter((item) => item.severity === 'error').map((item) => item.message)
-    return fail('invalid-input', 'QA 오류가 있어 승인할 수 없습니다.', errors.join('\n'))
+    return fail('invalid-input', msg().errors.qaBlocksApproval, errors.join('\n'))
   }
 
   // 빈 행을 새로 만들지 않는다 — 번역 파일에 빈 행을 미리 채우지 않는 규칙과 같다
@@ -601,7 +602,7 @@ export function approveTranslationRows(
       skipped.push({ key: request.key, reason: blocker })
       continue
     }
-    const decision = applyManualUpdate(request.key, current, { text: current.text, status: 'approved' }, master)
+    const decision = applyManualUpdate(request.key, current, { text: current.text, status: 'approved' }, master, msg())
     if (!decision.ok) {
       skipped.push({ key: request.key, reason: 'not-draft' })
       continue

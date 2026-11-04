@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { UI_LANGUAGE_NAME, UI_LANGUAGES, isUiLanguage, type Messages, type UiLanguage } from '@shared/i18n'
 import type { AgentCheckResult, LoginMethod } from '@shared/schema/agent'
 import type { AppSettings } from '@shared/schema/app-settings'
 import type { AppUpdateStatus } from '@shared/schema/app-update'
 import type { ClaudeCliStatus, ClaudeSource } from '@shared/schema/cli'
+import { useI18n } from '../../i18n'
 import { AccountCard, type AuthView } from '../AccountCard'
 import { AppUpdateCard } from '../AppUpdateCard'
 import type { UsageView } from '../UsageMeters'
@@ -16,6 +18,8 @@ type Props = {
   checkResult: AgentCheckResult | null
   onSave: (patch: SettingsPatch) => void
   onCheck: () => void
+  /** 화면 언어를 고르면 바로 앱 설정에 저장한다 */
+  onLanguageChange: (language: UiLanguage) => void
   auth: AuthView
   usage: UsageView
   onAuthRefresh: () => void
@@ -38,11 +42,17 @@ type Props = {
   onAppUpdateInstall: () => void
 }
 
-const SOURCE_LABEL: Record<ClaudeSource, string> = {
-  setting: '설정한 경로',
-  native: '공식 설치(자동 업데이트)',
-  path: 'PATH',
-  bundled: '개발용(SDK 내장)'
+function sourceLabel(source: ClaudeSource, t: Messages): string {
+  switch (source) {
+    case 'setting':
+      return t.claudeCode.sourceSetting
+    case 'native':
+      return t.claudeCode.sourceNative
+    case 'path':
+      return t.claudeCode.sourcePath
+    case 'bundled':
+      return t.claudeCode.sourceBundled
+  }
 }
 
 function toValue(input: string): string | null {
@@ -50,7 +60,7 @@ function toValue(input: string): string | null {
   return trimmed === '' ? null : trimmed
 }
 
-/** 설정 화면. M1에서 실제로 동작하는 유일한 단계 화면이다. */
+/** 설정 화면. 화면 언어, 계정, Claude Code 연결, 앱 업데이트. */
 export function Settings({
   settings,
   busy,
@@ -58,6 +68,7 @@ export function Settings({
   checkResult,
   onSave,
   onCheck,
+  onLanguageChange,
   auth,
   usage,
   onAuthRefresh,
@@ -75,12 +86,32 @@ export function Settings({
   onAppUpdateCancel,
   onAppUpdateInstall
 }: Props): React.JSX.Element {
+  const { language, t } = useI18n()
   const [cliPath, setCliPath] = useState(settings.cliPath ?? '')
   const [configDir, setConfigDir] = useState(settings.claudeConfigDir ?? '')
 
   return (
     <div>
-      <h2 className="screen-title">설정</h2>
+      <h2 className="screen-title">{t.settings.title}</h2>
+
+      <div className="card">
+        <h3>{t.settings.language}</h3>
+        <select
+          className="language-setting"
+          value={language}
+          aria-label={t.settings.language}
+          onChange={(event) => {
+            const next = event.target.value
+            if (isUiLanguage(next)) onLanguageChange(next)
+          }}
+        >
+          {UI_LANGUAGES.map((item) => (
+            <option key={item} value={item}>
+              {UI_LANGUAGE_NAME[item]}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <AccountCard
         auth={auth}
@@ -93,57 +124,57 @@ export function Settings({
       />
 
       <div className="card">
-        <h3>Claude Code 연결</h3>
+        <h3>{t.claudeCode.title}</h3>
 
         <dl className="dl" style={{ marginBottom: 'var(--space-3)' }}>
-          <dt>실행 파일</dt>
-          <dd>{cli === null ? '확인 중…' : (cli.executable?.path ?? '찾지 못함')}</dd>
-          <dt>출처</dt>
-          <dd>{cli?.executable ? SOURCE_LABEL[cli.executable.source] : '-'}</dd>
-          <dt>버전</dt>
+          <dt>{t.claudeCode.executable}</dt>
+          <dd>{cli === null ? t.claudeCode.checking : (cli.executable?.path ?? t.claudeCode.notFound)}</dd>
+          <dt>{t.claudeCode.source}</dt>
+          <dd>{cli?.executable ? sourceLabel(cli.executable.source, t) : '-'}</dd>
+          <dt>{t.claudeCode.version}</dt>
           <dd>
-            {cli === null ? '-' : (cli.version ?? (cli.runError ? `실행하지 못함 (${cli.runError})` : '실행하지 못함'))}
-            {cli?.requiredVersion ? <span className="hint"> · 최소 {cli.requiredVersion}</span> : null}
+            {cli === null
+              ? '-'
+              : (cli.version ?? (cli.runError ? t.claudeCode.cannotRunWith(cli.runError) : t.claudeCode.cannotRun))}
+            {cli?.requiredVersion ? <span className="hint">{t.claudeCode.minVersion(cli.requiredVersion)}</span> : null}
           </dd>
         </dl>
-        {cli?.meetsRequired === false ? (
-          <p className="hint field-error">버전이 낮습니다. [업데이트 확인]을 누르세요.</p>
-        ) : null}
+        {cli?.meetsRequired === false ? <p className="hint field-error">{t.claudeCode.versionTooLow}</p> : null}
         <div className="row" style={{ marginBottom: 'var(--space-4)' }}>
           <button
             type="button"
             disabled={busy || cliBusy || jobRunning || !cli?.canUpdate}
-            title={jobRunning ? '작업이 끝난 뒤에 업데이트할 수 있습니다' : undefined}
+            title={jobRunning ? t.claudeCode.updateAfterJob : undefined}
             onClick={onCliUpdate}
           >
-            {cliBusy ? '진행 중…' : '업데이트 확인'}
+            {cliBusy ? t.claudeCode.inProgress : t.claudeCode.checkUpdate}
           </button>
           {cli && (!cli.executable || cli.version === null) && cli.canInstall ? (
             <button type="button" className="primary" disabled={busy || cliBusy} onClick={onCliInstall}>
-              Claude Code 설치
+              {t.claudeCode.install}
             </button>
           ) : null}
         </div>
 
         <div className="field">
-          <label htmlFor="cli-path">실행 파일 경로</label>
+          <label htmlFor="cli-path">{t.claudeCode.executablePath}</label>
           <input
             id="cli-path"
             className="mono"
             value={cliPath}
             onChange={(event) => setCliPath(event.target.value)}
-            placeholder="비워 두면 자동으로 찾습니다"
+            placeholder={t.claudeCode.executablePathPlaceholder}
           />
         </div>
 
         <div className="field">
-          <label htmlFor="config-dir">설정 폴더</label>
+          <label htmlFor="config-dir">{t.claudeCode.configDir}</label>
           <input
             id="config-dir"
             className="mono"
             value={configDir}
             onChange={(event) => setConfigDir(event.target.value)}
-            placeholder="비워 두면 CLAUDE_CONFIG_DIR 또는 ~/.claude"
+            placeholder={t.claudeCode.configDirPlaceholder}
           />
         </div>
 
@@ -156,16 +187,16 @@ export function Settings({
               onSave({ cliPath: toValue(cliPath), claudeConfigDir: toValue(configDir) })
             }
           >
-            저장
+            {t.claudeCode.save}
           </button>
           <button type="button" disabled={busy || checking} onClick={onCheck}>
-            {checking ? '확인 중…' : '연결 확인'}
+            {checking ? t.claudeCode.checking : t.claudeCode.check}
           </button>
         </div>
 
         {checkResult?.ok ? (
           <div className="message ok">
-            <strong>연결됨</strong>
+            <strong>{t.claudeCode.connected}</strong>
             {checkResult.account.email ? ` · ${checkResult.account.email}` : ''}
           </div>
         ) : null}
@@ -173,9 +204,7 @@ export function Settings({
         {checkResult && !checkResult.ok ? (
           <div className="message error">
             <strong>{checkResult.error.message}</strong>
-            {checkResult.error.kind === 'auth-failed' ? (
-              <p className="hint">계정 카드에서 로그인하거나, 로그인한 설정 폴더를 지정하세요.</p>
-            ) : null}
+            {checkResult.error.kind === 'auth-failed' ? <p className="hint">{t.claudeCode.authFailedHint}</p> : null}
             {checkResult.error.detail ? <pre>{checkResult.error.detail}</pre> : null}
           </div>
         ) : null}

@@ -1,5 +1,6 @@
 import type { ExportLanguageView, ExportLocale, UnityLocaleInfo } from '@shared/schema/export'
 import { UNITY_ENGLISH_NAMES } from './unity-locale-names'
+import type { Messages } from '@shared/i18n'
 
 const NAMES_BY_LOWER: ReadonlyMap<string, string> = new Map(
   Object.entries(UNITY_ENGLISH_NAMES).map(([code, name]) => [code.toLowerCase(), name])
@@ -52,7 +53,8 @@ export function resolveLocales(
   languages: readonly string[],
   sourceLanguage: string,
   settings: Readonly<Record<string, ExportLocale>>,
-  unityLocales: readonly UnityLocaleInfo[] | null
+  unityLocales: readonly UnityLocaleInfo[] | null,
+  t: Messages
 ): ResolvedLocales {
   const warnings: string[] = []
   const locales = languages.map((language): ExportLanguageView => {
@@ -75,7 +77,7 @@ export function resolveLocales(
     const unityLocale =
       unityLocales?.find((locale) => locale.code.toLowerCase() === unityLocaleCode.toLowerCase()) ?? null
     if (unityLocales && !unityLocale) {
-      warnings.push(`Unity 프로젝트에 ${unityLocaleCode} 로케일이 없습니다(${language}). Unity 는 이 열을 가져오지 않습니다.`)
+      warnings.push(t.exportCheck.missingUnityLocale(unityLocaleCode, language))
     }
 
     return {

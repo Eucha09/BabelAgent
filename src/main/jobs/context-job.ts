@@ -3,7 +3,7 @@ import { buildContextBatchPrompt, buildContextSystemPrompt, CONTEXT_TOOL } from 
 import { CONTEXT_INPUT_SHAPE, judgeContext, toSuggestion, type SuggestionRules } from '@core/context/submission'
 import { knownUiTypes, selectContextTargets, type ContextTarget } from '@core/context/targets'
 import { buildBatches, clampConcurrency } from '@core/translate/batches'
-import type { ContextField, StartContextInput } from '@shared/schema/context'
+import type { StartContextInput } from '@shared/schema/context'
 import type { JobView } from '@shared/schema/jobs'
 import type { OpenProject } from '@shared/schema/project'
 import { fail, ok, type IpcResult } from '@shared/types'
@@ -12,6 +12,7 @@ import { CONTEXT_SUGGESTIONS_FILE, loadContextSuggestions, loadMaster, writeCont
 import { logSubmitFailure, runAgentBatch, type AgentJobContext } from './agent-batch'
 import { ensureNoRunningJob, launchJob, makeLog, type JobSink } from './runner'
 import type { BatchOutcome } from './scheduler'
+import { msg } from '../i18n'
 
 type ContextBatch = { id: number; size: number; targets: ContextTarget[] }
 
@@ -23,17 +24,11 @@ type ContextJobContext = AgentJobContext & {
   written: (file: string) => void
 }
 
-const FIELD_LABEL: Record<ContextField, string> = {
-  context: '컨텍스트',
-  ui_type: 'UI 유형',
-  max_len: '최대 길이',
-  vars: '변수 설명'
-}
 
 async function runContextBatch(ctx: ContextJobContext, batch: ContextBatch, signal: AbortSignal): Promise<BatchOutcome> {
   const batchId = batch.id
-  const label = `배치 ${batchId}`
-  ctx.log({ level: 'info', batchId, message: `${label} 시작 (${batch.targets.length}행)` })
+  const label = msg().jobLog.batch(batchId)
+  ctx.log({ level: 'info', batchId, message: msg().jobLog.batchStart(label, batch.targets.length) })
 
   const byKey = new Map(batch.targets.map((target) => [target.row.key, target]))
   const result = await runAgentBatch({
@@ -64,10 +59,10 @@ async function runContextBatch(ctx: ContextJobContext, batch: ContextBatch, sign
               ? {
                   level: 'warn',
                   batchId,
-                  message: `${label} · ${CONTEXT_TOOL} → ${event.count}행 통과 · 문제가 남은 ${event.remarkCount}건은 버림(다시 실행하면 그 행만 돈다)`,
+                  message: msg().jobLog.passedRowsDropped(label, CONTEXT_TOOL, event.count, event.remarkCount),
                   ...(event.remarks ? { detail: event.remarks } : {})
                 }
-              : { level: 'ok', batchId, message: `${label} · ${CONTEXT_TOOL} → ${event.count}행 통과` }
+              : { level: 'ok', batchId, message: msg().jobLog.passedRows(label, CONTEXT_TOOL, event.count) }
           )
         }
       )
@@ -82,8 +77,8 @@ async function runContextBatch(ctx: ContextJobContext, batch: ContextBatch, sign
   if (suggestions.length > 0) {
     const write = writeContextSuggestions(ctx.dir, suggestions)
     if (!write.ok) {
-      ctx.log({ level: 'error', batchId, message: `${label} 기록 실패`, detail: write.error.message })
-      return { kind: 'failed', reason: '제안 파일에 기록하지 못했습니다.', detail: write.error.message }
+      ctx.log({ level: 'error', batchId, message: msg().jobLog.writeFailed(label), detail: write.error.message })
+      return { kind: 'failed', reason: msg().jobLog.suggestionsWriteFailed, detail: write.error.message }
     }
     ctx.written(CONTEXT_SUGGESTIONS_FILE)
   }
@@ -91,7 +86,7 @@ async function runContextBatch(ctx: ContextJobContext, batch: ContextBatch, sign
   ctx.log({
     level: 'ok',
     batchId,
-    message: `${label} 제안 기록 (${suggestions.length}행)${empty > 0 ? ` · 낼 값이 없던 ${empty}행` : ''}`
+    message: `${msg().jobLog.suggestionsWritten(label, suggestions.length)}${empty > 0 ? msg().jobLog.suggestionsEmpty(empty) : ''}`
   })
   return { kind: 'done', written: suggestions.length }
 }
@@ -112,8 +107,8 @@ export function startContextJob(
 
   const master = loadMaster(dir)
   if (!master.ok) return master
-  if (master.value.rows.length === 0) return fail('invalid-input', '원문이 없습니다.')
-  if (input.scope === 'selected' && input.keys.length === 0) return fail('invalid-input', '선택한 행이 없습니다.')
+  if (master.value.rows.length === 0) return fail('invalid-input', msg().jobLog.noSource)
+  if (input.scope === 'selected' && input.keys.length === 0) return fail('invalid-input', msg().jobLog.noRowsSelected)
 
   const pending = loadContextSuggestions(dir)
   if (!pending.ok) return pending
@@ -127,8 +122,8 @@ export function startContextJob(
     return fail(
       'invalid-input',
       skippedPending.length > 0
-        ? `추정할 행이 없습니다. 승인을 기다리는 제안이 ${skippedPending.length}행 있습니다.`
-        : '고른 필드가 모두 채워져 있어 추정할 행이 없습니다.'
+        ? msg().jobLog.nothingButPending(skippedPending.length)
+        : msg().jobLog.nothingToInfer
     )
   }
 
@@ -145,16 +140,16 @@ export function startContextJob(
   })
   const concurrency = clampConcurrency(config.batch.concurrency)
   const { model, effort } = config.translate
-  const fields = input.fields.map((field) => FIELD_LABEL[field]).join('·')
+  const fields = input.fields.map((field) => msg().contextScreen.field[field]).join('·')
   const view: Omit<JobView, 'snapshot'> = {
     id: randomUUID(),
     kind: 'context',
     language: null,
-    summary: `${fields} · ${input.scope === 'selected' ? '선택 행' : '빈 칸 있는 행'}`,
+    summary: `${fields} · ${input.scope === 'selected' ? msg().contextScreen.scopeSelected : msg().contextScreen.scopeEmpty}`,
     model,
     effort,
     startedAt: new Date().toISOString(),
-    notes: skippedPending.length > 0 ? [`제안 대기 ${skippedPending.length}행 제외`] : []
+    notes: skippedPending.length > 0 ? [msg().jobLog.pendingSkippedNote(skippedPending.length)] : []
   }
 
   const log = makeLog(sink)
@@ -174,10 +169,10 @@ export function startContextJob(
   log({
     level: 'info',
     batchId: null,
-    message: `컨텍스트 추정 시작: ${fields} · ${targets.length}행 · 배치 ${batches.length}개 · 작업자 ${concurrency} · 모델 ${model} · 사고 ${effort}`
+    message: msg().jobLog.contextStart(fields, targets.length, batches.length, concurrency, model, effort)
   })
   if (skippedPending.length > 0) {
-    log({ level: 'info', batchId: null, message: `승인을 기다리는 제안이 있는 ${skippedPending.length}행은 건너뜁니다.` })
+    log({ level: 'info', batchId: null, message: msg().jobLog.pendingSkipped(skippedPending.length) })
   }
 
   return ok(launchJob({ view, batches, run: (batch, signal) => runContextBatch(context, batch, signal), concurrency, sink }))

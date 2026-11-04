@@ -13,6 +13,7 @@ import { appendGlossaryCandidates, GLOSSARY_FILE, loadAllGlossaryTerms, loadMast
 import { logSubmitFailure, runAgentBatch, type AgentJobContext } from './agent-batch'
 import { ensureNoRunningJob, launchJob, makeLog, type JobSink } from './runner'
 import type { BatchOutcome } from './scheduler'
+import { msg } from '../i18n'
 
 type TermsBatch = TranslateBatch & { size: number }
 
@@ -24,21 +25,21 @@ type TermsJobContext = AgentJobContext & {
 
 async function runTermsBatch(ctx: TermsJobContext, batch: TermsBatch, signal: AbortSignal): Promise<BatchOutcome> {
   const batchId = batch.id
-  const label = `배치 ${batchId}`
+  const label = msg().jobLog.batch(batchId)
   const sources = batch.rows.map((row) => row.source)
 
   // 배치마다 다시 읽는다 — 앞 배치가 붙인 후보와 그 사이 사람이 더한 용어를 다시 내지 않게
   const all = loadAllGlossaryTerms(ctx.dir)
   if (!all.ok) {
-    ctx.log({ level: 'error', batchId, message: `${label} 용어집을 읽지 못했습니다`, detail: all.error.message })
-    return { kind: 'failed', reason: '용어집을 읽지 못했습니다.', detail: all.error.message }
+    ctx.log({ level: 'error', batchId, message: msg().jobLog.glossaryUnreadableLog(label), detail: all.error.message })
+    return { kind: 'failed', reason: msg().jobLog.glossaryUnreadable, detail: all.error.message }
   }
   const terms = all.value.map((term) => ({ term }))
   const known = new Set<string>()
   for (const text of sources) {
     for (const found of findTermsInSource(text, terms, ctx.sourceLanguage)) known.add(found.term)
   }
-  ctx.log({ level: 'info', batchId, message: `${label} 시작 (${batch.rows.length}행) · 이미 있는 용어 ${known.size}개` })
+  ctx.log({ level: 'info', batchId, message: msg().jobLog.termsBatchStart(label, batch.rows.length, known.size) })
 
   const result = await runAgentBatch({
     ctx,
@@ -75,10 +76,10 @@ async function runTermsBatch(ctx: TermsJobContext, batch: TermsBatch, signal: Ab
               ? {
                   level: 'warn',
                   batchId,
-                  message: `${label} · ${TERMS_TOOL} → 후보 ${event.count}개 통과 · 문제가 남은 ${event.remarkCount}건은 버림`,
+                  message: msg().jobLog.candidatesPassedDropped(label, TERMS_TOOL, event.count, event.remarkCount),
                   ...(event.remarks ? { detail: event.remarks } : {})
                 }
-              : { level: 'ok', batchId, message: `${label} · ${TERMS_TOOL} → 후보 ${event.count}개 통과` }
+              : { level: 'ok', batchId, message: msg().jobLog.candidatesPassed(label, TERMS_TOOL, event.count) }
           )
         }
       )
@@ -88,15 +89,15 @@ async function runTermsBatch(ctx: TermsJobContext, batch: TermsBatch, signal: Ab
   // 병렬 배치가 같은 용어를 냈을 수 있다. 기록할 때 다시 읽어 먼저 기록된 쪽만 남긴다.
   const write = appendGlossaryCandidates(ctx.dir, result.items, ctx.targetLanguages)
   if (!write.ok) {
-    ctx.log({ level: 'error', batchId, message: `${label} 기록 실패`, detail: write.error.message })
-    return { kind: 'failed', reason: '용어집에 기록하지 못했습니다.', detail: write.error.message }
+    ctx.log({ level: 'error', batchId, message: msg().jobLog.writeFailed(label), detail: write.error.message })
+    return { kind: 'failed', reason: msg().jobLog.glossaryWriteFailed, detail: write.error.message }
   }
   const { added, existing } = write.value
   if (added.length > 0) ctx.written(GLOSSARY_FILE)
   ctx.log({
     level: 'ok',
     batchId,
-    message: `${label} 후보 ${added.length}개 추가(승인 대기)${existing.length > 0 ? ` · 다른 배치와 겹친 ${existing.length}개는 뺌` : ''}`,
+    message: `${msg().jobLog.candidatesAdded(label, added.length)}${existing.length > 0 ? msg().jobLog.overlapped(existing.length) : ''}`,
     ...(added.length > 0 ? { detail: added.join(', ') } : {})
   })
   return { kind: 'done', written: added.length }
@@ -118,12 +119,12 @@ export function startTermsJob(
 
   const master = loadMaster(dir)
   if (!master.ok) return master
-  if (input.scope === 'selected' && input.keys.length === 0) return fail('invalid-input', '선택한 행이 없습니다.')
+  if (input.scope === 'selected' && input.keys.length === 0) return fail('invalid-input', msg().jobLog.noRowsSelected)
   const selected = new Set(input.keys)
   const rows = master.value.rows.filter(
     (row) => row.source.trim() !== '' && (input.scope === 'all' || selected.has(row.key))
   )
-  if (rows.length === 0) return fail('invalid-input', '용어를 찾을 원문이 없습니다.')
+  if (rows.length === 0) return fail('invalid-input', msg().jobLog.noSourceForTerms)
 
   const batches: TermsBatch[] = buildBatches(rows, config.batch).map((batch) => ({ ...batch, size: batch.rows.length }))
   const concurrency = clampConcurrency(config.batch.concurrency)
@@ -132,7 +133,7 @@ export function startTermsJob(
     id: randomUUID(),
     kind: 'terms',
     language: null,
-    summary: input.scope === 'selected' ? '선택 행' : '전체 원문',
+    summary: input.scope === 'selected' ? msg().glossaryScreen.scopeSelected : msg().glossaryScreen.scopeAll,
     model,
     effort,
     startedAt: new Date().toISOString(),
@@ -155,7 +156,7 @@ export function startTermsJob(
   log({
     level: 'info',
     batchId: null,
-    message: `용어 추출 시작: ${view.summary} · ${rows.length}행 · 배치 ${batches.length}개 · 작업자 ${concurrency} · 모델 ${model} · 사고 ${effort}`
+    message: msg().jobLog.termsStart(view.summary, rows.length, batches.length, concurrency, model, effort)
   })
 
   return ok(launchJob({ view, batches, run: (batch, signal) => runTermsBatch(context, batch, signal), concurrency, sink }))

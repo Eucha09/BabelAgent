@@ -1,7 +1,10 @@
 import { join } from 'node:path'
 import { BrowserWindow, app, shell } from 'electron'
+import { UI_LANGUAGE_ARG, resolveUiLanguage } from '@shared/i18n/languages'
 import { cancelLogin } from './agent/auth'
+import { setUiLanguage, uiLanguage } from './i18n'
 import { registerIpc } from './ipc'
+import { loadAppSettings } from './store/app-settings'
 import { initAppUpdate } from './update/app-update'
 
 const devUrl = process.env['ELECTRON_RENDERER_URL']
@@ -44,7 +47,9 @@ function createWindow(): void {
       // 렌더러는 preload가 노출한 IPC로만 메인과 통신한다
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      // 설정을 읽기 전 첫 화면(Claude Code 확인 창)부터 화면 언어로 그리게 preload 에 넘긴다
+      additionalArguments: [`${UI_LANGUAGE_ARG}${uiLanguage()}`]
     }
   })
 
@@ -72,7 +77,15 @@ function createWindow(): void {
   }
 }
 
+/** OS 표시 언어(선호 순). Windows 는 표시 언어 목록을 준다. 비었으면 앱 로캘 하나로 본다 */
+function systemLanguages(): string[] {
+  const preferred = app.getPreferredSystemLanguages()
+  return preferred.length > 0 ? preferred : [app.getLocale()]
+}
+
 void app.whenReady().then(() => {
+  // 화면 언어: 설정에서 고른 값, 없으면 OS 표시 언어. 창과 메인의 문구가 같은 값을 쓴다
+  setUiLanguage(resolveUiLanguage(loadAppSettings().uiLanguage, systemLanguages()))
   registerIpc()
   initAppUpdate()
   createWindow()

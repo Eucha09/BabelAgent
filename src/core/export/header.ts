@@ -1,4 +1,5 @@
 import type { ExportColumnView, ExportLanguageView, TemplateColumn } from '@shared/schema/export'
+import type { Messages } from '@shared/i18n'
 
 /** Unity CSV 확장(KeyIdColumns)의 기본 열 이름 */
 export const KEY_COLUMN = 'Key'
@@ -99,10 +100,10 @@ export function templateColumns(
 }
 
 /** 내보내기를 막는 열 문제: Key 열 없음, 빈 이름, 겹치는 이름, 역할이 겹치는 열. */
-export function columnProblems(columns: readonly ExportColumnView[]): string[] {
+export function columnProblems(columns: readonly ExportColumnView[], t: Messages): string[] {
   const problems: string[] = []
-  if (!columns.some((column) => column.role === 'key')) problems.push(`${KEY_COLUMN} 열이 없습니다. Unity 는 키 열 없이 가져오지 못합니다.`)
-  if (columns.some((column) => column.name.trim() === '')) problems.push('이름이 빈 열이 있습니다.')
+  if (!columns.some((column) => column.role === 'key')) problems.push(t.exportCheck.noKeyColumn(KEY_COLUMN))
+  if (columns.some((column) => column.name.trim() === '')) problems.push(t.exportCheck.emptyColumnName)
 
   const seenNames = new Set<string>()
   const duplicateNames = new Set<string>()
@@ -115,7 +116,7 @@ export function columnProblems(columns: readonly ExportColumnView[]): string[] {
     if (seenRoles.has(role)) duplicateRoles.add(column.name)
     seenRoles.add(role)
   }
-  if (duplicateNames.size > 0) problems.push(`열 이름이 겹칩니다: ${[...duplicateNames].join(', ')}`)
-  if (duplicateRoles.size > 0) problems.push(`같은 내용을 두 번 쓰는 열이 있습니다: ${[...duplicateRoles].join(', ')}`)
+  if (duplicateNames.size > 0) problems.push(t.exportCheck.duplicateColumnNames([...duplicateNames].join(', ')))
+  if (duplicateRoles.size > 0) problems.push(t.exportCheck.duplicateRoles([...duplicateRoles].join(', ')))
   return problems
 }

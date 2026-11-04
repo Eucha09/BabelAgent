@@ -1,6 +1,7 @@
 import type { TranslationStatus } from '@shared/schema/project'
 import type { TranslationRow } from '@shared/schema/strings'
 import type { MasterSource } from './translate/merge'
+import type { Messages } from '@shared/i18n'
 
 /**
  * 사람이 검토 화면에서 행 하나를 고칠 때의 상태 전이 판정. 상태도는 docs/data-format.md.
@@ -18,13 +19,6 @@ export type ManualUpdate = {
 
 export type ManualUpdateResult = { ok: true; row: TranslationRow } | { ok: false; reason: string }
 
-const LABEL: Record<TranslationStatus, string> = {
-  untranslated: '미번역',
-  draft: '초안',
-  review: '검토',
-  approved: '승인',
-  stale: '원문변경'
-}
 
 /**
  * - 글을 비우면 미번역이 된다. 빈 글을 다른 상태로 둘 수 없고, 글이 있는 행을 미번역으로 둘 수도 없다.
@@ -38,7 +32,8 @@ export function applyManualUpdate(
   key: string,
   previous: TranslationRow | undefined,
   update: ManualUpdate,
-  master: MasterSource
+  master: MasterSource,
+  t: Messages
 ): ManualUpdateResult {
   const previousText = previous?.text ?? ''
   const previousStatus = previous?.status ?? 'untranslated'
@@ -47,13 +42,13 @@ export function applyManualUpdate(
   const statusChanged = update.status !== previousStatus
 
   if (update.status === 'stale' && (previousStatus !== 'stale' || textChanged)) {
-    return { ok: false, reason: '원문변경(stale)은 원문이 바뀔 때만 붙습니다. 번역을 고치면 초안으로 바뀝니다.' }
+    return { ok: false, reason: t.statusCheck.staleManual }
   }
   if (empty && update.status !== 'untranslated') {
-    return { ok: false, reason: `빈 번역은 ${LABEL[update.status]} 상태로 둘 수 없습니다. 비우면 미번역이 됩니다.` }
+    return { ok: false, reason: t.statusCheck.emptyWithStatus(t.status[update.status]) }
   }
   if (!empty && update.status === 'untranslated') {
-    return { ok: false, reason: '번역문이 있는 행은 미번역 상태로 둘 수 없습니다.' }
+    return { ok: false, reason: t.statusCheck.textAsUntranslated }
   }
 
   const rebase = empty || textChanged || statusChanged

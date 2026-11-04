@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { JobLogEntry } from '@shared/schema/jobs'
 import type { StyleRuleChange } from '@shared/schema/project'
+import { useT } from '../i18n'
 import { JobLog } from './JobLog'
 
 /**
@@ -29,11 +30,6 @@ export type ChatTurn = {
   rule?: RuleCard
 }
 
-const RULE_TITLE: Record<StyleRuleChange['op'], string> = {
-  add: '스타일 규칙 추가 제안',
-  update: '스타일 규칙 수정 제안',
-  remove: '스타일 규칙 삭제 제안'
-}
 
 function RuleProposal({
   card,
@@ -44,11 +40,12 @@ function RuleProposal({
   onSave: () => void
   onDismiss: () => void
 }): React.JSX.Element {
+  const t = useT()
   const { change } = card
   return (
     <div className={`rule-card ${card.state}`}>
       <div className="rule-card-head">
-        <span>{RULE_TITLE[change.op]}</span>
+        <span>{t.agentPanel.ruleTitle[change.op]}</span>
         {change.op !== 'add' ? <code className="token-key">{change.id}</code> : null}
       </div>
       {change.op === 'update' && card.currentText !== null ? <p className="rule-card-before">{card.currentText}</p> : null}
@@ -62,21 +59,23 @@ function RuleProposal({
           {card.error ? <p className="hint field-error">{card.error}</p> : null}
           <div className="row">
             <button type="button" className="primary" onClick={onSave}>
-              {card.state === 'failed' ? '다시 저장' : '저장'}
+              {card.state === 'failed' ? t.agentPanel.saveAgain : t.agentPanel.save}
             </button>
             <button type="button" onClick={onDismiss}>
-              무시
+              {t.agentPanel.dismiss}
             </button>
           </div>
-          <p className="hint">저장하면 다음 번역부터 반영됩니다.</p>
+          <p className="hint">{t.agentPanel.saveHint}</p>
         </>
       ) : (
         <p className="hint">
           {card.state === 'saving'
-            ? '저장 중…'
+            ? t.agentPanel.saving
             : card.state === 'saved'
-              ? `저장했습니다${card.ruleId ? ` (${card.ruleId})` : ''}.`
-              : '무시했습니다.'}
+              ? card.ruleId
+                ? t.agentPanel.savedWithId(card.ruleId)
+                : t.agentPanel.saved
+              : t.agentPanel.dismissed}
         </p>
       )}
     </div>
@@ -113,6 +112,7 @@ export function AgentPanel({
   onRuleSave,
   onRuleDismiss
 }: Props): React.JSX.Element {
+  const t = useT()
   const [draft, setDraft] = useState('')
   const [logOpen, setLogOpen] = useState(false)
 
@@ -130,7 +130,7 @@ export function AgentPanel({
   if (collapsed) {
     return (
       <aside className="agent-panel collapsed">
-        <button type="button" onClick={onToggle} title="에이전트 패널 펼치기">
+        <button type="button" onClick={onToggle} title={t.agentPanel.expand}>
           ◀
         </button>
       </aside>
@@ -151,12 +151,12 @@ export function AgentPanel({
   return (
     <aside className="agent-panel">
       <div className="panel-header">
-        <span>에이전트</span>
+        <span>{t.agentPanel.title}</span>
         <span className="row">
-          <span className="badge" title={sessionId ?? '세션 없음'}>
-            {sessionId ? '세션 유지' : '새 세션'}
+          <span className="badge" title={sessionId ?? t.agentPanel.noSession}>
+            {sessionId ? t.agentPanel.sessionKept : t.agentPanel.newSession}
           </span>
-          <button type="button" onClick={onToggle} title="접기">
+          <button type="button" onClick={onToggle} title={t.agentPanel.collapse}>
             ▶
           </button>
         </span>
@@ -165,7 +165,7 @@ export function AgentPanel({
       {jobLog.length > 0 ? (
         <div className={logOpen ? 'panel-joblog open' : 'panel-joblog'}>
           <button type="button" className="ghost panel-joblog-toggle" onClick={() => setLogOpen((value) => !value)}>
-            {logOpen ? '▾' : '▸'} 작업 로그 {jobRunning ? '· 진행 중' : ''}
+            {logOpen ? '▾' : '▸'} {t.agentPanel.jobLog} {jobRunning ? t.agentPanel.jobRunning : ''}
             <span className="hint">{jobLog.length}</span>
           </button>
           {logOpen ? <JobLog entries={jobLog} limit={80} /> : null}
@@ -175,24 +175,22 @@ export function AgentPanel({
       <div className="chat-log" ref={logRef}>
         {turns.length === 0 ? (
           <p className="hint">
-            {projectOpen
-              ? '프로젝트에 대해 묻거나 지시를 주세요. 예: "앞으로 NPC 대사는 반말로"'
-              : '프로젝트를 열면 에이전트를 사용할 수 있습니다.'}
+            {projectOpen ? t.agentPanel.emptyOpen : t.agentPanel.emptyClosed}
           </p>
         ) : null}
         {turns.map((turn) =>
           turn.role === 'rule' && turn.rule ? (
             isOpen(turn.rule) ? (
               <div key={turn.id} className="chat-tool">
-                <span className="chat-tool-label">규칙</span>
-                <span>{RULE_TITLE[turn.rule.change.op]} — 아래 카드에서 확인</span>
+                <span className="chat-tool-label">{t.agentPanel.ruleLabel}</span>
+                <span>{t.agentPanel.ruleSeeCard(t.agentPanel.ruleTitle[turn.rule.change.op])}</span>
               </div>
             ) : (
               <RuleProposal key={turn.id} card={turn.rule} onSave={() => onRuleSave(turn.id)} onDismiss={() => onRuleDismiss(turn.id)} />
             )
           ) : turn.role === 'tool' ? (
             <div key={turn.id} className={turn.ok === false ? 'chat-tool failed' : 'chat-tool'}>
-              <span className="chat-tool-label">도구</span>
+              <span className="chat-tool-label">{t.agentPanel.toolLabel}</span>
               <span className="mono">{turn.text}</span>
             </div>
           ) : (
@@ -218,9 +216,7 @@ export function AgentPanel({
         <textarea
           rows={3}
           value={draft}
-          placeholder={
-            projectOpen ? '메시지를 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)' : '프로젝트를 먼저 열어주세요'
-          }
+          placeholder={projectOpen ? t.agentPanel.placeholder : t.agentPanel.placeholderClosed}
           disabled={!projectOpen || sending}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
@@ -235,10 +231,10 @@ export function AgentPanel({
         />
         <div className="row">
           <button type="button" className="primary" disabled={!canSend} onClick={send}>
-            전송
+            {t.agentPanel.send}
           </button>
           <button type="button" disabled={!sending} onClick={onCancel}>
-            취소
+            {t.common.cancel}
           </button>
         </div>
       </div>

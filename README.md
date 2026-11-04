@@ -12,6 +12,7 @@
 - **번역**: 배치 번역(동시 작업자, 사용량 한도 대기·재개), 행 단위 재번역, 스타일 규칙
 - **검토/QA**: Unity Smart Strings 토크나이저로 변수·중괄호 검사, 리치 텍스트 태그, 최대 길이, 용어집 위반을 오류/경고로 구분
 - **내보내기**: Unity Localization CSV 를 템플릿 없이 자동 생성(`Key`, `Id`, 언어별 열). Unity 프로젝트를 연결하면 로케일 코드와 기존 키 Id 를 읽어 오고, Smart 항목 목록과 폰트 아틀라스용 글자 목록도 함께 씁니다
+- **화면 언어**: 한국어·English. 처음에는 Windows 표시 언어를 따르고, 설정 화면에서 바꿀 수 있습니다
 
 프로젝트는 폴더 하나이고 CSV 가 원본입니다(`project.json`, `strings_master.csv`, `translations_{언어}.csv`, `glossary.csv`). 엑셀이나 버전 관리 도구로 그대로 다룰 수 있습니다.
 

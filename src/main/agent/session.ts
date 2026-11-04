@@ -9,6 +9,7 @@ import type {
 } from '@shared/schema/agent'
 import { resolveClaudeExecutable } from './claude-cli'
 import { loadAgentSdk } from './sdk'
+import { msg } from '../i18n'
 
 const STDERR_TAIL_LIMIT = 4000
 const CHECK_TIMEOUT_MS = 20_000
@@ -49,26 +50,19 @@ function tail(buffer: string): string | undefined {
   return trimmed.length > STDERR_TAIL_LIMIT ? trimmed.slice(-STDERR_TAIL_LIMIT) : trimmed
 }
 
-const MESSAGES: Record<AgentErrorKind, string> = {
-  'cli-not-found': 'Claude Code CLI를 찾을 수 없습니다. 설정 화면에서 실행 파일 경로를 지정하세요.',
-  'auth-failed':
-    'Claude Code 계정 인증에 실패했습니다. 아래 설정 폴더에 로그인 정보가 없거나 만료됐습니다.',
-  'sdk-load-failed': 'Agent SDK를 불러오지 못했습니다. 설치가 손상되었을 수 있습니다.',
-  aborted: '요청을 취소했습니다.',
-  unknown: '에이전트 실행 중 오류가 발생했습니다.'
-}
 
 /** 인증 오류에는 어느 설정 폴더를 봤는지 붙인다. 이것만 알아도 원인 절반이 잡힌다. */
 function annotateConfigDir(error: AgentError, configDir: string): AgentError {
   if (error.kind !== 'auth-failed') return error
-  const note = `설정 폴더: ${configDir}`
+  const note = msg().errors.configDir(configDir)
   return { ...error, detail: error.detail ? `${note}
 ${error.detail}` : note }
 }
 
 function buildError(kind: AgentErrorKind, detail?: string): AgentError {
-  if (detail === undefined) return { kind, message: MESSAGES[kind] }
-  return { kind, message: MESSAGES[kind], detail }
+  const message = msg().errors.agent[kind]
+  if (detail === undefined) return { kind, message }
+  return { kind, message, detail }
 }
 
 /** 예외와 stderr를 보고 원인을 좁힌다. 사용자가 다음 행동을 알 수 있어야 한다. */
@@ -125,13 +119,13 @@ export async function checkAgent(
     }
   }
 
-  const query = sdk.query({ prompt: '연결 확인', options })
+  const query = sdk.query({ prompt: 'Connection check', options })
   try {
     const info = await Promise.race([
       query.accountInfo(),
       new Promise<never>((_resolve, reject) =>
         setTimeout(
-          () => reject(new Error('계정 정보 조회가 20초 안에 끝나지 않았습니다.')),
+          () => reject(new Error(msg().errors.accountTimeout)),
           CHECK_TIMEOUT_MS
         )
       )
@@ -271,7 +265,7 @@ export async function runChat(
         if (message.subtype === 'success') {
           emit.end(sessionId, Date.now() - startedAt)
         } else {
-          emitError(new Error(`결과 상태: ${message.subtype}`))
+          emitError(new Error(msg().errors.resultStatus(message.subtype)))
         }
         return
       }

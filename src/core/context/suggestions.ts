@@ -8,6 +8,7 @@ import {
 } from '@shared/schema/context'
 import type { MasterRow } from '@shared/schema/strings'
 import { parseVarsMeta } from '../qa/vars'
+import type { Messages } from '@shared/i18n'
 
 /** context_suggestions.csv 레코드를 제안 행으로. 키가 겹치면 뒤의 행(나중 제안)을 쓴다. */
 export function toSuggestions(records: readonly Readonly<Record<string, string>>[]): ContextSuggestion[] {
@@ -67,13 +68,13 @@ export function removeSuggestions(existing: readonly ContextSuggestion[], keys: 
  * 원문 열에 쓸 값인지. 빈 값은 "적용하지 않음"이라 통과한다.
  * max_len 은 양의 정수, vars 는 vars 열 형식(JSON 배열)이어야 한다.
  */
-export function fieldValueProblem(field: ContextField, value: string): string | null {
+export function fieldValueProblem(field: ContextField, value: string, t: Messages): string | null {
   const trimmed = value.trim()
   if (trimmed === '') return null
-  if (field === 'max_len' && !/^[1-9]\d*$/.test(trimmed)) return '최대 길이는 1 이상의 정수여야 합니다.'
+  if (field === 'max_len' && !/^[1-9]\d*$/.test(trimmed)) return t.contextCheck.maxLenInteger
   if (field === 'vars') {
     const parsed = parseVarsMeta(trimmed)
-    if (!parsed.ok) return `vars 형식이 올바르지 않습니다: ${parsed.reason}`
+    if (!parsed.ok) return t.contextCheck.varsInvalid(parsed.reason)
   }
   return null
 }
@@ -86,7 +87,11 @@ export type ApplySuggestionsResult = ApplyContextResult & { rows: MasterRow[] }
  * - 화면이 본 뒤 원문 행의 그 칸이 바뀌었으면 행 전체를 건너뛴다. 사람이 쓴 값을 덮지 않는다
  * - 원문 텍스트·키·해시는 건드리지 않는다. 메타데이터는 stale 을 일으키지 않는다
  */
-export function applySuggestionValues(rows: readonly MasterRow[], items: readonly ApplyContextItem[]): ApplySuggestionsResult {
+export function applySuggestionValues(
+  rows: readonly MasterRow[],
+  items: readonly ApplyContextItem[],
+  t: Messages
+): ApplySuggestionsResult {
   const next = [...rows]
   const indexByKey = new Map(next.map((row, index) => [row.key, index]))
   const applied: string[] = []
@@ -110,7 +115,7 @@ export function applySuggestionValues(rows: readonly MasterRow[], items: readonl
       continue
     }
     const problems = fields.flatMap((field) => {
-      const problem = fieldValueProblem(field, item.values[field] ?? '')
+      const problem = fieldValueProblem(field, item.values[field] ?? '', t)
       return problem ? [problem] : []
     })
     if (problems.length > 0) {

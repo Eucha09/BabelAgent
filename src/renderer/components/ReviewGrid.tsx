@@ -5,8 +5,9 @@ import { parseConfidence } from '@core/review/filter'
 import type { SmartSyntax } from '@core/qa/smart'
 import type { QaDiagnostic } from '@shared/schema/qa'
 import type { StringsRow } from '@shared/schema/strings'
+import { useT } from '../i18n'
 import { useColumnSizing } from '../state/column-sizing'
-import { STATUS_LABEL } from './StringsGrid'
+import { statusLabel } from '../state/labels'
 import { TokenText } from './TokenText'
 
 const ROW_HEIGHT = 34
@@ -37,7 +38,7 @@ const GridStateContext = createContext<GridState | null>(null)
 
 function useGridState(): GridState {
   const state = useContext(GridStateContext)
-  if (!state) throw new Error('ReviewGrid 밖에서 칸을 그렸습니다.')
+  if (!state) throw new Error('ReviewGrid cell rendered outside the grid')
   return state
 }
 
@@ -47,6 +48,7 @@ function SourceCell({ text }: { text: string }): React.JSX.Element {
 }
 
 function TranslationCell({ row }: { row: ReviewRow }): React.JSX.Element {
+  const t = useT()
   const { syntax, editing, disabled, onStartEdit, onEditChange, onCommitEdit, onCancelEdit } = useGridState()
 
   if (editing?.key === row.key) {
@@ -80,12 +82,12 @@ function TranslationCell({ row }: { row: ReviewRow }): React.JSX.Element {
   return (
     <span
       className="grid-text translation-cell"
-      title={disabled ? undefined : '더블클릭하거나 Enter 로 편집'}
+      title={disabled ? undefined : t.grid.editHint}
       onDoubleClick={() => {
         if (!disabled) onStartEdit(row.key)
       }}
     >
-      {row.translation === '' ? <span className="muted">미번역</span> : <TokenText text={row.translation} syntax={syntax} />}
+      {row.translation === '' ? <span className="muted">{t.status.untranslated}</span> : <TokenText text={row.translation} syntax={syntax} />}
     </span>
   )
 }
@@ -99,13 +101,14 @@ function ConfidenceCell({ row }: { row: ReviewRow }): React.JSX.Element {
 }
 
 function QaCell({ diagnostics }: { diagnostics: readonly QaDiagnostic[] }): React.JSX.Element | null {
+  const t = useT()
   const errors = diagnostics.filter((item) => item.severity === 'error').length
   const warnings = diagnostics.length - errors
   if (diagnostics.length === 0) return null
   return (
     <span className="qa-pills" title={diagnostics.map((item) => item.message).join('\n')}>
-      {errors > 0 ? <span className="qa-pill error">오류 {errors}</span> : null}
-      {warnings > 0 ? <span className="qa-pill warning">경고 {warnings}</span> : null}
+      {errors > 0 ? <span className="qa-pill error">{t.grid.errors(errors)}</span> : null}
+      {warnings > 0 ? <span className="qa-pill warning">{t.grid.warnings(warnings)}</span> : null}
     </span>
   )
 }
@@ -133,6 +136,7 @@ export function ReviewGrid({
   onCommitEdit,
   onCancelEdit
 }: Props): React.JSX.Element {
+  const t = useT()
   const scrollRef = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [columnSizing, setColumnSizing] = useColumnSizing(SIZING_KEY)
@@ -141,16 +145,14 @@ export function ReviewGrid({
   const columns = useMemo(
     () => [
       helper.accessor('key', {
-        header: '키',
+        header: t.columns.key,
         size: 116,
         cell: (info) => <span className="token-key grid-text">{info.getValue()}</span>
       }),
       helper.accessor('status', {
-        header: '상태',
+        header: t.grid.status,
         size: 76,
-        cell: (info) => (
-          <span className={`status-badge ${info.getValue()}`}>{STATUS_LABEL[info.getValue()] ?? info.getValue()}</span>
-        )
+        cell: (info) => <span className={`status-badge ${info.getValue()}`}>{statusLabel(info.getValue(), t)}</span>
       }),
       helper.display({
         id: 'qa',
@@ -159,23 +161,23 @@ export function ReviewGrid({
         cell: (info) => <QaCell diagnostics={info.row.original.diagnostics} />
       }),
       helper.accessor('source', {
-        header: '원문',
+        header: t.columns.source,
         size: 200,
         cell: (info) => <SourceCell text={info.getValue()} />
       }),
       helper.accessor('translation', {
         id: 'translation',
-        header: `번역 (${language})`,
+        header: t.grid.translationIn(language),
         size: 222,
         cell: (info) => <TranslationCell row={info.row.original} />
       }),
       helper.accessor('confidence', {
-        header: '신뢰도',
+        header: t.grid.confidence,
         size: 56,
         cell: (info) => <ConfidenceCell row={info.row.original} />
       })
     ],
-    [language]
+    [language, t]
   )
 
   const table = useReactTable({
@@ -259,7 +261,7 @@ export function ReviewGrid({
                 {header.column.getCanResize() ? (
                   <div
                     className={header.column.getIsResizing() ? 'col-resizer active' : 'col-resizer'}
-                    title="끌어서 너비 조절 · 더블클릭하면 기본 너비"
+                    title={t.common.resizeColumn}
                     onMouseDown={header.getResizeHandler()}
                     onTouchStart={header.getResizeHandler()}
                     onDoubleClick={() => header.column.resetSize()}
@@ -270,7 +272,7 @@ export function ReviewGrid({
           </div>
 
           {rows.length === 0 ? (
-            <div className="grid-empty">조건에 맞는 행이 없습니다.</div>
+            <div className="grid-empty">{t.grid.noRows}</div>
           ) : (
             <div style={{ height: `${virtualizer.getTotalSize()}px`, width: totalWidth, position: 'relative' }}>
               {virtualizer.getVirtualItems().map((item) => {

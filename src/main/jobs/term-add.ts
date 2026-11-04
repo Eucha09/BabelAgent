@@ -26,6 +26,8 @@ import { runSubmitSession } from '../agent/submit-session'
 import { createSubmitServer, mcpToolName } from '../agent/tools'
 import { appendGlossaryCandidates, loadAllGlossaryTerms, loadGlossary, loadMaster, loadTranslations } from '../project/store'
 import { MAX_TURNS } from './agent-batch'
+import { msg, uiLanguage } from '../i18n'
+import { UI_LOCALE } from '@shared/i18n'
 
 type Auth = { cliPath: string | null; configDir: string | null }
 type Log = (entry: Omit<JobLogEntry, 'at'>) => void
@@ -41,9 +43,9 @@ export function cancelTermSession(requestId: string): boolean {
 }
 
 function describeReset(resetsAt: number | null): string {
-  if (resetsAt === null) return '잠시 뒤 다시 시도하세요.'
-  const time = new Date(resetsAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-  return `${time}에 풀립니다. 그 뒤에 다시 시도하세요.`
+  if (resetsAt === null) return msg().jobLog.retryLater
+  const time = new Date(resetsAt).toLocaleTimeString(UI_LOCALE[uiLanguage()], { hour: '2-digit', minute: '2-digit' })
+  return msg().jobLog.resetsAt(time)
 }
 
 type TermMaterial = {
@@ -92,13 +94,18 @@ async function runTermEntrySession(
   try {
     sdk = await loadAgentSdk()
   } catch (error) {
-    return fail('agent', 'Agent SDK를 불러오지 못했습니다.', String(error))
+    return fail('agent', msg().errors.sdkLoadFailed, String(error))
   }
 
   log({
     level: 'info',
     batchId: null,
-    message: `${label} 시작 · 원문 ${material.usages.length}행 중 예문 ${material.examples.length}행${input.revision?.instruction.trim() ? ` — 지시: ${input.revision.instruction.trim()}` : ''}`
+    message: msg().jobLog.termStart(
+      label,
+      material.usages.length,
+      material.examples.length,
+      input.revision?.instruction.trim() ? msg().jobLog.instruction(input.revision.instruction.trim()) : ''
+    )
   })
   const submit = createSubmitServer(
     sdk,
@@ -116,7 +123,7 @@ async function runTermEntrySession(
     },
     (event) => {
       if (!event.ok) {
-        log({ level: 'warn', batchId: null, message: `${label} · ${TERM_ENTRY_TOOL} → 검증 실패 (${event.attempt}번째)`, detail: event.problems })
+        log({ level: 'warn', batchId: null, message: msg().jobLog.validationFailedOnce(label, TERM_ENTRY_TOOL, event.attempt), detail: event.problems })
       }
     }
   )
@@ -146,29 +153,29 @@ async function runTermEntrySession(
   if (accepted) return ok(accepted)
 
   if (controller.signal.aborted) {
-    log({ level: 'info', batchId: null, message: `${label} 취소` })
-    return fail('cancelled', '취소했습니다.')
+    log({ level: 'info', batchId: null, message: msg().jobLog.cancelledLog(label) })
+    return fail('cancelled', msg().jobLog.cancelled)
   }
   if (session.limit) {
-    log({ level: 'warn', batchId: null, message: `${label} — 사용량 한도` })
-    return fail('limit', `사용량 한도에 걸렸습니다. ${describeReset(session.limit.resetsAt)}`)
+    log({ level: 'warn', batchId: null, message: msg().jobLog.limitLog(label) })
+    return fail('limit', msg().jobLog.limitHit(describeReset(session.limit.resetsAt)))
   }
   const problems = submit.lastProblems()
   const [message, detail] = problems
-    ? ['에이전트가 낸 항목이 검증을 통과하지 못했습니다.', problems]
+    ? [msg().jobLog.entryRejected, problems]
     : session.agentError
-      ? ['에이전트 실행 중 오류가 났습니다.', session.agentError]
-      : ['에이전트가 항목을 제출하지 않았습니다.', undefined]
+      ? [msg().jobLog.agentFailed, session.agentError]
+      : [msg().jobLog.noEntry, undefined]
   log(
     detail === undefined
-      ? { level: 'error', batchId: null, message: `${label} 실패: ${message}` }
-      : { level: 'error', batchId: null, message: `${label} 실패: ${message}`, detail }
+      ? { level: 'error', batchId: null, message: msg().jobLog.failed(label, message) }
+      : { level: 'error', batchId: null, message: msg().jobLog.failed(label, message), detail }
   )
   return fail('agent', message, detail)
 }
 
 function describeConflicts(conflicts: readonly { language: string; keys: string[] }[]): string {
-  return conflicts.length > 0 ? ` · 기존 번역과 다른 행 ${conflicts.map((item) => `${item.language} ${item.keys.length}`).join(', ')}` : ''
+  return conflicts.length > 0 ? msg().jobLog.conflicts(conflicts.map((item) => `${item.language} ${item.keys.length}`).join(', ')) : ''
 }
 
 /**
@@ -185,20 +192,20 @@ export async function runTermAddition(
 ): Promise<IpcResult<AddTermResult>> {
   const { dir, config } = project
   const term = input.term.trim()
-  if (term === '') return fail('invalid-input', '용어를 입력하세요.')
-  if (config.targetLanguages.length === 0) return fail('invalid-input', '대상 언어가 없습니다. 프로젝트 화면에서 먼저 정하세요.')
+  if (term === '') return fail('invalid-input', msg().jobLog.enterTerm)
+  if (config.targetLanguages.length === 0) return fail('invalid-input', msg().jobLog.noTargets)
 
   const known = loadAllGlossaryTerms(dir)
   if (!known.ok) return known
-  if (known.value.some((item) => termKey(item) === termKey(term))) return fail('invalid-input', `이미 용어집에 있는 용어입니다: ${term}`)
+  if (known.value.some((item) => termKey(item) === termKey(term))) return fail('invalid-input', msg().jobLog.termExists(term))
 
   const material = gatherTermMaterial(project, term)
   if (!material.ok) return material
   if (material.value.usages.length === 0) {
-    return fail('invalid-input', `원문에서 "${term}" 을 찾지 못했습니다. 원문에 나오는 표기 그대로 입력하세요.`)
+    return fail('invalid-input', msg().jobLog.termNotFound(term))
   }
 
-  const label = `용어 추가 "${term}"`
+  const label = msg().jobLog.termAddLabel(term)
   const session = await runTermEntrySession(
     project,
     { requestId: input.requestId, term, hints: { pos: input.pos, note: input.note }, material: material.value, label },
@@ -211,18 +218,18 @@ export async function runTermAddition(
   const written = appendGlossaryCandidates(dir, [candidate], config.targetLanguages)
   if (!written.ok) return written
   // 세션이 도는 사이 누가 같은 용어를 넣었으면 기록하지 않았다
-  if (written.value.added.length === 0) return fail('invalid-input', `그 사이 같은 용어가 용어집에 들어왔습니다: ${term}`)
+  if (written.value.added.length === 0) return fail('invalid-input', msg().jobLog.termAddedMeanwhile(term))
 
   const view = loadGlossary(dir, config.targetLanguages)
   if (!view.ok) return view
   const entry = view.value.entries.find((item) => termKey(item.term) === termKey(term))
-  if (!entry) return fail('unknown', '추가한 용어를 다시 읽지 못했습니다.')
+  if (!entry) return fail('unknown', msg().jobLog.termReloadFailed)
   const { usages, translations, examples } = material.value
   const conflicts = findTermConflicts(candidate.translations, usages, translations)
   log({
     level: conflicts.length > 0 ? 'warn' : 'ok',
     batchId: null,
-    message: `${label} → 승인 대기 (신뢰도 ${session.value.confidence})${describeConflicts(conflicts)}`,
+    message: msg().jobLog.termPending(label, session.value.confidence, describeConflicts(conflicts)),
     detail: Object.entries(candidate.translations).map(([language, text]) => `${language}: ${text}`).join('\n')
   })
   return ok({ entry, found: usages.length, examples: examples.length, conflicts })
@@ -242,15 +249,15 @@ export async function runTermRetranslation(
 ): Promise<IpcResult<RetranslateTermResult>> {
   const { dir, config } = project
   const term = input.term.trim()
-  if (config.targetLanguages.length === 0) return fail('invalid-input', '대상 언어가 없습니다. 프로젝트 화면에서 먼저 정하세요.')
+  if (config.targetLanguages.length === 0) return fail('invalid-input', msg().jobLog.noTargets)
   const known = loadAllGlossaryTerms(dir)
   if (!known.ok) return known
-  if (!known.value.some((item) => termKey(item) === termKey(term))) return fail('invalid-input', `용어집에 없는 용어입니다: ${term}`)
+  if (!known.value.some((item) => termKey(item) === termKey(term))) return fail('invalid-input', msg().jobLog.termNotInGlossary(term))
 
   const material = gatherTermMaterial(project, term)
   if (!material.ok) return material
 
-  const label = `용어 재번역 "${term}"`
+  const label = msg().jobLog.termRetranslateLabel(term)
   const current = Object.fromEntries(config.targetLanguages.map((language) => [language, input.translations[language] ?? '']))
   const session = await runTermEntrySession(
     project,
@@ -273,10 +280,12 @@ export async function runTermRetranslation(
   log({
     level: conflicts.length > 0 ? 'warn' : 'ok',
     batchId: null,
-    message: `${label} → 후보 받음 (신뢰도 ${session.value.confidence})${describeConflicts(conflicts)}`,
+    message: msg().jobLog.termCandidate(label, session.value.confidence, describeConflicts(conflicts)),
     detail: [
-      ...config.targetLanguages.map((language) => `${language}: ${current[language] || '(없음)'} → ${session.value.translations[language] ?? ''}`),
-      `지침: ${input.note || '(없음)'} → ${session.value.note || '(없음)'}`
+      ...config.targetLanguages.map(
+        (language) => `${language}: ${current[language] || msg().jobLog.none} → ${session.value.translations[language] ?? ''}`
+      ),
+      msg().jobLog.noteChange(input.note || msg().jobLog.none, session.value.note || msg().jobLog.none)
     ].join('\n')
   })
   return ok({

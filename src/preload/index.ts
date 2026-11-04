@@ -12,6 +12,7 @@ import type {
   ChatRuleProposal,
   LoginMethod
 } from '@shared/schema/agent'
+import { UI_LANGUAGE_ARG, isUiLanguage, resolveUiLanguage, type UiLanguage } from '@shared/i18n/languages'
 import type { AppSettings, AppSettingsPatch } from '@shared/schema/app-settings'
 import type { AppUpdateStatus } from '@shared/schema/app-update'
 import type { ClaudeCliStatus, ClaudeInstallDone, ClaudeUpdateResult } from '@shared/schema/cli'
@@ -72,7 +73,17 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): () => vo
   }
 }
 
+/**
+ * 메인이 창을 만들 때 정한 화면 언어. 앱 설정을 읽기 전 첫 화면부터 이 언어로 그린다.
+ * 인자가 없으면(다른 창 등) 브라우저 언어로 같은 규칙을 적용한다.
+ */
+function initialUiLanguage(): UiLanguage {
+  const value = process.argv.find((arg) => arg.startsWith(UI_LANGUAGE_ARG))?.slice(UI_LANGUAGE_ARG.length)
+  return isUiLanguage(value) ? value : resolveUiLanguage(null, navigator.languages)
+}
+
 const api = {
+  initialUiLanguage: initialUiLanguage(),
   settings: {
     get: (): Promise<IpcResult<AppSettings>> => ipcRenderer.invoke(IPC.appSettingsGet),
     set: (patch: AppSettingsPatch): Promise<IpcResult<AppSettings>> =>

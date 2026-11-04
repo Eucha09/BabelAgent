@@ -54,9 +54,6 @@ export type JobSnapshot = {
 export const JobKind = z.enum(['translate', 'context', 'terms', 'term-translate'])
 export type JobKind = z.infer<typeof JobKind>
 
-/** 작업이 세는 단위. 용어 번역은 원문 행이 아니라 용어를 센다 */
-export const JOB_UNIT: Record<JobKind, string> = { translate: '행', context: '행', terms: '행', 'term-translate': '개' }
-
 export type JobView = {
   id: string
   kind: JobKind

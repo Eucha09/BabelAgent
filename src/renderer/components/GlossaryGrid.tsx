@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { GlossaryEntry } from '@shared/schema/glossary'
+import { useT } from '../i18n'
 import { useColumnSizing } from '../state/column-sizing'
 
 const ROW_HEIGHT = 34
@@ -78,6 +79,7 @@ function waitingLanguages(entry: GlossaryEntry, languages: readonly string[]): s
 }
 
 export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onEdit }: Props): React.JSX.Element {
+  const t = useT()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [columnSizing, setColumnSizing] = useColumnSizing(SIZING_KEY)
 
@@ -96,40 +98,37 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
             className="cell-check"
             checked={info.row.original.selected}
             onChange={() => onToggle(info.row.original.id)}
-            aria-label={`${info.row.original.base.term} 선택`}
+            aria-label={t.grid.select(info.row.original.base.term)}
           />
         )
       }),
       helper.display({
         id: 'status',
-        header: '상태',
+        header: t.grid.status,
         size: 76,
         cell: (info) => {
           const { entry } = info.row.original
           if (entry.status === 'pending') {
             return (
-              <span className="status-badge review" title="에이전트 후보. 승인해야 번역과 QA 에 쓰입니다">
-                대기
+              <span className="status-badge review" title={t.glossaryGrid.candidateHint}>
+                {t.glossaryGrid.pending}
               </span>
             )
           }
           const waiting = waitingLanguages(entry, languages)
           if (waiting.length > 0) {
             return (
-              <span
-                className="status-badge review"
-                title={`승인 대기 언어: ${waiting.join(', ')} — [선택 승인]을 눌러야 그 언어의 번역이 번역과 QA 에 쓰입니다`}
-              >
-                일부 대기
+              <span className="status-badge review" title={t.glossaryGrid.partialHint(waiting.join(', '))}>
+                {t.glossaryGrid.partial}
               </span>
             )
           }
-          return <span className="status-badge approved">승인</span>
+          return <span className="status-badge approved">{t.glossaryGrid.approved}</span>
         }
       }),
       helper.display({
         id: 'term',
-        header: '용어',
+        header: t.glossaryGrid.term,
         size: 150,
         cell: (info) => {
           const row = info.row.original
@@ -149,7 +148,7 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
       ...languages.map((language) =>
         helper.display({
           id: `translation_${language}`,
-          header: `번역 (${language})`,
+          header: t.grid.translationIn(language),
           size: 160,
           cell: (info) => {
             const row = info.row.original
@@ -158,9 +157,9 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
               <TextCell
                 value={row.entry.translations[language] ?? ''}
                 pending={waiting}
-                title={waiting ? '용어 번역이 채운 번역입니다. [선택 승인]을 눌러야 번역과 QA 에 쓰입니다' : undefined}
+                title={waiting ? t.glossaryGrid.waitingCell : undefined}
                 disabled={disabled}
-                placeholder="확정 번역"
+                placeholder={t.glossaryGrid.fixedTranslation}
                 onChange={(value) =>
                   onEdit(row.id, (entry) => ({ ...entry, translations: { ...entry.translations, [language]: value } }))
                 }
@@ -171,7 +170,7 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
       ),
       helper.display({
         id: 'pos',
-        header: '품사·분류',
+        header: t.glossaryGrid.pos,
         size: 90,
         cell: (info) => {
           const row = info.row.original
@@ -180,7 +179,7 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
       }),
       helper.display({
         id: 'note',
-        header: () => <span title="번역 프롬프트에 용어와 함께 들어갑니다">사용 지침</span>,
+        header: () => <span title={t.glossaryGrid.noteHint}>{t.glossaryGrid.note}</span>,
         size: 200,
         cell: (info) => {
           const row = info.row.original
@@ -206,7 +205,7 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
               className="cell-check"
               checked={row.entry.strict}
               disabled={disabled}
-              title="켜면 이 용어를 어긴 번역을 경고가 아니라 오류로 올립니다(내보내기를 막음)"
+              title={t.glossaryGrid.strictHint}
               onChange={(event) => {
                 const strict = event.target.checked
                 onEdit(row.id, (entry) => ({ ...entry, strict }))
@@ -217,7 +216,7 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
       }),
       helper.display({
         id: 'reason',
-        header: '근거 · 신뢰도',
+        header: t.glossaryGrid.reason,
         size: 200,
         cell: (info) => {
           const { entry, low } = info.row.original
@@ -231,7 +230,7 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
         }
       })
     ],
-    [disabled, languages, onEdit, onToggle]
+    [disabled, languages, onEdit, onToggle, t]
   )
 
   const table = useReactTable({
@@ -282,7 +281,7 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
               {header.column.getCanResize() ? (
                 <div
                   className={header.column.getIsResizing() ? 'col-resizer active' : 'col-resizer'}
-                  title="끌어서 너비 조절 · 더블클릭하면 기본 너비"
+                  title={t.common.resizeColumn}
                   onMouseDown={header.getResizeHandler()}
                   onTouchStart={header.getResizeHandler()}
                   onDoubleClick={() => header.column.resetSize()}
@@ -293,7 +292,7 @@ export function GlossaryGrid({ rows, languages, disabled, focusId, onToggle, onE
         </div>
 
         {rows.length === 0 ? (
-          <div className="grid-empty">조건에 맞는 용어가 없습니다.</div>
+          <div className="grid-empty">{t.glossaryGrid.empty}</div>
         ) : (
           <div style={{ height: `${virtualizer.getTotalSize()}px`, width: totalWidth, position: 'relative' }}>
             {virtualizer.getVirtualItems().map((item) => {

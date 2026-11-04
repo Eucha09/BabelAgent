@@ -10,6 +10,7 @@ import {
   downloadAppUpdate,
   installAppUpdate
 } from '../update/app-update'
+import { msg } from '../i18n'
 
 export function registerAppUpdateIpc(): void {
   ipcMain.handle(IPC.appUpdateStatus, (): IpcResult<AppUpdateStatus> => ok(appUpdateStatus()))
@@ -23,7 +24,7 @@ export function registerAppUpdateIpc(): void {
   ipcMain.handle(IPC.appUpdateInstall, (): IpcResult<null> => {
     // 번역 등 작업이 도는 중에 앱을 닫으면 진행 중인 배치가 버려진다
     const idle = ensureNoRunningJob()
-    if (!idle.ok) return fail(idle.error.kind, `작업이 끝난 뒤에 다시 시작할 수 있습니다. ${idle.error.message}`)
+    if (!idle.ok) return fail(idle.error.kind, msg().errors.restartAfterJob(idle.error.message))
     return installAppUpdate()
   })
 }

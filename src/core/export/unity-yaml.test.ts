@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { matchIds, parseUnityAsset, selectSharedTable, sniffUnityAsset, uniqueLocales, type UnitySharedTable } from './unity-yaml'
+import { ko } from '@shared/i18n/ko'
 
 // 실제 Unity 6000.4 / Localization 1.5.13 파일과 같은 구조(필드·들여쓰기). docs/unity-export.md
 const LOCALE = `%YAML 1.1
@@ -104,11 +105,11 @@ describe('sniffUnityAsset', () => {
 
 describe('parseUnityAsset', () => {
   it('로케일 코드와 표시 이름', () => {
-    expect(parseUnityAsset(LOCALE, 'locale')).toEqual({ kind: 'locale', locale: { code: 'ko', name: 'Korean (ko)' } })
+    expect(parseUnityAsset(LOCALE, 'locale', ko)).toEqual({ kind: 'locale', locale: { code: 'ko', name: 'Korean (ko)' } })
   })
 
   it('공유 데이터의 Id·키를 문자열 그대로 읽는다(64비트 Id, No·007, 따옴표, 접힌 줄)', () => {
-    const result = parseUnityAsset(SHARED, 'shared-table')
+    const result = parseUnityAsset(SHARED, 'shared-table', ko)
     expect(result.kind).toBe('shared-table')
     if (result.kind !== 'shared-table') return
     expect(result.table.collection).toBe('UI')
@@ -124,13 +125,13 @@ describe('parseUnityAsset', () => {
 
   it('프리팹의 stripped 꼬리가 있어도 읽는다', () => {
     const text = `${SHARED}--- !u!1 &222 stripped\nGameObject:\n  m_Name: x\n`
-    expect(parseUnityAsset(text, 'shared-table').kind).toBe('shared-table')
+    expect(parseUnityAsset(text, 'shared-table', ko).kind).toBe('shared-table')
   })
 
   it('깨진 YAML 과 필드 없음은 이유를 돌려준다', () => {
-    const broken = parseUnityAsset('%YAML 1.1\n--- !u!114 &1\nMonoBehaviour:\n  m_Entries: [\n', 'shared-table')
+    const broken = parseUnityAsset('%YAML 1.1\n--- !u!114 &1\nMonoBehaviour:\n  m_Entries: [\n', 'shared-table', ko)
     expect(broken.kind).toBe('invalid')
-    const missing = parseUnityAsset(SETTINGS_HEAD, 'locale')
+    const missing = parseUnityAsset(SETTINGS_HEAD, 'locale', ko)
     expect(missing).toMatchObject({ kind: 'invalid' })
   })
 })

@@ -1,5 +1,6 @@
 import type { BatchStatus, JobFailure, JobSnapshot, JobState } from '@shared/schema/jobs'
 import { limitDelay } from './limit'
+import { msg } from '../i18n'
 
 export type { JobSnapshot, JobState }
 
@@ -160,7 +161,7 @@ export class JobScheduler<B extends SchedulerBatch> {
     this.run(batch, controller.signal)
       .catch((error: unknown): BatchOutcome => ({
         kind: 'failed',
-        reason: '배치 실행 중 예외가 났습니다.',
+        reason: msg().jobLog.batchException,
         detail: error instanceof Error ? error.message : String(error)
       }))
       .then((outcome) => this.settle(batch, outcome))

@@ -14,7 +14,9 @@ import {
 import { TranslateEffort, TranslateModel } from '@shared/schema/jobs'
 import { MAX_CONCURRENCY, type OpenProject, type ProjectConfig, type ProjectSettingsPatch } from '@shared/schema/project'
 import type { IpcError, IpcResult } from '@shared/types'
-import { EFFORT_HINT, EFFORT_OPTIONS, MODEL_OPTIONS } from '../../state/translate-options'
+import type { Messages } from '@shared/i18n'
+import { useT } from '../../i18n'
+import { EFFORT_VALUES, MODEL_VALUES } from '../../state/translate-options'
 import { LanguageMultiSelect, LanguageSelect } from '../LanguagePicker'
 
 const api = window.babel
@@ -23,13 +25,13 @@ const api = window.babel
  * 대상 언어를 늘렸을 때 용어집에서 그 언어 칸이 빈 용어 수. 다시 추출하지 않고 [용어 번역]으로 채우라고 알린다.
  * 용어집을 읽지 못하면 알리지 않는다(저장은 이미 끝났다).
  */
-async function glossaryGapNotice(added: readonly string[]): Promise<string | null> {
+async function glossaryGapNotice(added: readonly string[], t: Messages): Promise<string | null> {
   if (added.length === 0) return null
   const glossary = await api.glossary.list()
   if (!glossary.ok) return null
   const empty = findTranslateTargets(glossary.value.entries, added).length
   if (empty === 0) return null
-  return `용어집에 ${added.join(', ')} 번역이 빈 용어가 ${empty}개 있습니다 — 용어집 화면의 [용어 번역]으로 채우세요.`
+  return t.projectScreen.glossaryGap(added.join(', '), empty)
 }
 
 type Props = {
@@ -60,6 +62,7 @@ function FieldError({ problems, field }: { problems: readonly SettingsProblem[];
  * 저장할 때는 화면을 연 시점과 달라진 묶음만 보내므로, 그 사이 앱 밖에서 고친 다른 묶음은 지워지지 않는다.
  */
 export function Project({ project, onSave, onDirtyChange, onMessage }: Props): React.JSX.Element {
+  const t = useT()
   const { config } = project
   /** 화면을 연(또는 마지막으로 저장한) 시점의 설정. 바뀐 묶음을 가리는 기준이다. */
   const [base, setBase] = useState<ProjectConfig>(config)
@@ -69,7 +72,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
   const [externalChange, setExternalChange] = useState(false)
 
   const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(toProjectForm(base)), [form, base])
-  const { config: draft, problems } = useMemo(() => fromProjectForm(form, base), [form, base])
+  const { config: draft, problems } = useMemo(() => fromProjectForm(form, base, t), [form, base, t])
 
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
@@ -109,8 +112,8 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
       setBase(result.value.config)
       setForm(toProjectForm(result.value.config))
       const added = result.value.config.targetLanguages.filter((code) => !base.targetLanguages.includes(code))
-      const gap = await glossaryGapNotice(added)
-      onMessage(gap ? `프로젝트 설정을 저장했습니다. ${gap}` : '프로젝트 설정을 저장했습니다.')
+      const gap = await glossaryGapNotice(added, t)
+      onMessage(gap ? t.projectScreen.savedWithNotice(gap) : t.projectScreen.saved)
     } finally {
       setSaving(false)
     }
@@ -139,25 +142,26 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
   return (
     <div className="project-screen">
       <div className="strings-header project-header">
-        <h2 className="screen-title">프로젝트</h2>
+        <h2 className="screen-title">{t.screens.project.label}</h2>
         <div className="row">
           <button type="button" disabled={saving || !dirty} onClick={discard}>
-            변경 취소
+            {t.common.discardChanges}
           </button>
           <button
             type="button"
             className="primary"
             disabled={saving || !dirty || problems.length > 0}
-            title={problems.length > 0 ? '빨간 글씨로 표시한 칸을 먼저 고치세요' : undefined}
+            title={problems.length > 0 ? t.projectScreen.fixRedFirst : undefined}
             onClick={() => void save()}
           >
-            저장{dirty ? ' *' : ''}
+            {t.common.save}
+            {dirty ? ' *' : ''}
           </button>
         </div>
       </div>
 
       {externalChange ? (
-        <div className="message">project.json 이 앱 밖에서 바뀌었습니다. [변경 취소]를 누르면 다시 읽습니다.</div>
+        <div className="message">{t.projectScreen.external}</div>
       ) : null}
       {error ? (
         <div className="message error">
@@ -167,15 +171,15 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
       ) : null}
 
       <section className="card">
-        <h3>기본 정보</h3>
+        <h3>{t.projectScreen.basics}</h3>
         <div className="field">
-          <label htmlFor="project-name">프로젝트 이름</label>
+          <label htmlFor="project-name">{t.projectScreen.name}</label>
           <input id="project-name" value={form.name} onChange={(event) => update('name', event.target.value)} />
           <FieldError problems={problems} field="name" />
         </div>
         <div className="form-grid">
           <div className="field">
-            <label htmlFor="source-language">원문 언어</label>
+            <label htmlFor="source-language">{t.projectScreen.sourceLanguage}</label>
             <LanguageSelect
               id="source-language"
               value={form.sourceLanguage}
@@ -184,11 +188,11 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             />
             <FieldError problems={problems} field="sourceLanguage" />
             {form.sourceLanguage.trim() !== base.sourceLanguage ? (
-              <p className="hint">원문 파일 내용은 바뀌지 않습니다.</p>
+              <p className="hint">{t.projectScreen.sourceUnchanged}</p>
             ) : null}
           </div>
           <div className="field">
-            <label htmlFor="target-languages">대상 언어</label>
+            <label htmlFor="target-languages">{t.projectScreen.targetLanguages}</label>
             <LanguageMultiSelect
               id="target-languages"
               values={targetCodes}
@@ -198,7 +202,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             <FieldError problems={problems} field="targetLanguages" />
             {removedTargets.length > 0 ? (
               <p className="hint">
-                {removedTargets.map((code) => `translations_${code}.csv`).join(', ')} 파일은 지우지 않습니다.
+                {t.projectScreen.filesKept(removedTargets.map((code) => `translations_${code}.csv`).join(', '))}
               </p>
             ) : null}
           </div>
@@ -206,41 +210,41 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
       </section>
 
       <section className="card">
-        <h3>게임</h3>
+        <h3>{t.projectScreen.game}</h3>
         <div className="field">
-          <label htmlFor="game-genre">장르</label>
+          <label htmlFor="game-genre">{t.projectScreen.genre}</label>
           <input
             id="game-genre"
             value={form.genre}
             onChange={(event) => update('genre', event.target.value)}
-            placeholder="예: 판타지 RPG"
+            placeholder={t.projectScreen.genrePlaceholder}
           />
         </div>
         <div className="field">
-          <label htmlFor="game-intro">게임 소개</label>
+          <label htmlFor="game-intro">{t.projectScreen.intro}</label>
           <textarea
             id="game-intro"
             rows={5}
             value={form.intro}
             onChange={(event) => update('intro', event.target.value)}
-            placeholder="세계관, 주요 인물 등 번역에 필요한 배경"
+            placeholder={t.projectScreen.introPlaceholder}
           />
         </div>
         <div className="field">
-          <label htmlFor="game-tone">톤 가이드</label>
+          <label htmlFor="game-tone">{t.projectScreen.tone}</label>
           <textarea
             id="game-tone"
             rows={4}
             value={form.toneGuide}
             onChange={(event) => update('toneGuide', event.target.value)}
-            placeholder="예: 간결하고 경쾌하게"
+            placeholder={t.projectScreen.tonePlaceholder}
           />
         </div>
       </section>
 
       <section className="card">
-        <h3>스타일 규칙</h3>
-        {form.styleRules.length === 0 ? <p className="hint">아직 규칙이 없습니다.</p> : null}
+        <h3>{t.projectScreen.styleRules}</h3>
+        {form.styleRules.length === 0 ? <p className="hint">{t.projectScreen.noRules}</p> : null}
         <ol className="style-rules">
           {form.styleRules.map((rule, index) => (
             <li key={rule.id} className="style-rule">
@@ -248,7 +252,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
               <textarea
                 rows={1}
                 value={rule.text}
-                placeholder="예: NPC 대사는 반말로"
+                placeholder={t.projectScreen.rulePlaceholder}
                 onChange={(event) =>
                   update(
                     'styleRules',
@@ -259,7 +263,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
               <button
                 type="button"
                 className="ghost"
-                title="이 규칙 삭제"
+                title={t.projectScreen.deleteRuleHint}
                 onClick={() =>
                   update(
                     'styleRules',
@@ -267,7 +271,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
                   )
                 }
               >
-                삭제
+                {t.projectScreen.deleteRule}
               </button>
             </li>
           ))}
@@ -282,15 +286,15 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             ])
           }
         >
-          규칙 추가
+          {t.projectScreen.addRule}
         </button>
       </section>
 
       <section className="card">
-        <h3>번역</h3>
+        <h3>{t.projectScreen.translation}</h3>
         <div className="form-grid">
           <label className="field">
-            <span className="field-label">모델</span>
+            <span className="field-label">{t.translateOptions.modelLabel}</span>
             <select
               value={form.model}
               onChange={(event) => {
@@ -298,15 +302,15 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
                 if (next.success) update('model', next.data)
               }}
             >
-              {MODEL_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
+              {MODEL_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {t.translateOptions.model[value]}
                 </option>
               ))}
             </select>
           </label>
-          <label className="field" title={EFFORT_HINT}>
-            <span className="field-label">사고 수준</span>
+          <label className="field" title={t.translateOptions.effortHint}>
+            <span className="field-label">{t.translateOptions.effortLabel}</span>
             <select
               value={form.effort}
               onChange={(event) => {
@@ -314,9 +318,9 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
                 if (next.success) update('effort', next.data)
               }}
             >
-              {EFFORT_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
+              {EFFORT_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {t.translateOptions.effort[value]}
                 </option>
               ))}
             </select>
@@ -324,7 +328,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
         </div>
         <div className="form-grid three">
           <div className="field">
-            <label htmlFor="batch-rows">배치 행 수</label>
+            <label htmlFor="batch-rows">{t.projectScreen.batchRows}</label>
             <input
               id="batch-rows"
               type="number"
@@ -336,7 +340,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             <FieldError problems={problems} field="batch.maxRows" />
           </div>
           <div className="field">
-            <label htmlFor="batch-chars">배치 글자 수</label>
+            <label htmlFor="batch-chars">{t.projectScreen.batchChars}</label>
             <input
               id="batch-chars"
               type="number"
@@ -348,7 +352,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             <FieldError problems={problems} field="batch.maxSourceChars" />
           </div>
           <div className="field">
-            <label htmlFor="batch-workers">동시 작업자 (1~{MAX_CONCURRENCY})</label>
+            <label htmlFor="batch-workers">{t.projectScreen.workers(MAX_CONCURRENCY)}</label>
             <input
               id="batch-workers"
               type="number"
@@ -364,9 +368,9 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
       </section>
 
       <section className="card">
-        <h3>검토</h3>
+        <h3>{t.projectScreen.review}</h3>
         <div className="field">
-          <label htmlFor="low-confidence">신뢰도 낮음 기준 (0~1)</label>
+          <label htmlFor="low-confidence">{t.projectScreen.lowConfidence}</label>
           <input
             id="low-confidence"
             type="number"
@@ -382,13 +386,13 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
       </section>
 
       <section className="card">
-        <h3>컨텍스트 추정</h3>
+        <h3>{t.projectScreen.context}</h3>
         <div className="field">
           <label
             htmlFor="max-len-ratio"
-            title={`에이전트가 제안하는 최대 길이의 하한: 원문 길이 × 배수(최소 ${MIN_SUGGESTED_MAX_LEN}자)`}
+            title={t.projectScreen.maxLenRatioHint(MIN_SUGGESTED_MAX_LEN)}
           >
-            최대 길이 배수 (1~{MAX_LEN_RATIO_LIMIT})
+            {t.projectScreen.maxLenRatio(MAX_LEN_RATIO_LIMIT)}
           </label>
           <input
             id="max-len-ratio"
@@ -405,13 +409,13 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
       </section>
 
       <section className="card" id="project-export-card">
-        <h3>내보내기</h3>
+        <h3>{t.projectScreen.export}</h3>
         <table className="locale-table">
           <thead>
             <tr>
-              <th>언어</th>
-              <th>Unity 로케일 코드</th>
-              <th>열 이름</th>
+              <th>{t.localeTable.language}</th>
+              <th>{t.localeTable.localeCode}</th>
+              <th>{t.localeTable.columnName}</th>
             </tr>
           </thead>
           <tbody>
@@ -422,14 +426,14 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
                 <tr key={language}>
                   <td>
                     <code>{language}</code>
-                    {language === form.sourceLanguage.trim() ? <span className="hint"> 원문</span> : null}
+                    {language === form.sourceLanguage.trim() ? <span className="hint"> {t.localeTable.source}</span> : null}
                   </td>
                   <td>
                     <input
                       className="mono"
                       value={locale.unityLocaleCode}
                       placeholder={language}
-                      aria-label={`${language} Unity 로케일 코드`}
+                      aria-label={t.localeTable.localeCodeOf(language)}
                       onChange={(event) => updateLocale(language, 'unityLocaleCode', event.target.value)}
                     />
                   </td>
@@ -438,7 +442,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
                       className="mono"
                       value={locale.columnName}
                       placeholder={defaultColumnName(code)}
-                      aria-label={`${language} 열 이름`}
+                      aria-label={t.localeTable.columnNameOf(language)}
                       onChange={(event) => updateLocale(language, 'columnName', event.target.value)}
                     />
                   </td>
@@ -453,15 +457,15 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
       <section className="card">
         <details>
           <summary>
-            <h3 className="summary-title">고급: Smart Strings</h3>
+            <h3 className="summary-title">{t.projectScreen.smart}</h3>
           </summary>
           <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
-            Unity 프로젝트의 SmartFormat 설정과 같게 맞추세요.
+            {t.projectScreen.smartHint}
           </p>
           <div className="check-list">
             <label className="check">
               <input type="checkbox" checked={form.smartEnabled} onChange={(event) => update('smartEnabled', event.target.checked)} />
-              <span>Smart Strings 사용</span>
+              <span>{t.projectScreen.smartEnabled}</span>
             </label>
             <label className="check">
               <input
@@ -469,7 +473,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
                 checked={form.alternativeEscaping}
                 onChange={(event) => update('alternativeEscaping', event.target.checked)}
               />
-              <span>대체 이스케이프 (alternativeEscaping)</span>
+              <span>{t.projectScreen.alternativeEscaping}</span>
             </label>
             <label className="check">
               <input
@@ -477,15 +481,15 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
                 checked={form.convertCharacterStringLiterals}
                 onChange={(event) => update('convertCharacterStringLiterals', event.target.checked)}
               />
-              <span>문자 리터럴 변환 (convertCharacterStringLiterals)</span>
+              <span>{t.projectScreen.characterLiterals}</span>
             </label>
             <label className="check">
               <input type="checkbox" checked={form.caseSensitive} onChange={(event) => update('caseSensitive', event.target.checked)} />
-              <span>대소문자 구분 (caseSensitive)</span>
+              <span>{t.projectScreen.caseSensitive}</span>
             </label>
           </div>
           <div className="field">
-            <label htmlFor="escape-char">이스케이프 문자 (escapeChar)</label>
+            <label htmlFor="escape-char">{t.projectScreen.escapeChar}</label>
             <input
               id="escape-char"
               className="mono"
@@ -496,7 +500,7 @@ export function Project({ project, onSave, onDirtyChange, onMessage }: Props): R
             <FieldError problems={problems} field="smartStrings.escapeChar" />
           </div>
           <div className="field">
-            <label htmlFor="formatters">포매터 목록 (쉼표로 구분)</label>
+            <label htmlFor="formatters">{t.projectScreen.formatters}</label>
             <textarea
               id="formatters"
               className="mono"

@@ -4,6 +4,7 @@ import { findTermUsages } from '@core/terms/addition'
 import type { AddTermResult } from '@shared/schema/glossary'
 import type { MasterRow } from '@shared/schema/strings'
 import type { IpcError, IpcResult } from '@shared/types'
+import { useT } from '../i18n'
 
 export type AddTermRequest = { requestId: string; term: string; pos: string; note: string; strict: boolean }
 
@@ -45,6 +46,7 @@ export function AddTermDialog({
   onDone,
   onClose
 }: Props): React.JSX.Element {
+  const t = useT()
   const [term, setTerm] = useState('')
   const [pos, setPos] = useState('')
   const [note, setNote] = useState('')
@@ -62,9 +64,9 @@ export function AddTermDialog({
     trimmed === ''
       ? null
       : existing.has(termKey(trimmed))
-        ? '이미 용어집에 있는 용어입니다.'
+        ? t.addTerm.exists
         : found === 0
-          ? '원문에서 찾지 못했습니다. 원문에 나오는 표기 그대로 입력하세요.'
+          ? t.addTerm.notFound
           : null
   const canRun = run === null && trimmed !== '' && problem === null && languages.length > 0
 
@@ -88,12 +90,12 @@ export function AddTermDialog({
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h3>용어 추가</h3>
+        <h3>{t.addTerm.title}</h3>
         <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
-          에이전트가 {languages.join(', ') || '대상 언어'} 번역을 채워 승인 대기로 넣습니다.
+          {t.addTerm.intro(languages.join(', ') || t.addTerm.targetFallback)}
         </p>
         <div className="field">
-          <label htmlFor="new-term">원문 용어 *</label>
+          <label htmlFor="new-term">{t.addTerm.term}</label>
           <input
             id="new-term"
             value={term}
@@ -110,38 +112,38 @@ export function AddTermDialog({
           {problem ? (
             <p className="hint field-error">{problem}</p>
           ) : trimmed !== '' ? (
-            <p className="hint">원문 {found}행에서 찾았습니다.</p>
+            <p className="hint">{t.addTerm.found(found)}</p>
           ) : null}
         </div>
         <div className="form-grid">
           <div className="field">
-            <label htmlFor="new-term-pos">품사·분류 (선택)</label>
+            <label htmlFor="new-term-pos">{t.addTerm.pos}</label>
             <input
               id="new-term-pos"
               value={pos}
               disabled={run !== null}
-              placeholder="비우면 에이전트가 채움"
+              placeholder={t.addTerm.agentFills}
               onChange={(event) => setPos(event.target.value)}
             />
           </div>
           <label className="check" style={{ alignSelf: 'end', marginBottom: 'var(--space-3)' }}>
             <input type="checkbox" checked={strict} disabled={run !== null} onChange={(event) => setStrict(event.target.checked)} />
-            <span>strict — 승인 후 어기면 오류</span>
+            <span>{t.addTerm.strict}</span>
           </label>
         </div>
         <div className="field">
-          <label htmlFor="new-term-note">사용 지침 (선택)</label>
+          <label htmlFor="new-term-note">{t.addTerm.note}</label>
           <textarea
             id="new-term-note"
             rows={2}
             value={note}
             disabled={run !== null}
-            placeholder="비우면 에이전트가 채움. 예: 로마자 그대로 쓴다"
+            placeholder={t.addTerm.notePlaceholder}
             onChange={(event) => setNote(event.target.value)}
           />
         </div>
 
-        {run ? <p className="hint">에이전트가 번역을 채우는 중… {elapsed}초</p> : null}
+        {run ? <p className="hint">{t.addTerm.running(elapsed)}</p> : null}
         {error ? (
           <div className="message error">
             <strong>{error.message}</strong>
@@ -152,15 +154,15 @@ export function AddTermDialog({
         <div className="modal-actions">
           {run ? (
             <button type="button" onClick={() => onCancelRun(run.requestId)}>
-              중단
+              {t.addTerm.stop}
             </button>
           ) : (
             <button type="button" onClick={onClose}>
-              닫기
+              {t.common.close}
             </button>
           )}
           <button type="button" className="primary" disabled={!canRun} onClick={() => void start()}>
-            에이전트로 추가
+            {t.addTerm.add}
           </button>
         </div>
       </div>

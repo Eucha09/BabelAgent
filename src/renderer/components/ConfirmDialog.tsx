@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useT } from '../i18n'
 
 type Props = {
   title: string
@@ -19,6 +20,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel
 }: Props): React.JSX.Element {
+  const t = useT()
   return (
     <div className="modal-backdrop">
       <div className="modal">
@@ -26,7 +28,7 @@ export function ConfirmDialog({
         <div className="confirm-body">{children}</div>
         <div className="modal-actions">
           <button type="button" onClick={onCancel} autoFocus>
-            취소
+            {t.common.cancel}
           </button>
           <button type="button" className={danger ? 'danger' : 'primary'} onClick={onConfirm}>
             {confirmLabel}

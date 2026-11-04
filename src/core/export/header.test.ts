@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { ExportColumnView } from '@shared/schema/export'
 import { autoColumns, columnProblems, inferTemplateColumns, mappingMatchesHeader, templateColumns } from './header'
 import { resolveLocales } from './locales'
+import { ko } from '@shared/i18n/ko'
 
-const { locales } = resolveLocales(['ko', 'en', 'zh-Hans'], 'ko', {}, null)
+const { locales } = resolveLocales(['ko', 'en', 'zh-Hans'], 'ko', {}, null, ko)
 const names = (columns: readonly ExportColumnView[]): string[] => columns.map((column) => column.name)
 
 describe('autoColumns', () => {
@@ -30,7 +31,7 @@ describe('autoColumns', () => {
   })
 
   it('열마다 출처를 붙인다', () => {
-    const custom = resolveLocales(['en', 'ja'], 'ko', { en: { unityLocaleCode: '', columnName: 'EN' } }, [{ code: 'ja-JP', name: 'Japanese' }])
+    const custom = resolveLocales(['en', 'ja'], 'ko', { en: { unityLocaleCode: '', columnName: 'EN' } }, [{ code: 'ja-JP', name: 'Japanese' }], ko)
     const columns = autoColumns(custom.locales, { sharedComments: false, localeComments: false })
     expect(columns.map((column) => column.origin)).toEqual(['auto', 'auto', 'setting', 'unity'])
   })
@@ -108,13 +109,13 @@ describe('columnProblems', () => {
   })
 
   it('정상 헤더는 문제없음', () => {
-    expect(columnProblems(autoColumns(locales, { sharedComments: true, localeComments: true }))).toEqual([])
+    expect(columnProblems(autoColumns(locales, { sharedComments: true, localeComments: true }), ko)).toEqual([])
   })
 
   it('Key 열 없음, 빈 이름, 겹치는 이름, 같은 역할 두 번', () => {
-    expect(columnProblems([column('Id', 'id')])).toHaveLength(1)
-    expect(columnProblems([column('Key', 'key'), column('', 'value', 'en')])).toHaveLength(1)
-    expect(columnProblems([column('Key', 'key'), column('X', 'value', 'en'), column('X', 'value', 'ko')])[0]).toContain('X')
-    expect(columnProblems([column('Key', 'key'), column('A', 'value', 'en'), column('B', 'value', 'en')])[0]).toContain('B')
+    expect(columnProblems([column('Id', 'id')], ko)).toHaveLength(1)
+    expect(columnProblems([column('Key', 'key'), column('', 'value', 'en')], ko)).toHaveLength(1)
+    expect(columnProblems([column('Key', 'key'), column('X', 'value', 'en'), column('X', 'value', 'ko')], ko)[0]).toContain('X')
+    expect(columnProblems([column('Key', 'key'), column('A', 'value', 'en'), column('B', 'value', 'en')], ko)[0]).toContain('B')
   })
 })

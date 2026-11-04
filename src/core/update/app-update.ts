@@ -1,3 +1,5 @@
+import type { Messages } from '@shared/i18n'
+
 /** 업데이트가 실패한 단계. 같은 원인이라도 안내 문장이 다르다 */
 export type UpdatePhase = 'check' | 'download'
 
@@ -38,7 +40,7 @@ const FILE_LOCKED = ['EBUSY', 'EPERM', 'EACCES']
  * 업데이트 오류를 사용자에게 보여 줄 문장으로 바꾼다. 판단은 오류 코드와 Chromium 네트워크 오류 이름(net::ERR_…)으로만 하고,
  * 원래 메시지는 detail 에 그대로 남긴다.
  */
-export function describeUpdateError(error: unknown, phase: UpdatePhase): UpdateErrorView {
+export function describeUpdateError(error: unknown, phase: UpdatePhase, t: Messages): UpdateErrorView {
   const { code, message } = errorParts(error)
   const detail = message.trim() === '' ? null : message.trim().split('\n').slice(0, 6).join('\n')
 
@@ -46,22 +48,22 @@ export function describeUpdateError(error: unknown, phase: UpdatePhase): UpdateE
     /net::ERR_(INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|CONNECTION_|NETWORK_|TIMED_OUT|ADDRESS_UNREACHABLE|PROXY_)/.test(message) ||
     isOneOf(code, OFFLINE)
   if (offline) {
-    return { message: '인터넷에 연결할 수 없습니다. 네트워크를 확인한 뒤 다시 시도하세요.', detail }
+    return { message: t.updateErrors.offline, detail }
   }
   if (isOneOf(code, NOT_PUBLISHED)) {
-    return { message: '공개된 릴리스에서 업데이트 정보를 찾지 못했습니다. 잠시 뒤 다시 확인하세요.', detail }
+    return { message: t.updateErrors.notPublished, detail }
   }
   if (code === 'ERR_CHECKSUM_MISMATCH') {
-    return { message: '받은 파일이 릴리스 정보와 맞지 않아 버렸습니다. 다시 받으세요.', detail }
+    return { message: t.updateErrors.checksum, detail }
   }
   if (isOneOf(code, FILE_LOCKED)) {
-    return { message: '업데이트 파일을 쓰지 못했습니다. 백신 프로그램이 파일을 검사 중인지 확인하고 다시 시도하세요.', detail }
+    return { message: t.updateErrors.fileLocked, detail }
   }
   if (typeof code === 'string' && /^HTTP_ERROR_5\d\d$/.test(code)) {
-    return { message: 'GitHub 서버가 응답하지 않습니다. 잠시 뒤 다시 시도하세요.', detail }
+    return { message: t.updateErrors.serverError, detail }
   }
   return {
-    message: phase === 'check' ? '업데이트를 확인하지 못했습니다.' : '업데이트를 받지 못했습니다.',
+    message: phase === 'check' ? t.updateErrors.checkFailed : t.updateErrors.downloadFailed,
     detail
   }
 }

@@ -84,7 +84,7 @@
 | `export:reveal` | `export/` 폴더 열기 |
 | `export:unity:link` / `:unlink` / `:reload` / `:collection` | Unity 프로젝트 폴더 연결(메인의 폴더 대화상자, Assets·ProjectSettings 확인)·해제·다시 읽기·컬렉션 고르기. 읽은 결과는 메인이 들고 있다가 연결·다시 읽기 때만 새로 훑는다 |
 | `export:template:set` / `:clear` | Unity 에서 내보낸 CSV 를 메인의 파일 대화상자로 골라 템플릿으로 등록(프로젝트 밖이면 `templates/unity_template.csv`로 복사, 열 역할 추론해 저장)·해제 |
-| `app:settings:get` / `:set` | CLI 경로·설정 폴더 등 앱 전역 설정 |
+| `app:settings:get` / `:set` | CLI 경로·설정 폴더·화면 언어 등 앱 전역 설정 |
 | `app:update:status` | 지금 앱 버전·앱 업데이트 상태·릴리스 페이지 주소 |
 | `app:update:check` | GitHub Releases 에서 새 버전 확인. 겹친 요청은 하나로 합치고, 받는 중이거나 받아 둔 뒤에는 다시 확인하지 않는다 |
 | `app:update:download` / `:cancel` | 찾은 새 버전 받기 시작 / 멈추기. 진행률은 `app:update:state` 이벤트 |
@@ -155,9 +155,18 @@
   "cliPath": null,              // null이면 공식 설치 → PATH → SDK 내장(개발) 순으로 찾는다
   "claudeConfigDir": null,      // null이면 CLAUDE_CONFIG_DIR, 그것도 없으면 ~/.claude
   "theme": "dark",              // 다크 한 벌만 지원. 확장 자리
-  "lastProjectDir": null
+  "lastProjectDir": null,
+  "uiLanguage": null            // 화면 언어 ko | en. null이면 OS 표시 언어(첫 번째 선호 언어가 한국어면 ko, 그 밖은 en)
 }
 ```
+
+화면 언어는 메인이 창을 만들 때 정해 `additionalArguments`(`--babel-ui-language=`)로 preload 에 넘긴다. 렌더러는 앱 설정을 읽기 전 첫 화면(Claude Code 확인 창)부터 이 언어로 그리고, 설정 화면에서 고르면 바로 저장해 다시 그린다. 문구 카탈로그는 `src/shared/i18n/`(`ko.ts` 기준, `en.ts`)이고 렌더러·메인·core 가 같이 쓴다.
+
+- 렌더러: `I18nProvider`(App) 아래에서 `useT()`/`useI18n()`. 콜백이 만드는 상태바 메시지는 App 의 `tRef`로 그때 언어를 읽는다.
+- 메인: `msg()`(`src/main/i18n.ts`). 언어는 모듈 변수로 두고 앱이 켜질 때(`resolveUiLanguage(설정, app.getPreferredSystemLanguages())`)와 `app:settings:set`에 `uiLanguage`가 올 때 정한다. Electron 에 기대지 않으므로 파일·프로젝트 모듈의 단위 테스트에서는 기본값 한국어로 돈다. 이미 남긴 작업 로그·작업 요약은 그때 언어로 남는다.
+- core: 문구를 만드는 함수가 마지막 인자로 `t: Messages`를 받는다(QA 진단, 내보내기 계획, 설정·규칙 검사, 상태 전이, 업데이트 오류 등). 호출하는 쪽이 메인이면 `msg()`, 렌더러면 `t`.
+- 에이전트에게 가는 글(프롬프트, 도구 응답, 제출 검증 결과)은 화면 언어와 상관없이 영어다. 에이전트가 쓰는 메모·컨텍스트는 원문 언어로 받는다.
+- `catalog.test.ts`: 두 카탈로그의 모양이 같은지, 영어 카탈로그에 한글이 없는지, `src` 코드(주석 제외)에 한글 리터럴이 없는지 본다.
 
 인증 방식은 앱 설정에 두지 않는다(옛 `auth.mode`는 읽을 때 버린다). Claude Code 에 로그인한 방식을 그대로 쓴다.
 

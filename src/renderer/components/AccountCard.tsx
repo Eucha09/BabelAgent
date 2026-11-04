@@ -1,6 +1,7 @@
 import { describeAuthMethod } from '@core/auth/method'
 import type { AuthStatus, LoginMethod } from '@shared/schema/agent'
 import type { IpcError } from '@shared/types'
+import { useT } from '../i18n'
 import { UsageMeters, type UsageView } from './UsageMeters'
 
 export type AuthView = {
@@ -26,38 +27,39 @@ type Props = {
  * 앱은 코드·토큰을 만지지 않는다(보관도 CLI 가 한다). 구독 계정과 Console(API 과금) 두 방식을 모두 연다.
  */
 export function AccountCard({ auth, usage, busy, onRefresh, onLoginStart, onLoginCancel, onLogout }: Props): React.JSX.Element {
+  const t = useT()
   const loggedIn = auth.status?.loggedIn === true
   const disabled = busy || auth.loading
-  const method = describeAuthMethod(auth.status)
+  const method = describeAuthMethod(auth.status, t)
 
   return (
     <div className="card">
-      <h3>계정</h3>
+      <h3>{t.account.title}</h3>
 
       {auth.loginRunning ? (
         <>
-          <p className="hint">열린 Claude Code 창에서 로그인을 마치세요.</p>
+          <p className="hint">{t.account.loginWindowOpen}</p>
           <div className="row" style={{ marginTop: 'var(--space-3)' }}>
             <button type="button" onClick={onLoginCancel}>
-              로그인 창 닫기
+              {t.account.closeLoginWindow}
             </button>
           </div>
         </>
       ) : (
         <>
           <dl className="dl">
-            <dt>상태</dt>
+            <dt>{t.account.status}</dt>
             <dd>
               <span className={`chip-dot ${loggedIn ? 'ok' : 'error'}`} />{' '}
-              {auth.loading ? '확인 중…' : loggedIn ? '로그인됨' : '로그아웃 상태'}
+              {auth.loading ? t.account.checking : loggedIn ? t.account.loggedIn : t.account.loggedOut}
             </dd>
-            <dt>계정</dt>
+            <dt>{t.account.account}</dt>
             <dd>{auth.status?.email ?? '-'}</dd>
-            <dt>조직</dt>
+            <dt>{t.account.organization}</dt>
             <dd>{auth.status?.orgName ?? '-'}</dd>
-            <dt>인증 방식</dt>
+            <dt>{t.account.authMethod}</dt>
             <dd>{loggedIn ? method.label : '-'}</dd>
-            <dt>설정 폴더</dt>
+            <dt>{t.account.configDir}</dt>
             <dd>{auth.status?.configDir ?? '-'}</dd>
           </dl>
 
@@ -65,16 +67,16 @@ export function AccountCard({ auth, usage, busy, onRefresh, onLoginStart, onLogi
           {method.kind === 'subscription' ? <UsageMeters usage={usage} /> : null}
           {method.kind === 'api-key' ? (
             <p className="hint" style={{ marginTop: 'var(--space-3)' }}>
-              사용량은{' '}
+              {t.account.consoleUsageBefore}
               <a href="https://platform.claude.com/" target="_blank" rel="noreferrer">
                 Claude Console
               </a>
-              에서 확인하세요.
+              {t.account.consoleUsageAfter}
             </p>
           ) : null}
           {method.kind === 'provider' ? (
             <p className="hint" style={{ marginTop: 'var(--space-3)' }}>
-              사용량은 클라우드 제공자 콘솔에서 확인하세요.
+              {t.account.providerUsage}
             </p>
           ) : null}
 
@@ -83,24 +85,19 @@ export function AccountCard({ auth, usage, busy, onRefresh, onLoginStart, onLogi
               type="button"
               className={loggedIn ? undefined : 'primary'}
               disabled={disabled}
-              title="Claude Pro·Max 등 구독 계정으로 로그인합니다"
+              title={t.account.loginSubscriptionTitle}
               onClick={() => onLoginStart('claudeai')}
             >
-              Claude 계정(구독)으로 로그인
+              {t.account.loginSubscription}
             </button>
-            <button
-              type="button"
-              disabled={disabled}
-              title="Anthropic Console 계정으로 로그인합니다. 사용량은 API 요금으로 청구됩니다"
-              onClick={() => onLoginStart('console')}
-            >
-              Console(API 과금)로 로그인
+            <button type="button" disabled={disabled} title={t.account.loginConsoleTitle} onClick={() => onLoginStart('console')}>
+              {t.account.loginConsole}
             </button>
             <button type="button" disabled={disabled} onClick={onRefresh}>
-              새로고침
+              {t.account.refresh}
             </button>
             <button type="button" disabled={disabled || !loggedIn} onClick={onLogout}>
-              로그아웃
+              {t.account.logout}
             </button>
           </div>
 
@@ -110,7 +107,6 @@ export function AccountCard({ auth, usage, busy, onRefresh, onLoginStart, onLogi
               {auth.error.detail ? <pre>{auth.error.detail}</pre> : null}
             </div>
           ) : null}
-
         </>
       )}
     </div>

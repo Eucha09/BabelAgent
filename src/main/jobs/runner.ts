@@ -1,6 +1,7 @@
-import { JOB_UNIT, type JobKind, type JobLogEntry, type JobView } from '@shared/schema/jobs'
+import type { JobLogEntry, JobView } from '@shared/schema/jobs'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { JobScheduler, type JobSnapshot, type RunBatch, type SchedulerBatch } from './scheduler'
+import { msg } from '../i18n'
 
 /** 작업이 화면에 알리는 길. 렌더러로 보내는 이벤트에 그대로 묶인다. */
 export type JobSink = {
@@ -22,12 +23,6 @@ type ActiveJob = {
   scheduler: JobControls
 }
 
-const KIND_LABEL: Record<JobKind, string> = {
-  translate: '번역',
-  context: '컨텍스트 추정',
-  terms: '용어 추출',
-  'term-translate': '용어 번역'
-}
 
 let active: ActiveJob | null = null
 
@@ -42,7 +37,7 @@ function isRunning(job: ActiveJob | null): job is ActiveJob {
  * 돌고 있으면 그 사실을 알리는 실패를 돌려준다.
  */
 export function ensureNoRunningJob(): IpcResult<null> {
-  if (isRunning(active)) return fail('invalid-input', `이미 진행 중인 작업이 있습니다: ${KIND_LABEL[active.view.kind]}`)
+  if (isRunning(active)) return fail('invalid-input', msg().jobLog.alreadyRunning(msg().job.title[active.view.kind]))
   return ok(null)
 }
 
@@ -51,7 +46,7 @@ export function currentJob(): JobView | null {
 }
 
 export function controlJob(action: JobAction): IpcResult<null> {
-  if (!active) return fail('invalid-input', '진행 중인 작업이 없습니다.')
+  if (!active) return fail('invalid-input', msg().jobLog.noJobRunning)
   const { scheduler } = active
   if (action === 'pause') scheduler.pause()
   else if (action === 'resume') scheduler.resume()
@@ -89,12 +84,18 @@ export function launchJob<B extends SchedulerBatch>(input: {
   active = { view, scheduler }
 
   void scheduler.whenSettled().then((final: JobSnapshot) => {
-    const verb = final.state === 'cancelled' ? '취소됨' : '끝'
-    const unit = JOB_UNIT[view.kind]
+    const text = msg()
+    const count = (value: number): string => `${value}${text.job.unit[view.kind]}`
     log({
       level: final.failedRows > 0 ? 'warn' : 'ok',
       batchId: null,
-      message: `${KIND_LABEL[view.kind]} ${verb}: 완료 ${final.doneRows}${unit} · 실패 ${final.failedRows}${unit} · 남음 ${final.totalRows - final.doneRows - final.failedRows}${unit}`
+      message: text.jobLog.jobEnded(
+        text.job.title[view.kind],
+        final.state === 'cancelled',
+        count(final.doneRows),
+        count(final.failedRows),
+        count(final.totalRows - final.doneRows - final.failedRows)
+      )
     })
   })
 

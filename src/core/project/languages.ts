@@ -58,11 +58,16 @@ export function koreanLanguageName(code: string): string {
   return displayName(koreanNames, code)
 }
 
+/** 언어 코드 옆에 붙일 영어 이름. Unity 이름표를 먼저 보고, 없으면 CLDR. 모르는 코드면 빈 글자. */
+export function englishLanguageName(code: string): string {
+  return unityEnglishName(code) ?? displayName(englishNames, code)
+}
+
 function option(code: string, common: boolean): LanguageOption {
   return {
     code,
     name: koreanLanguageName(code),
-    englishName: unityEnglishName(code) ?? displayName(englishNames, code),
+    englishName: englishLanguageName(code),
     common
   }
 }

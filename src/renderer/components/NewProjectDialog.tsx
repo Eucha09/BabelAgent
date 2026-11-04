@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CreateProjectInput } from '@shared/schema/project'
+import { useT } from '../i18n'
 import { LanguageMultiSelect, LanguageSelect } from './LanguagePicker'
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
 
 /** 새 프로젝트의 project.json 초기값을 입력받는다. */
 export function NewProjectDialog({ dir, busy, onCancel, onSubmit }: Props): React.JSX.Element {
+  const t = useT()
   const [name, setName] = useState('')
   const [sourceLanguage, setSourceLanguage] = useState('ko')
   const [targetLanguages, setTargetLanguages] = useState<string[]>(['en', 'ja'])
@@ -21,27 +23,27 @@ export function NewProjectDialog({ dir, busy, onCancel, onSubmit }: Props): Reac
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h3>새 프로젝트</h3>
+        <h3>{t.newProject.title}</h3>
         <p className="project-path">{dir}</p>
 
         <div className="field">
-          <label htmlFor="project-name">프로젝트 이름</label>
+          <label htmlFor="project-name">{t.newProject.name}</label>
           <input
             id="project-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="예: 바벨탑 RPG"
+            placeholder={t.newProject.namePlaceholder}
             autoFocus
           />
         </div>
 
         <div className="field">
-          <label htmlFor="source-language">원문 언어</label>
+          <label htmlFor="source-language">{t.newProject.sourceLanguage}</label>
           <LanguageSelect id="source-language" value={sourceLanguage} exclude={targetLanguages} onChange={setSourceLanguage} />
         </div>
 
         <div className="field">
-          <label htmlFor="target-languages">대상 언어</label>
+          <label htmlFor="target-languages">{t.newProject.targetLanguages}</label>
           <LanguageMultiSelect
             id="target-languages"
             values={targetLanguages}
@@ -52,7 +54,7 @@ export function NewProjectDialog({ dir, busy, onCancel, onSubmit }: Props): Reac
 
         <div className="modal-actions">
           <button type="button" onClick={onCancel} disabled={busy}>
-            취소
+            {t.common.cancel}
           </button>
           <button
             type="button"
@@ -62,7 +64,7 @@ export function NewProjectDialog({ dir, busy, onCancel, onSubmit }: Props): Reac
               onSubmit({ dir, name: trimmedName, sourceLanguage, targetLanguages })
             }
           >
-            만들기
+            {t.newProject.create}
           </button>
         </div>
       </div>

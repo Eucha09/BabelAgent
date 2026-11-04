@@ -11,15 +11,10 @@ import { qaContext } from '../project/qa'
 import { loadGlossaryTerms, loadMaster, loadTermsWithoutConfirmedTranslation, loadTranslations } from '../project/store'
 import { ensureNoRunningJob, launchJob, makeLog, type JobSink } from './runner'
 import { runTranslateBatch } from './translate-batch'
+import { msg } from '../i18n'
 
 type JobBatch = TranslateBatch & { size: number }
 
-const SCOPE_LABEL: Record<StartTranslateInput['scope'], string> = {
-  all: '전체',
-  untranslated: '미번역',
-  stale: 'stale',
-  selected: '선택 행'
-}
 
 export function startTranslateJob(
   project: OpenProject,
@@ -32,31 +27,31 @@ export function startTranslateJob(
 
   const { dir, config } = project
   if (!config.targetLanguages.includes(input.language)) {
-    return fail('invalid-input', `${input.language} 은 이 프로젝트의 대상 언어가 아닙니다.`)
+    return fail('invalid-input', msg().errors.notTargetLanguage(input.language))
   }
 
   const master = loadMaster(dir)
   if (!master.ok) return master
-  if (master.value.rows.length === 0) return fail('invalid-input', '번역할 원문이 없습니다.')
+  if (master.value.rows.length === 0) return fail('invalid-input', msg().jobLog.noSourceToTranslate)
 
   const translations = loadTranslations(dir, input.language)
   if (!translations.ok) return translations
 
   if (input.scope === 'selected' && input.keys.length === 0) {
-    return fail('invalid-input', '선택한 행이 없습니다.')
+    return fail('invalid-input', msg().jobLog.noRowsSelected)
   }
   const scoped = selectRows(master.value.rows, translations.value.rows, input.scope, new Set(input.keys))
   if (scoped.rows.length === 0) {
     const approved = scoped.skippedApproved.length
     return fail(
       'invalid-input',
-      approved > 0 ? `번역할 행이 없습니다. 승인된 ${approved}행은 덮어쓰지 않습니다.` : '이 범위에는 번역할 행이 없습니다.'
+      approved > 0 ? msg().jobLog.nothingButApproved(approved) : msg().jobLog.nothingInScope
     )
   }
 
   const log = makeLog(sink)
   const glossary = loadGlossaryTerms(dir, input.language)
-  if (!glossary.ok) log({ level: 'warn', batchId: null, message: '용어집을 읽지 못해 용어 없이 번역합니다.', detail: glossary.error.message })
+  if (!glossary.ok) log({ level: 'warn', batchId: null, message: msg().jobLog.glossaryUnreadableTranslate, detail: glossary.error.message })
   const terms = glossary.ok ? glossary.value : []
 
   // 작업을 시작할 때 본 행. 작업 중 검토 화면에서 고친 행은 배치 결과로 덮지 않는다.
@@ -70,11 +65,11 @@ export function startTranslateJob(
     id: randomUUID(),
     kind: 'translate',
     language: input.language,
-    summary: `${input.language} · ${SCOPE_LABEL[input.scope]}`,
+    summary: `${input.language} · ${msg().translate.scope[input.scope].label}`,
     model: input.model,
     effort: input.effort,
     startedAt: new Date().toISOString(),
-    notes: skipped > 0 ? [`승인 ${skipped}행 제외`] : []
+    notes: skipped > 0 ? [msg().jobLog.approvedSkippedNote(skipped)] : []
   }
 
   const context = {
@@ -95,9 +90,18 @@ export function startTranslateJob(
   log({
     level: 'info',
     batchId: null,
-    message: `번역 시작: ${input.language} · ${SCOPE_LABEL[input.scope]} · ${scoped.rows.length}행 · 배치 ${batches.length}개 · 작업자 ${concurrency} · 모델 ${input.model} · 사고 ${input.effort} · 승인된 용어 ${terms.length}개 중 배치마다 나오는 것만 넣음`
+    message: msg().jobLog.translateStart(
+      input.language,
+      msg().translate.scope[input.scope].label,
+      scoped.rows.length,
+      batches.length,
+      concurrency,
+      input.model,
+      input.effort,
+      terms.length
+    )
   })
-  if (skipped > 0) log({ level: 'info', batchId: null, message: `승인된 ${skipped}행은 건너뜁니다.` })
+  if (skipped > 0) log({ level: 'info', batchId: null, message: msg().jobLog.approvedSkipped(skipped) })
   // 대상 언어를 새로 늘리고 용어집을 채우기 전에 번역부터 돌리는 경우를 알린다. 이런 용어는 번역 없이(지침만) 들어가고 QA 도 보지 않는다
   const unconfirmed = loadTermsWithoutConfirmedTranslation(dir, input.language)
   if (unconfirmed.ok) {
@@ -110,7 +114,7 @@ export function startTranslateJob(
       log({
         level: 'warn',
         batchId: null,
-        message: `이 범위에 나오는 승인된 용어 ${used.length}개는 ${input.language} 확정 번역이 없어 번역 없이 들어갑니다. 용어집 화면의 [용어 번역]과 [선택 승인]으로 채우면 다음 번역부터 반영됩니다.`,
+        message: msg().jobLog.unconfirmedTerms(used.length, input.language),
         detail: used.map((term) => term.term).join(', ')
       })
     }

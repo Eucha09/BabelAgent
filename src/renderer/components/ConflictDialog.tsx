@@ -1,3 +1,5 @@
+import { useT } from '../i18n'
+
 type Props = {
   message: string
   detail?: string | undefined
@@ -16,22 +18,23 @@ export function ConflictDialog({
   onReload,
   onCancel
 }: Props): React.JSX.Element {
+  const t = useT()
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h3>파일 충돌</h3>
+        <h3>{t.conflict.title}</h3>
         <p className="screen-desc">{message}</p>
         {detail ? <pre className="login-log">{detail}</pre> : null}
-        <p className="hint">덮어쓰면 앱 밖의 변경이, 다시 불러오면 내 편집이 사라집니다.</p>
+        <p className="hint">{t.conflict.hint}</p>
         <div className="modal-actions">
           <button type="button" onClick={onCancel} disabled={busy}>
-            취소
+            {t.common.cancel}
           </button>
           <button type="button" onClick={onReload} disabled={busy}>
-            다시 불러오기
+            {t.conflict.reload}
           </button>
           <button type="button" className="primary" onClick={onKeepMine} disabled={busy}>
-            덮어쓰기
+            {t.conflict.overwrite}
           </button>
         </div>
       </div>

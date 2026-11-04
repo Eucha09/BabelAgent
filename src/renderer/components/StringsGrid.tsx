@@ -5,7 +5,9 @@ import type { DropPosition } from '@core/strings/order'
 import type { SmartSyntax } from '@core/qa/smart'
 import { needsSmartSuggestion, parseSmartFlag } from '@core/strings/smart'
 import type { StringsRow } from '@shared/schema/strings'
+import { useT } from '../i18n'
 import { useColumnSizing } from '../state/column-sizing'
+import { statusLabel } from '../state/labels'
 
 /** 한 줄짜리 행의 높이. 가상 스크롤의 첫 추정값이자 행의 최소 높이다. */
 const ROW_HEIGHT = 34
@@ -33,13 +35,6 @@ type Props = {
   onMoveBy: (key: string, offset: -1 | 1) => void
 }
 
-export const STATUS_LABEL: Record<string, string> = {
-  untranslated: '미번역',
-  draft: '초안',
-  review: '검토',
-  approved: '승인',
-  stale: '원문변경'
-}
 
 const helper = createColumnHelper<StringsRow>()
 
@@ -54,6 +49,7 @@ export function StringsGrid({
   onMove,
   onMoveBy
 }: Props): React.JSX.Element {
+  const t = useT()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
@@ -89,7 +85,7 @@ export function StringsGrid({
           <span
             className="drag-handle"
             draggable
-            title="끌어서 순서 바꾸기"
+            title={t.grid.dragToReorder}
             onDragStart={(event) => {
               const key = info.row.original.key
               event.dataTransfer.setData('text/plain', key)
@@ -104,16 +100,16 @@ export function StringsGrid({
         )
       }),
       helper.accessor('key', {
-        header: '키',
+        header: t.columns.key,
         size: 150,
         cell: (info) => <span className="token-key grid-text">{info.getValue()}</span>
       }),
-      editable('source', '원문', 260),
-      editable('context', '컨텍스트', 170),
-      editable('ui_type', 'UI 유형', 90, true),
-      editable('max_len', '최대 길이', 70, true),
+      editable('source', t.columns.source, 260),
+      editable('context', t.columns.context, 170),
+      editable('ui_type', t.columns.ui_type, 90, true),
+      editable('max_len', t.columns.max_len, 70, true),
       // 변수 메타데이터(JSON 배열). 형식이 틀리면 검토 화면이 경고한다
-      editable('vars', '변수', 150, true),
+      editable('vars', t.columns.vars, 150, true),
       // Unity Smart String 여부. 미정인데 원문에 Smart 구문이 있으면 "제안"을 붙인다
       helper.accessor('smart', {
         header: 'Smart',
@@ -126,42 +122,40 @@ export function StringsGrid({
               <select
                 className="grid-select"
                 value={flag === null ? '' : String(flag)}
-                title={flag === null && info.getValue().trim() !== '' ? `알 수 없는 값 "${info.getValue()}" — 미정으로 봅니다` : undefined}
+                title={flag === null && info.getValue().trim() !== '' ? t.grid.smartUnknown(info.getValue()) : undefined}
                 onChange={(event) => onEdit(row.key, 'smart', event.target.value)}
               >
-                <option value="">미정</option>
+                <option value="">{t.grid.smartUnset}</option>
                 <option value="true">Smart</option>
-                <option value="false">일반</option>
+                <option value="false">{t.grid.smartOff}</option>
               </select>
               {needsSmartSuggestion(row, syntax) ? (
-                <span className="badge warn" title="원문에 Smart 구문이 있습니다">
-                  제안
+                <span className="badge warn" title={t.grid.smartHasSyntax}>
+                  {t.grid.smartSuggest}
                 </span>
               ) : null}
             </div>
           )
         }
       }),
-      editable('tags', '태그', 100, true),
+      editable('tags', t.columns.tags, 100, true),
       helper.accessor('translation', {
-        header: language ? `번역 (${language})` : '번역',
+        header: language ? t.grid.translationIn(language) : t.grid.translation,
         size: 240,
         cell: (info) => <span className="grid-text">{info.getValue()}</span>
       }),
       helper.accessor('status', {
-        header: '상태',
+        header: t.grid.status,
         size: 96,
         cell: (info) =>
           newKeys.has(info.row.original.key) ? (
-            <span className="status-badge new">새 행</span>
+            <span className="status-badge new">{t.grid.newRow}</span>
           ) : (
-            <span className={`status-badge ${info.getValue()}`}>
-              {STATUS_LABEL[info.getValue()] ?? info.getValue()}
-            </span>
+            <span className={`status-badge ${info.getValue()}`}>{statusLabel(info.getValue(), t)}</span>
           )
       })
     ]
-  }, [language, newKeys, onEdit, syntax])
+  }, [language, newKeys, onEdit, syntax, t])
 
   const table = useReactTable({
     data: rows,
@@ -244,7 +238,7 @@ export function StringsGrid({
               {header.column.getCanResize() ? (
                 <div
                   className={header.column.getIsResizing() ? 'col-resizer active' : 'col-resizer'}
-                  title="끌어서 너비 조절 · 더블클릭하면 기본 너비"
+                  title={t.common.resizeColumn}
                   onMouseDown={header.getResizeHandler()}
                   onTouchStart={header.getResizeHandler()}
                   onDoubleClick={() => header.column.resetSize()}

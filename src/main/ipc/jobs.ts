@@ -7,6 +7,7 @@ import { startTranslateJob } from '../jobs/translate-job'
 import { saveProjectConfig } from '../project/open'
 import { loadAppSettings } from '../store/app-settings'
 import { currentProject, replaceCurrentConfig } from './project'
+import { msg } from '../i18n'
 
 export function send(sender: WebContents, channel: string, payload: unknown): void {
   if (!sender.isDestroyed()) sender.send(channel, payload)
@@ -33,9 +34,9 @@ export function agentAuth(): { cliPath: string | null; configDir: string | null 
 export function registerJobsIpc(): void {
   ipcMain.handle(IPC.jobStart, (event, raw: unknown): IpcResult<JobView> => {
     const parsed = StartTranslateInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '번역 요청 형식이 올바르지 않습니다.', parsed.error.message)
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest, parsed.error.message)
     const project = currentProject()
-    if (!project) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+    if (!project) return fail('not-a-project', msg().errors.notAProject)
 
     // 고른 모델과 사고 수준을 기억한다. 저장에 실패해도 번역은 진행한다.
     const { model, effort } = parsed.data
@@ -49,7 +50,7 @@ export function registerJobsIpc(): void {
 
   ipcMain.handle(IPC.jobControl, (_event, raw: unknown): IpcResult<null> => {
     const parsed = JobControlInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '작업 제어 요청이 올바르지 않습니다.')
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest)
     return controlJob(parsed.data.action)
   })
 

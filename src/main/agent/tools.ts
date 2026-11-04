@@ -15,6 +15,7 @@ import {
   loadMaster,
   loadTranslations
 } from '../project/store'
+import { msg } from '../i18n'
 
 type Sdk = typeof AgentSdk
 
@@ -118,7 +119,6 @@ export type PanelHooks = {
   onDataWritten: (file: string) => void
 }
 
-const RULE_LABEL: Record<StyleRuleChange['op'], string> = { add: '추가', update: '수정', remove: '삭제' }
 
 /**
  * 에이전트 패널 채팅용 도구. 읽기 도구는 프로젝트 파일을 읽기만 한다.
@@ -132,7 +132,7 @@ export function createPanelServer(
 ): ReturnType<Sdk['createSdkMcpServer']> {
   const { onCall } = hooks
   const closed = (name: string): ToolResult => {
-    onCall({ name, summary: '프로젝트가 닫혀 있음', ok: false })
+    onCall({ name, summary: msg().panelTools.projectClosed, ok: false })
     return reply({ ok: false, message: 'No project is open.' }, true)
   }
 
@@ -146,7 +146,7 @@ export function createPanelServer(
       const { dir, config } = project
       const master = loadMaster(dir)
       const count = master.ok ? master.value.rows.length : 0
-      onCall({ name: 'get_project_context', summary: `원문 ${count}행 · 규칙 ${config.styleRules.length}개`, ok: true })
+      onCall({ name: 'get_project_context', summary: msg().panelTools.context(count, config.styleRules.length), ok: true })
       return reply({
         name: config.name,
         sourceLanguage: config.sourceLanguage,
@@ -190,7 +190,11 @@ export function createPanelServer(
         return [{ key, source: row.source, context: row.context, ui_type: row.ui_type, max_len: row.max_len, translations: perLanguage }]
       })
       const missing = keys.filter((key) => !byKey.has(key))
-      onCall({ name: 'get_strings_batch', summary: `${found.length}행${missing.length ? ` · 없는 키 ${missing.length}` : ''}`, ok: true })
+      onCall({
+        name: 'get_strings_batch',
+        summary: `${msg().panelTools.strings(found.length)}${missing.length ? msg().panelTools.stringsMissing(missing.length) : ''}`,
+        ok: true
+      })
       return reply({ strings: found, missing })
     }
   )
@@ -208,7 +212,7 @@ export function createPanelServer(
         return reply({ ok: false, message: loaded.error.message }, true)
       }
       const terms = filterTermsForTexts(loaded.value, texts, project.config.sourceLanguage)
-      onCall({ name: 'get_glossary_terms', summary: `${language} 용어 ${terms.length}개`, ok: true })
+      onCall({ name: 'get_glossary_terms', summary: msg().panelTools.glossary(language, terms.length), ok: true })
       return reply({ terms })
     }
   )
@@ -233,17 +237,17 @@ export function createPanelServer(
               ? { op, id, text: text ?? '' }
               : { op, id }
       if (!change) {
-        onCall({ name: 'update_project_rules', summary: 'id 없음', ok: false })
+        onCall({ name: 'update_project_rules', summary: msg().panelTools.noId, ok: false })
         return reply({ ok: false, code: 'missing-id' }, true)
       }
       // 저장은 하지 않고, 지금 규칙에 적용해 봐서 문제가 있으면 바로 알린다
-      const tried = applyStyleRuleChange(project.config.styleRules, change, new Date().toISOString())
+      const tried = applyStyleRuleChange(project.config.styleRules, change, new Date().toISOString(), msg())
       if (!tried.ok) {
         onCall({ name: 'update_project_rules', summary: tried.problem.message, ok: false })
         return reply({ ok: false, code: tried.problem.code }, true)
       }
       const current = change.op === 'add' ? null : (project.config.styleRules.find((rule) => rule.id === change.id)?.text ?? null)
-      onCall({ name: 'update_project_rules', summary: `규칙 ${RULE_LABEL[change.op]} 제안 — 사용자 확인 대기`, ok: true })
+      onCall({ name: 'update_project_rules', summary: msg().panelTools.ruleProposed[change.op], ok: true })
       hooks.onRuleProposal(change, current)
       return reply({ ok: true, status: 'awaiting_user_confirmation' })
     }
@@ -277,7 +281,7 @@ export function createPanelServer(
       if (added.length > 0) hooks.onDataWritten(GLOSSARY_FILE)
       onCall({
         name: 'propose_glossary_terms',
-        summary: `후보 ${added.length}개 추가(승인 대기)${existing.length ? ` · 이미 있음 ${existing.length}` : ''}${checked.issues.length ? ` · 거부 ${checked.issues.length}` : ''}`,
+        summary: `${msg().panelTools.termsAdded(added.length)}${existing.length ? msg().panelTools.termsExisting(existing.length) : ''}${checked.issues.length ? msg().panelTools.termsRejected(checked.issues.length) : ''}`,
         ok: checked.issues.length === 0
       })
       return reply({

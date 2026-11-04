@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { describeAuthMethod } from '@core/auth/method'
+import { authMethodKind, describeAuthMethod } from '@core/auth/method'
+import { messagesFor, type UiLanguage } from '@shared/i18n'
 import type { AgentCheckResult, AuthStatus, LoginMethod } from '@shared/schema/agent'
 import type { AppSettings } from '@shared/schema/app-settings'
 import type { AppUpdateStatus } from '@shared/schema/app-update'
@@ -25,13 +26,20 @@ import { Strings } from './components/screens/Strings'
 import { Translate } from './components/screens/Translate'
 import type { JobLogEntry, JobView } from '@shared/schema/jobs'
 import { Welcome } from './components/screens/Welcome'
-import { findScreen, type ScreenId } from './state/screens'
-import { effortLabel, modelLabel } from './state/translate-options'
+import { I18nProvider } from './i18n'
+import type { ScreenId } from './state/screens'
+
 
 const api = window.babel
 
 export function App(): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  /** 화면 언어. 고른 적이 없으면(null) 메인이 OS 표시 언어로 정해 preload 로 넘긴 값 */
+  const uiLanguage: UiLanguage = settings?.uiLanguage ?? api.initialUiLanguage
+  const t = messagesFor(uiLanguage)
+  /** 콜백·구독이 메시지를 만들 때 쓰는 지금 화면 언어의 카탈로그. 언어가 바뀌어도 콜백을 다시 만들지 않는다 */
+  const tRef = useRef(t)
+  tRef.current = t
   const [project, setProject] = useState<OpenProject | null>(null)
   const [screen, setScreen] = useState<ScreenId>('strings')
   /** 지금 화면에 저장하지 않은 편집이 있는지(프로젝트·원문 화면이 알려 준다). 다른 화면으로 갈 때 확인을 받는다. */
@@ -88,7 +96,7 @@ export function App(): React.JSX.Element {
     const offEnd = api.agent.onEnd(({ sessionId: id, durationMs }) => {
       setSending(false)
       setSessionId(id)
-      setMessage(`에이전트 응답 완료 (${(durationMs / 1000).toFixed(1)}초)`)
+      setMessage(tRef.current.app.agentDone((durationMs / 1000).toFixed(1)))
     })
     const offError = api.agent.onError(({ requestId, message: text, detail, kind }) => {
       setSending(false)
@@ -96,7 +104,7 @@ export function App(): React.JSX.Element {
         ...prev,
         { id: `${requestId}-error`, role: 'error', text, ...(detail ? { detail } : {}) }
       ])
-      setMessage(`에이전트 오류: ${kind}`)
+      setMessage(tRef.current.app.agentError(kind))
     })
     let toolCount = 0
     const offTool = api.agent.onTool(({ requestId, name, summary, ok }) => {
@@ -123,7 +131,7 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     return api.project.onChanged((next) => {
       setProject((prev) => (prev && prev.dir === next.dir ? next : prev))
-      setMessage('project.json 이 바뀌어 설정을 다시 읽었습니다.')
+      setMessage(tRef.current.app.projectReloaded)
     })
   }, [])
 
@@ -173,10 +181,10 @@ export function App(): React.JSX.Element {
     const apply = (status: AppUpdateStatus): void => {
       const { state } = status
       if (state.kind === 'available' && lastUpdateKind.current !== 'available') {
-        setMessage(`새 버전 ${state.version} 이 있습니다. 상태바나 설정 화면에서 [받기]를 누르세요.`)
+        setMessage(tRef.current.app.updateAvailable(state.version))
       }
       if (state.kind === 'downloaded' && lastUpdateKind.current !== 'downloaded') {
-        setMessage(`${state.version} 을 받아 두었습니다. 다시 시작하거나 앱을 끌 때 설치됩니다.`)
+        setMessage(tRef.current.app.updateDownloaded(state.version))
       }
       lastUpdateKind.current = state.kind
       setAppUpdate(status)
@@ -195,7 +203,7 @@ export function App(): React.JSX.Element {
   const checkAppUpdate = useCallback(async () => {
     const result = await api.appUpdate.check()
     if (!result.ok) setMessage(result.error.message)
-    else if (result.value.state.kind === 'current') setMessage('앱이 최신 버전입니다.')
+    else if (result.value.state.kind === 'current') setMessage(tRef.current.app.appUpToDate)
   }, [])
 
   const downloadAppUpdate = useCallback(async () => {
@@ -205,13 +213,13 @@ export function App(): React.JSX.Element {
 
   const cancelAppUpdate = useCallback(async () => {
     await api.appUpdate.cancel()
-    setMessage('업데이트 받기를 멈췄습니다.')
+    setMessage(tRef.current.app.downloadStopped)
   }, [])
 
   const installAppUpdate = useCallback(async () => {
     const result = await api.appUpdate.install()
     if (!result.ok) setMessage(result.error.message)
-    else setMessage('업데이트를 설치하려고 앱을 닫습니다. 설치가 끝나면 다시 열립니다.')
+    else setMessage(tRef.current.app.installingUpdate)
   }, [])
 
   /** 저장하지 않은 편집이 있으면 먼저 확인을 받는다 */
@@ -232,7 +240,7 @@ export function App(): React.JSX.Element {
     return api.cli.onInstallDone(() => {
       setCliBusy(false)
       void refreshCli().then((status) => {
-        setMessage(status?.version ? `Claude Code ${status.version} 을 찾았습니다.` : 'Claude Code 를 찾지 못했습니다. 설치 창의 메시지를 확인하세요.')
+        setMessage(status?.version ? tRef.current.app.cliFound(status.version) : tRef.current.app.cliNotFound)
         if (status?.version) void refreshAuth()
       })
     })
@@ -248,14 +256,15 @@ export function App(): React.JSX.Element {
       }
       setCliStatus(result.value.status)
       const { outcome, before, after } = result.value
+      const text = tRef.current
       setMessage(
         outcome === 'updated'
-          ? `Claude Code 를 ${before ?? '?'} → ${after ?? '?'} 으로 업데이트했습니다.`
+          ? text.claudeGate.updated(before ?? '?', after ?? '?')
           : outcome === 'current'
-            ? `Claude Code 가 최신입니다 (${after ?? '?'}).`
+            ? text.claudeGate.upToDate(after ?? '?')
             : outcome === 'skipped'
-              ? '개발용 Claude Code 는 업데이트하지 않습니다.'
-              : '업데이트하지 못했습니다. 설정 화면에서 다시 시도하세요.'
+              ? text.app.cliSkipped
+              : text.app.cliUpdateFailed
       )
     } finally {
       setCliBusy(false)
@@ -267,7 +276,7 @@ export function App(): React.JSX.Element {
     if (!result.ok) setMessage(result.error.message)
     else {
       setCliBusy(true)
-      setMessage('설치 창에서 진행합니다. 끝나면 그 창을 닫으세요.')
+      setMessage(tRef.current.app.installWindow)
     }
   }, [])
 
@@ -277,10 +286,10 @@ export function App(): React.JSX.Element {
       setAuth((prev) => ({ ...prev, loginRunning: false }))
       void refreshAuth().then((status) => {
         if (status?.loggedIn) {
-          setMessage(`로그인 상태를 확인했습니다: ${describeAuthMethod(status).label}`)
-          if (describeAuthMethod(status).kind === 'subscription') void refreshUsage()
+          setMessage(tRef.current.app.loginChecked(describeAuthMethod(status, tRef.current).label))
+          if (authMethodKind(status) === 'subscription') void refreshUsage()
         } else {
-          setMessage('로그인 창이 닫혔지만 로그인되지 않았습니다.')
+          setMessage(tRef.current.app.loginNotDone)
         }
       })
     })
@@ -297,14 +306,14 @@ export function App(): React.JSX.Element {
   const cancelLogin = useCallback(async () => {
     await api.auth.loginCancel()
     setAuth((prev) => ({ ...prev, loginRunning: false }))
-    setMessage('로그인 창을 닫았습니다.')
+    setMessage(tRef.current.app.loginClosed)
   }, [])
 
   const logout = useCallback(async () => {
     setBusy(true)
     try {
       const result = await api.auth.logout()
-      if (result.ok) setMessage('로그아웃했습니다.')
+      if (result.ok) setMessage(tRef.current.app.loggedOut)
       else setAuth((prev) => ({ ...prev, error: result.error }))
       await refreshAuth()
     } finally {
@@ -317,7 +326,7 @@ export function App(): React.JSX.Element {
     if (screen !== 'settings') return
     if (usage.limits !== null || usage.loading || usage.error !== null) return
     // 사용량 한도는 구독에만 있다. API 키·클라우드 제공자는 /usage 를 돌리지 않는다
-    if (describeAuthMethod(auth.status).kind !== 'subscription') return
+    if (authMethodKind(auth.status) !== 'subscription') return
     void refreshUsage()
   }, [screen, usage, auth.status, refreshUsage])
 
@@ -327,7 +336,7 @@ export function App(): React.JSX.Element {
       setScreen('strings')
       setTurns([])
       setSessionId(null)
-      setMessage(`프로젝트를 열었습니다: ${result.value.config.name}`)
+      setMessage(tRef.current.app.projectOpened(result.value.config.name))
     } else {
       setMessage(result.error.message)
     }
@@ -396,7 +405,7 @@ export function App(): React.JSX.Element {
       setProject(null)
       setTurns([])
       setSessionId(null)
-      setMessage('프로젝트를 닫았습니다.')
+      setMessage(tRef.current.app.projectClosed)
     } finally {
       setBusy(false)
     }
@@ -409,7 +418,7 @@ export function App(): React.JSX.Element {
       if (result.ok) {
         setSettings(result.value)
         setCheckResult(null)
-        setMessage('설정을 저장했습니다.')
+        setMessage(tRef.current.app.settingsSaved)
         void refreshCli()
         void refreshAuth()
       } else {
@@ -419,6 +428,17 @@ export function App(): React.JSX.Element {
       setBusy(false)
     }
   }, [refreshAuth, refreshCli])
+
+  /** 화면 언어를 고르면 바로 앱 설정에 저장한다. 저장되면 화면이 그 언어로 다시 그려진다 */
+  const changeUiLanguage = useCallback(async (language: UiLanguage) => {
+    const result = await api.settings.set({ uiLanguage: language })
+    if (result.ok) setSettings(result.value)
+    else setMessage(result.error.message)
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.lang = uiLanguage
+  }, [uiLanguage])
 
   /** project.json 부분 갱신. 프로젝트·번역·내보내기 화면이 같이 쓴다. 저장되면 열린 프로젝트 상태도 맞춘다. */
   const updateProject = useCallback(async (patch: ProjectSettingsPatch): Promise<IpcResult<OpenProject>> => {
@@ -436,7 +456,8 @@ export function App(): React.JSX.Element {
         return
       }
       const { model, effort } = result.value.config.translate
-      setMessage(`번역 설정을 저장했습니다: ${modelLabel(model)} · 사고 ${effortLabel(effort)}`)
+      const text = tRef.current
+      setMessage(text.app.translateSettingsSaved(text.translateOptions.summary(text.translateOptions.model[model], text.translateOptions.effort[effort])))
     },
     [updateProject]
   )
@@ -475,7 +496,7 @@ export function App(): React.JSX.Element {
       const requestId = crypto.randomUUID()
       setTurns((prev) => [...prev, { id: `${requestId}-user`, role: 'user', text }])
       setSending(true)
-      setMessage('에이전트에 요청을 보냈습니다…')
+      setMessage(tRef.current.app.agentSent)
       setActiveRequestId(requestId)
       const result = await api.agent.send({ requestId, text, projectDir: project.dir, sessionId })
       if (!result.ok) {
@@ -508,7 +529,7 @@ export function App(): React.JSX.Element {
       }
       setProject(result.value.project)
       updateRuleCard(turnId, { state: 'saved', ruleId: result.value.ruleId })
-      setMessage(`스타일 규칙을 저장했습니다 (${result.value.ruleId}). 다음 번역 배치부터 반영됩니다.`)
+      setMessage(tRef.current.app.ruleSaved(result.value.ruleId))
     },
     [turns, updateRuleCard]
   )
@@ -525,11 +546,11 @@ export function App(): React.JSX.Element {
     await api.agent.cancel({ requestId: activeRequestId })
   }, [activeRequestId])
 
-  const screenDef = findScreen(screen)
-  // 프로젝트가 없으면 메인에 시작 화면이 뜨므로 칩도 그에 맞춘다
-  const screenLabel = screen === 'settings' ? '설정' : project ? screenDef.label : '시작'
 
-  return (
+  // 프로젝트가 없으면 메인에 시작 화면이 뜨므로 칩도 그에 맞춘다
+  const screenLabel = screen === 'settings' || project ? t.screens[screen].label : t.titleBar.start
+
+  const shell = (
     <div className="app-shell">
       <TitleBar project={project} screenLabel={screenLabel} />
 
@@ -552,11 +573,12 @@ export function App(): React.JSX.Element {
             checkResult={checkResult}
             onSave={saveSettings}
             onCheck={checkAgent}
+            onLanguageChange={(language) => void changeUiLanguage(language)}
             auth={auth}
             usage={usage}
             onAuthRefresh={() => {
               void refreshAuth().then((status) => {
-                if (describeAuthMethod(status).kind === 'subscription') void refreshUsage()
+                if (authMethodKind(status) === 'subscription') void refreshUsage()
               })
             }}
             onLoginStart={(method) => void startLogin(method)}
@@ -650,9 +672,9 @@ export function App(): React.JSX.Element {
 
       {pendingLeave ? (
         <ConfirmDialog
-          title="저장하지 않은 변경"
+          title={t.app.unsavedTitle}
           confirmLabel={
-            pendingLeave.kind === 'close' ? '버리고 닫기' : pendingLeave.kind === 'update' ? '버리고 다시 시작' : '버리고 이동'
+            pendingLeave.kind === 'close' ? t.app.discardClose : pendingLeave.kind === 'update' ? t.app.discardRestart : t.app.discardLeave
           }
           danger
           onCancel={() => setPendingLeave(null)}
@@ -669,7 +691,7 @@ export function App(): React.JSX.Element {
             else setScreen(leave.id)
           }}
         >
-          <p className="hint">{findScreen(screen).label} 화면에 저장하지 않은 변경이 있습니다. 계속하면 사라집니다.</p>
+          <p className="hint">{t.app.unsavedBody(t.screens[screen].label)}</p>
         </ConfirmDialog>
       ) : null}
 
@@ -693,4 +715,6 @@ export function App(): React.JSX.Element {
       ) : null}
     </div>
   )
+
+  return <I18nProvider language={uiLanguage}>{shell}</I18nProvider>
 }

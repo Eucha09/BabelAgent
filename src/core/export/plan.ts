@@ -17,6 +17,7 @@ import { autoColumns, columnProblems, ID_COLUMN, inferTemplateColumns, KEY_COLUM
 import { resolveLocales } from './locales'
 import { buildExportTable, glyphFileName, sanitizeFileName, smartFileName, type ExportBuild, type ExportTranslations } from './rows'
 import { collectionInfos, matchIds, selectSharedTable, uniqueLocales, type UnitySharedTable } from './unity-yaml'
+import type { Messages } from '@shared/i18n'
 
 /** 메인이 Unity 프로젝트 폴더를 읽은 결과 */
 export type UnityScanResult =
@@ -78,7 +79,7 @@ function templateMapping(
   return { columns: inferTemplateColumns(header, allLocales), reinferred: saved.length > 0 }
 }
 
-export function planExport(input: ExportPlanInput): ExportPlan {
+export function planExport(input: ExportPlanInput, t: Messages): ExportPlan {
   const { config, request, master, translations } = input
   const problems: string[] = []
   const warnings: string[] = []
@@ -86,15 +87,15 @@ export function planExport(input: ExportPlanInput): ExportPlan {
   // Unity: 로케일과 공유 데이터
   const scan = input.unity
   const unityLocales = scan.state === 'ok' ? uniqueLocales(scan.locales) : null
-  if (scan.state === 'failed') warnings.push(`Unity 프로젝트를 읽지 못해 기본 자동 생성으로 내보냅니다: ${scan.reason}`)
+  if (scan.state === 'failed') warnings.push(t.exportCheck.unityUnreadable(scan.reason))
 
   const allLanguages = [config.sourceLanguage, ...config.targetLanguages]
   const languages = exportLanguages(config, request.languages)
-  if (languages.length === 0) problems.push('내보낼 언어를 고르세요.')
+  if (languages.length === 0) problems.push(t.exportCheck.noLanguages)
 
   // 템플릿 추론은 프로젝트 언어 전체로, 헤더는 고른 언어로 만든다
-  const all = resolveLocales(allLanguages, config.sourceLanguage, config.export.locales, unityLocales)
-  const resolved = resolveLocales(languages, config.sourceLanguage, config.export.locales, unityLocales)
+  const all = resolveLocales(allLanguages, config.sourceLanguage, config.export.locales, unityLocales, t)
+  const resolved = resolveLocales(languages, config.sourceLanguage, config.export.locales, unityLocales, t)
   const locales = resolved.locales
   const chosen = new Set(languages)
   warnings.push(...resolved.warnings)
@@ -107,21 +108,21 @@ export function planExport(input: ExportPlanInput): ExportPlan {
   const read = input.template
   if (read.state === 'failed') {
     template = read
-    warnings.push(`템플릿을 읽지 못해 자동 생성 헤더를 씁니다: ${read.reason}`)
+    warnings.push(t.exportCheck.templateUnreadable(read.reason))
   } else if (read.state === 'ok') {
     const mapping = templateMapping(config.export.template?.columns ?? [], read.header, all.locales)
     template = { state: 'ok', path: read.path, header: read.header, columns: mapping.columns, reinferred: mapping.reinferred }
-    if (mapping.reinferred) warnings.push('템플릿 헤더가 저장된 매핑과 달라 열 역할을 다시 추론했습니다. 확인한 뒤 매핑을 저장하세요.')
+    if (mapping.reinferred) warnings.push(t.exportCheck.templateReinferred)
     const omitted = mapping.columns.filter((column) => column.role === 'omit').map((column) => column.name)
-    if (omitted.length > 0) warnings.push(`템플릿 열 ${omitted.length}개는 내보내지 않습니다: ${omitted.join(', ')}`)
+    if (omitted.length > 0) warnings.push(t.exportCheck.templateOmitted(omitted.length, omitted.join(', ')))
     headerSource = 'template'
     columns = templateColumns(mapping.columns, chosen, options)
     const mapped = new Set(columns.filter((column) => column.role === 'value').map((column) => column.language))
     const unmapped = languages.filter((language) => !mapped.has(language))
-    if (unmapped.length > 0) warnings.push(`템플릿에 값 열이 없어 내보내지 않는 언어: ${unmapped.join(', ')}`)
+    if (unmapped.length > 0) warnings.push(t.exportCheck.templateUnmapped(unmapped.join(', ')))
   }
-  problems.push(...columnProblems(columns))
-  if (master.length === 0) problems.push('원문이 없습니다.')
+  problems.push(...columnProblems(columns, t))
+  if (master.length === 0) problems.push(t.exportCheck.noSource)
 
   // Id: 고른 컬렉션의 공유 데이터
   let tableName: string | null = null
@@ -133,11 +134,11 @@ export function planExport(input: ExportPlanInput): ExportPlan {
       tableName = selection.table.collection
       ids = matchIds(selection.table, master.map((row) => row.key)).ids
     } else if (selection.kind === 'choose') {
-      notices.push('String Table 컬렉션이 여럿입니다. 하나를 고르면 기존 키의 Id 를 채웁니다.')
+      notices.push(t.exportCheck.chooseCollection)
     } else if (selection.kind === 'missing') {
-      notices.push(`고른 컬렉션 "${selection.name}" 을 찾지 못했습니다. Id 를 비웁니다.`)
+      notices.push(t.exportCheck.collectionMissing(selection.name))
     } else {
-      notices.push('String Table 공유 데이터 에셋을 찾지 못했습니다. Id 를 비웁니다.')
+      notices.push(t.exportCheck.noSharedTable)
     }
   }
 

@@ -18,6 +18,7 @@ import { createPanelServer, mcpToolName, PANEL_TOOL_NAMES } from '../agent/tools
 import { readUsageLimits } from '../agent/usage'
 import { loadAppSettings } from '../store/app-settings'
 import { currentProject } from './project'
+import { msg } from '../i18n'
 
 function send(sender: WebContents, channel: string, payload: unknown): void {
   if (!sender.isDestroyed()) sender.send(channel, payload)
@@ -40,12 +41,12 @@ export function registerAgentIpc(): void {
   ipcMain.handle(IPC.agentChatSend, async (event, raw: unknown): Promise<IpcResult<null>> => {
     const parsed = AgentChatSendInput.safeParse(raw)
     if (!parsed.success) {
-      return fail('unknown', '메시지 형식이 올바르지 않습니다.', parsed.error.message)
+      return fail('unknown', msg().errors.invalidRequest, parsed.error.message)
     }
     const input = parsed.data
     const project = currentProject()
     if (!project || project.dir !== input.projectDir) {
-      return fail('not-a-project', '프로젝트를 먼저 열어야 에이전트를 쓸 수 있습니다.')
+      return fail('not-a-project', msg().errors.agentNeedsProject)
     }
 
     const { cliPath, claudeConfigDir } = loadAppSettings()
@@ -96,7 +97,7 @@ export function registerAgentIpc(): void {
 
   ipcMain.handle(IPC.agentChatCancel, (_event, raw: unknown): IpcResult<boolean> => {
     const parsed = AgentChatCancelInput.safeParse(raw)
-    if (!parsed.success) return fail('unknown', '취소 요청이 올바르지 않습니다.')
+    if (!parsed.success) return fail('unknown', msg().errors.invalidRequest)
     return ok(cancelChat(parsed.data.requestId))
   })
 }

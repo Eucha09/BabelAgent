@@ -14,6 +14,8 @@ import { createSubmitServer, mcpToolName } from '../agent/tools'
 import { qaContext, toQaInput } from '../project/qa'
 import { loadGlossaryTerms, loadMaster, loadTranslations, trustedSnapshot } from '../project/store'
 import { MAX_TURNS } from './agent-batch'
+import { msg, uiLanguage } from '../i18n'
+import { UI_LOCALE } from '@shared/i18n'
 
 const running = new Map<string, AbortController>()
 
@@ -25,9 +27,9 @@ export function cancelReroll(requestId: string): boolean {
 }
 
 function describeReset(resetsAt: number | null): string {
-  if (resetsAt === null) return '잠시 뒤 다시 시도하세요.'
-  const time = new Date(resetsAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-  return `${time}에 풀립니다. 그 뒤에 다시 시도하세요.`
+  if (resetsAt === null) return msg().jobLog.retryLater
+  const time = new Date(resetsAt).toLocaleTimeString(UI_LOCALE[uiLanguage()], { hour: '2-digit', minute: '2-digit' })
+  return msg().jobLog.resetsAt(time)
 }
 
 /**
@@ -43,12 +45,12 @@ export async function runReroll(
   const { dir, config } = project
   const { language, key, instruction, requestId } = input
   if (!config.targetLanguages.includes(language)) {
-    return fail('invalid-input', `${language} 은 이 프로젝트의 대상 언어가 아닙니다.`)
+    return fail('invalid-input', msg().errors.notTargetLanguage(language))
   }
   const master = loadMaster(dir)
   if (!master.ok) return master
   const row = master.value.rows.find((item) => item.key === key)
-  if (!row) return fail('invalid-input', `원문에 없는 키입니다: ${key}`)
+  if (!row) return fail('invalid-input', msg().errors.keyNotInSource(key))
   const translations = loadTranslations(dir, language)
   if (!translations.ok) return translations
   const current = translations.value.rows.find((item) => item.key === key)
@@ -56,16 +58,16 @@ export async function runReroll(
   const glossary = loadGlossaryTerms(dir, language)
   const terms = glossary.ok ? glossary.value : []
   const qa = qaContext(config, language, terms)
-  const check = (text: string) => checkRow(toQaInput(row, { text, status: 'draft', source_hash: row.source_hash }), qa)
+  const check = (text: string) => checkRow(toQaInput(row, { text, status: 'draft', source_hash: row.source_hash }), qa, msg())
 
   let sdk: Awaited<ReturnType<typeof loadAgentSdk>>
   try {
     sdk = await loadAgentSdk()
   } catch (error) {
-    return fail('agent', 'Agent SDK를 불러오지 못했습니다.', String(error))
+    return fail('agent', msg().errors.sdkLoadFailed, String(error))
   }
 
-  log({ level: 'info', batchId: null, message: `재번역 ${key} (${language}) 시작${instruction.trim() ? ` — 지시: ${instruction.trim()}` : ''}` })
+  log({ level: 'info', batchId: null, message: msg().jobLog.rerollStart(key, language, instruction.trim() ? msg().jobLog.instruction(instruction.trim()) : '') })
   const submit = createSubmitServer(
     sdk,
     {
@@ -81,7 +83,7 @@ export async function runReroll(
     },
     (event) => {
       if (!event.ok) {
-        log({ level: 'warn', batchId: null, message: `재번역 ${key} · ${SUBMIT_TOOL} → 검증 실패 (${event.attempt}번째)`, detail: event.problems })
+        log({ level: 'warn', batchId: null, message: msg().jobLog.validationFailedOnce(msg().jobLog.rerollLabel(key), SUBMIT_TOOL, event.attempt), detail: event.problems })
       }
     }
   )
@@ -118,7 +120,7 @@ export async function runReroll(
 
   const accepted = submit.accepted()?.[0]
   if (accepted) {
-    log({ level: 'ok', batchId: null, message: `재번역 ${key} → 후보 받음 (신뢰도 ${accepted.confidence})` })
+    log({ level: 'ok', batchId: null, message: msg().jobLog.rerollCandidate(key, accepted.confidence) })
     return ok({
       requestId,
       language,
@@ -131,19 +133,19 @@ export async function runReroll(
     })
   }
   if (controller.signal.aborted) {
-    log({ level: 'info', batchId: null, message: `재번역 ${key} 취소` })
-    return fail('cancelled', '재번역을 취소했습니다.')
+    log({ level: 'info', batchId: null, message: msg().jobLog.cancelledLog(msg().jobLog.rerollLabel(key)) })
+    return fail('cancelled', msg().jobLog.rerollCancelled)
   }
   if (session.limit) {
-    log({ level: 'warn', batchId: null, message: `재번역 ${key} — 사용량 한도` })
-    return fail('limit', `사용량 한도에 걸렸습니다. ${describeReset(session.limit.resetsAt)}`)
+    log({ level: 'warn', batchId: null, message: msg().jobLog.limitLog(msg().jobLog.rerollLabel(key)) })
+    return fail('limit', msg().jobLog.limitHit(describeReset(session.limit.resetsAt)))
   }
   const problems = submit.lastProblems()
   const [message, detail] = problems
-    ? ['후보가 검증을 통과하지 못했습니다.', problems]
+    ? [msg().jobLog.candidateRejected, problems]
     : session.agentError
-      ? ['에이전트 실행 중 오류가 났습니다.', session.agentError]
-      : ['에이전트가 후보를 제출하지 않았습니다.', undefined]
-  log(detail === undefined ? { level: 'error', batchId: null, message: `재번역 ${key} 실패: ${message}` } : { level: 'error', batchId: null, message: `재번역 ${key} 실패: ${message}`, detail })
+      ? [msg().jobLog.agentFailed, session.agentError]
+      : [msg().jobLog.noCandidate, undefined]
+  log(detail === undefined ? { level: 'error', batchId: null, message: msg().jobLog.failed(msg().jobLog.rerollLabel(key), message) } : { level: 'error', batchId: null, message: msg().jobLog.failed(msg().jobLog.rerollLabel(key), message), detail })
   return fail('agent', message, detail)
 }

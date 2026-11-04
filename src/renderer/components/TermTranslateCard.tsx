@@ -4,7 +4,7 @@ import { findTranslateTargets, TERMS_PER_BATCH } from '@core/terms/translation'
 import { clampConcurrency } from '@core/translate/batches'
 import type { GlossaryEntry, StartTermTranslateInput, TermsScope } from '@shared/schema/glossary'
 import type { ProjectConfig } from '@shared/schema/project'
-import { effortLabel, modelLabel } from '../state/translate-options'
+import { useT } from '../i18n'
 
 type Props = {
   config: ProjectConfig
@@ -24,6 +24,7 @@ type Props = {
  * 언어를 따로 고르지 않으면 빈 칸이 있는 언어를 모두 고른 것으로 본다 — 대상 언어를 늘린 뒤 바로 누르면 되게.
  */
 export function TermTranslateCard({ config, entries, languages, chosenTerms, disabled, blockedBy, onStart }: Props): React.JSX.Element {
+  const t = useT()
   const [scope, setScope] = useState<TermsScope>('all')
   /** null 이면 빈 칸이 있는 언어 전부 */
   const [picked, setPicked] = useState<ReadonlySet<string> | null>(null)
@@ -55,9 +56,9 @@ export function TermTranslateCard({ config, entries, languages, chosenTerms, dis
 
   return (
     <section className="card">
-      <h3>용어 번역</h3>
+      <h3>{t.termTranslate.title}</h3>
       {languages.length === 0 ? (
-        <p className="hint">대상 언어가 없습니다. 프로젝트 화면에서 정하세요.</p>
+        <p className="hint">{t.common.setTargetLanguages}</p>
       ) : (
         <div className="check-row" style={{ margin: '0 0 var(--space-2)' }}>
           {languages.map((language) => (
@@ -69,7 +70,7 @@ export function TermTranslateCard({ config, entries, languages, chosenTerms, dis
                 onChange={(event) => toggle(language, event.target.checked)}
               />
               <code>{language}</code>
-              <span className="scope-count">빈 칸 {emptyCounts.get(language) ?? 0}</span>
+              <span className="scope-count">{t.termTranslate.emptyCells(emptyCounts.get(language) ?? 0)}</span>
             </label>
           ))}
         </div>
@@ -77,7 +78,7 @@ export function TermTranslateCard({ config, entries, languages, chosenTerms, dis
       <div className="scope-options">
         <label className={scope === 'all' ? 'scope-option selected' : 'scope-option'}>
           <input type="radio" name="term-translate-scope" checked={scope === 'all'} disabled={disabled} onChange={() => setScope('all')} />
-          <span>빈 칸 전체</span>
+          <span>{t.termTranslate.scopeAll}</span>
           <span className="scope-count">{entries.length}</span>
         </label>
         <label className={scope === 'selected' ? 'scope-option selected' : 'scope-option'}>
@@ -88,13 +89,16 @@ export function TermTranslateCard({ config, entries, languages, chosenTerms, dis
             disabled={disabled}
             onChange={() => setScope('selected')}
           />
-          <span>선택한 용어</span>
+          <span>{t.termTranslate.scopeSelected}</span>
           <span className="scope-count">{chosenTerms.length}</span>
         </label>
       </div>
       <p className="hint">
-        모델 {modelLabel(config.translate.model)} · 사고 {effortLabel(config.translate.effort)} · 배치 용어 {TERMS_PER_BATCH}개 ·
-        작업자 {clampConcurrency(config.batch.concurrency)}
+        {[
+          t.translateOptions.summary(t.translateOptions.model[config.translate.model], t.translateOptions.effort[config.translate.effort]),
+          t.translateOptions.termBatch(TERMS_PER_BATCH),
+          t.translateOptions.workers(clampConcurrency(config.batch.concurrency))
+        ].join(' · ')}
       </p>
       <div className="row" style={{ marginTop: 'var(--space-3)' }}>
         <button
@@ -103,11 +107,11 @@ export function TermTranslateCard({ config, entries, languages, chosenTerms, dis
           disabled={disabled || targets.length === 0}
           onClick={() => onStart({ languages: effective, scope, terms: scope === 'selected' ? [...chosenTerms] : [] })}
         >
-          번역 시작
+          {t.termTranslate.start}
         </button>
         <span className="hint">
-          {targets.length > 0 ? `용어 ${targets.length}개 · 칸 ${cells}개 · 배치 ${batches}개` : '고른 언어에 빈 칸이 없습니다'}
-          {blockedBy ? ` — ${blockedBy} 중` : ''}
+          {targets.length > 0 ? t.termTranslate.plan(targets.length, cells, batches) : t.termTranslate.nothing}
+          {blockedBy ? t.job.busyWith(blockedBy) : ''}
         </span>
       </div>
     </section>

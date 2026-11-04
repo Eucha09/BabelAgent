@@ -1,6 +1,7 @@
 import { parseAllDocuments } from 'yaml'
 import { z } from 'zod'
 import type { UnityCollectionInfo, UnityLocaleInfo } from '@shared/schema/export'
+import type { Messages } from '@shared/i18n'
 
 /**
  * Unity 텍스트 직렬화(YAML) 에셋 읽기. 필드 이름은 실제 파일로 확인했다(docs/unity-export.md):
@@ -68,9 +69,9 @@ function documents(text: string): { values: unknown[]; error: string | null } {
 }
 
 /** 로케일 또는 공유 데이터 에셋 하나를 읽는다. kind 는 sniffUnityAsset 결과. */
-export function parseUnityAsset(text: string, kind: 'locale' | 'shared-table'): UnityAssetParse {
+export function parseUnityAsset(text: string, kind: 'locale' | 'shared-table', t: Messages): UnityAssetParse {
   const { values, error } = documents(text)
-  if (error !== null) return { kind: 'invalid', reason: `YAML 오류: ${error}` }
+  if (error !== null) return { kind: 'invalid', reason: t.exportCheck.yamlError(error) }
 
   if (kind === 'locale') {
     for (const value of values) {
@@ -78,11 +79,11 @@ export function parseUnityAsset(text: string, kind: 'locale' | 'shared-table'): 
       if (!parsed.success) continue
       const { m_Identifier, m_LocaleName, m_Name } = parsed.data.MonoBehaviour
       const code = m_Identifier.m_Code.trim()
-      if (code === '') return { kind: 'invalid', reason: '로케일 코드(m_Identifier.m_Code)가 비어 있습니다.' }
+      if (code === '') return { kind: 'invalid', reason: t.exportCheck.localeCodeEmpty }
       const name = (m_LocaleName ?? '').trim() || (m_Name ?? '').trim() || code
       return { kind: 'locale', locale: { code, name } }
     }
-    return { kind: 'invalid', reason: 'm_Identifier.m_Code 를 찾지 못했습니다.' }
+    return { kind: 'invalid', reason: t.exportCheck.localeCodeMissing }
   }
 
   for (const value of values) {
@@ -98,7 +99,7 @@ export function parseUnityAsset(text: string, kind: 'locale' | 'shared-table'): 
       }
     }
   }
-  return { kind: 'invalid', reason: 'm_TableCollectionName·m_Entries 를 찾지 못했습니다.' }
+  return { kind: 'invalid', reason: t.exportCheck.sharedTableMissing }
 }
 
 /** 같은 코드(대소문자 무시)의 로케일이 여러 에셋에 있으면 처음 것만 둔다. 코드 순으로 정렬. */

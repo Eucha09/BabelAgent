@@ -17,6 +17,7 @@
 | M6 | 내보내기 | [~] | (UI 확인 대기) |
 | 배포 | 배포 준비(인증·Claude Code·설치판·자동 릴리스·앱 업데이트) | [~] | (Claude Code [설치] 버튼, 첫 릴리스·앱 업데이트 확인 대기) |
 | 다듬기 | 화면 정리 | [~] | |
+| 화면 언어 | 한국어·영어 UI | [~] | (영어 화면 확인 대기) |
 | M7 | 선택 기능 | [ ] | |
 
 ## M1 골격
@@ -273,6 +274,44 @@ GitHub 공개·배포를 위한 정리. 인증을 Anthropic 규정에 맞추고,
 - 모델·사고 수준·배치 정보 줄은 세 작업 카드(컨텍스트·용어 추출·용어 번역)에서 같은 순서(모델 · 사고 · 배치 · 작업자)로 맞췄다. 다른 작업이 도는 중이면 "— 컨텍스트 추정 중"처럼 짧게 적는다.
 - 설명 문단이 빠져 화면 제목 아래 여백(`.screen-title`)을 늘리고, 제목과 버튼이 한 줄인 머리(`.strings-header`)는 가운데 정렬로 바꿨다. 프로젝트 화면의 고정 머리는 아래 여백을 배경 안에 둔다.
 - 확인: 빌드한 앱을 임시 사용자 폴더·임시 프로젝트로 띄워 시작·프로젝트·원문·컨텍스트·용어집·번역·검토·내보내기·설정 화면을 캡처했다(머리 정렬, 여백).
+
+## 화면 언어
+
+앱 화면을 한국어·영어로 고를 수 있게 한다(사용자 요청, 2026-11-02). 단계마다 typecheck·test 를 통과시키고, 1단계 뒤 화면을 보고 이어 간다.
+
+- [x] 1단계: 기반과 설정 화면 — 카탈로그(`src/shared/i18n/`), 앱 설정 `uiLanguage`, 처음 언어 전달(preload), `useT()`, 설정 화면 "언어" 카드, 설정 화면(계정·Claude Code 연결·앱 업데이트·사용량)과 core 의 인증 방식·사용량 문구
+- [x] 2단계: 나머지 화면과 대화상자(사이드바·상단 바·상태바·에이전트 패널·각 단계 화면·Claude Code 확인 창, App 의 상태바 메시지)
+- [x] 3단계: 메인 프로세스 메시지(IPC 오류, 작업 로그·요약, 파일 선택 창 제목, 에이전트 도구 요약, Claude Code 확인·앱 업데이트 메시지)
+- [x] 4단계: core 메시지(QA 진단, 내보내기 경고·문제, 설정 검증, 상태 라벨, 언어 이름)
+- [~] 5단계: 영어 문구 다듬기, 두 언어로 화면 캡처해 넘치는 곳 확인 — 캡처로 확인, 사용자 확인 대기
+- [x] 6단계: 문서(CLAUDE.md, architecture, README, guide-notes), `catalog.test.ts`의 한글 검사를 `src` 전체로
+
+결정 (2026-11-02, 사용자가 모두 권장안을 골랐다):
+
+- 처음 언어는 OS 표시 언어를 따른다. 첫 번째 선호 언어가 한국어면 한국어, 그 밖은 영어. 설정 화면에서 고르면 앱 설정에 저장되고, 다시 시작하지 않고 바로 바뀐다.
+- 에이전트가 쓰는 메모·컨텍스트·변수 설명은 지금처럼 원문 언어. 프롬프트는 바꾸지 않는다(캐시 유지).
+- 라이브러리 없이 자체 카탈로그. `ko.ts`가 기준이고 `en.ts`는 `Messages`(= `typeof ko`) 타입이라 키가 빠지거나 남으면 typecheck 가 실패한다. 값은 문자열 또는 인자를 받는 함수(영어 복수형은 함수 안에서).
+- 범위는 화면·메인·core 메시지 전부.
+
+메모 (1단계, 2026-11-02):
+
+- 앱 설정 `uiLanguage: 'ko' | 'en' | null`(null = 고른 적 없음). 메인이 창을 만들 때 `resolveUiLanguage(설정, app.getPreferredSystemLanguages())`로 정해 `additionalArguments`로 넘기고, preload 가 `window.babel.initialUiLanguage`로 노출한다. sandbox preload 는 외부 모듈을 못 불러오므로 preload 가 쓰는 `languages.ts`는 zod 없이 둔다. 렌더러의 언어는 `settings.uiLanguage ?? initialUiLanguage`.
+- 선택지 이름은 그 언어로 적는다(한국어 / English) — 읽지 못하는 언어로 바꿔도 되돌릴 수 있게.
+- core 의 문구 함수는 `t: Messages`를 받는다(`describeAuthMethod`, `usageLabel`, `formatRemaining`). 종류만 볼 때 쓰는 `authMethodKind`를 따로 뺐다(App 의 구독 여부 판단에 문구가 필요 없게). 기존 테스트는 `ko`를 넘기고 영어 사례를 더했다.
+- `catalog.test.ts`: 두 카탈로그의 모양이 같은지, 영어 카탈로그에 한글이 없는지, 빈 문구가 없는지, 옮긴 파일(`MIGRATED`)의 코드에 한글이 없는지(주석 제외). 단계마다 목록을 늘린다.
+- 확인: 빌드한 앱을 임시 사용자 폴더로 띄워 처음 언어(이 PC 는 ko), 설정에서 English 로 바꾸면 즉시 전환·`settings.json`에 저장, 다시 켜면 English 로 시작하는 것을 캡처로 봤다. 사이드바·상태바·에이전트 패널과 메인이 만드는 문구(앱 업데이트 상태 등)는 아직 한국어(2·3단계).
+- 테스트 595개(+23).
+
+메모 (2~6단계, 2026-11-03):
+
+- 렌더러: 모든 컴포넌트가 `useT()`/`useI18n()`. 열거형 라벨 표(상태·QA 규칙·빠른 필터·화면·모델·사고 수준·작업 종류·일괄 승인 건너뜀)는 카탈로그의 키 묶음으로 옮기고 `satisfies Record<…>`로 키를 열거형에 묶었다. `state/review.ts`·`STATUS_LABEL`·`JOB_TITLE`·`MODEL_OPTIONS`·`shared/schema/jobs`의 `JOB_UNIT`은 지웠다. 상태 이름은 CSV 의 모르는 값을 그대로 보여 주도록 `statusLabel()`(`state/labels.ts`). 그리드의 열 정의 `useMemo`·콜백은 `t`를 의존성에 넣고, App 의 상태바 메시지는 `tRef`로 그때 언어를 읽는다. 언어 이름은 화면 언어로 보여 주고(영어면 Unity·CLDR 영어 이름 — `englishLanguageName`), 찾기는 두 이름 모두로 된다.
+- Claude Code 확인 창은 "끝남" 단계에 문장 대신 업데이트 결과를 들고 있다가 그릴 때 문장을 만든다(확인 중에 언어가 바뀌어도 맞게).
+- 메인: `msg()`. 언어를 모듈 변수로 두고 앱 시작·설정 저장 때 정한다 — 처음에는 `app`을 직접 불렀는데, 파일·프로젝트 모듈이 Electron 없이 단위 테스트로 돌아서 바꿨다(정하기 전 기본값 한국어라 기존 테스트의 한국어 기대값이 그대로 맞는다). "…요청 형식이 올바르지 않습니다"처럼 IPC 페이로드 검증 실패 문구는 `errors.invalidRequest` 하나로 합쳤다(정상 사용에서는 나오지 않고, 상세에 zod 오류가 남는다). 연결 확인 세션의 프롬프트 "연결 확인"은 "Connection check"로 바꿨다(에이전트에게 가는 글은 영어).
+- core: 문구를 만드는 함수가 마지막 인자로 `t: Messages`(`checkRow`, `fieldValueProblem`·`applySuggestionValues`, `columnProblems`·`resolveLocales`·`planExport`·`parseUnityAsset`, `applyStyleRuleChange`, `validateProjectSettings`·`fromProjectForm`, `applyManualUpdate`, `describeInjectedTerms`, `describeUpdateError`). 테스트는 `ko`를 넘기고, QA 에는 영어 사례를 더했다. `core/strings/import.ts`의 한국어 열 머리 별칭(키·원문…)은 입력을 알아보는 값이라 그대로 둔다.
+- 5단계에서 고친 것: 영어에서 용어집 그리드 위 도구 모음이 넘쳐 버튼이 잘렸다 — 영어 버튼 이름을 줄이고(Deselect·Delete·Retranslate·Approve (n)), `.grid-toolbar`가 좁으면 버튼 줄이 아래로 넘어가게 했다. 상태 배지 "Partly pending" → "Partial", 그리드 머리 "Max length"·"Part of speech" → "Max len"·"Category"(두 줄로 꺾였다), 검토 검색 자리표시 문구를 줄였다. 한국어 화면은 그대로인 것을 같이 캡처했다.
+- 일부러 남긴 것: QA 진단 목록에 규칙 이름과 문장이 겹쳐 보이는 것("Too long Too long: 23 / 12 chars", 한국어도 "길이 초과 길이 초과: …")은 원래 그렇던 모양이라 이번에 바꾸지 않았다.
+- 확인: 빌드한 앱을 임시 프로필(영어·한국어 각각)과 샘플 프로젝트(원문 6행, 번역 4행, 용어 2개)로 띄워 모든 단계 화면·검토 상세·행 추가 대화상자를 캡처했다.
+- 테스트 745개(+150, 대부분 `catalog.test.ts`의 파일별 한글 검사).
 
 ## M7 선택 기능
 

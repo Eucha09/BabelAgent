@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildLanguageOptions, COMMON_LANGUAGES, customLanguageCode, filterLanguageOptions, koreanLanguageName } from './languages'
+import {
+  buildLanguageOptions,
+  COMMON_LANGUAGES,
+  customLanguageCode,
+  englishLanguageName,
+  filterLanguageOptions,
+  koreanLanguageName
+} from './languages'
 
 const options = buildLanguageOptions()
 const codes = (items: readonly { code: string }[]): string[] => items.map((item) => item.code)
@@ -22,6 +29,9 @@ describe('buildLanguageOptions', () => {
     expect(options[0]).toEqual({ code: 'ko', name: '한국어', englishName: 'Korean', common: true })
     expect(options.find((item) => item.code === 'zh-Hant')?.englishName).toBe('Chinese (Traditional)')
     expect(koreanLanguageName('not a code')).toBe('')
+    expect(englishLanguageName('zh-Hant')).toBe('Chinese (Traditional)')
+    expect(englishLanguageName('ko')).toBe('Korean')
+    expect(englishLanguageName('not a code')).toBe('')
   })
 })
 

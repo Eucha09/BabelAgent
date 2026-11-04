@@ -4,6 +4,7 @@ import { describeUpdateError, downloadPercent, type UpdatePhase } from '@core/up
 import { IPC_EVENT } from '@shared/ipc'
 import type { AppUpdateState, AppUpdateStatus } from '@shared/schema/app-update'
 import { fail, ok, type IpcResult } from '@shared/types'
+import { msg } from '../i18n'
 
 /**
  * 앱 자동 업데이트. 새 버전은 GitHub Releases(electron-builder.yml 의 publish)에서 확인한다.
@@ -44,13 +45,13 @@ function availableState(info: UpdateInfo): AppUpdateState {
 }
 
 function errorState(error: unknown, during: UpdatePhase): AppUpdateState {
-  return { kind: 'error', ...describeUpdateError(error, during), version: during === 'download' ? foundVersion : null }
+  return { kind: 'error', ...describeUpdateError(error, during, msg()), version: during === 'download' ? foundVersion : null }
 }
 
 /** 업데이트를 확인하지 않는 환경이면 이유를 돌려준다 */
 function disabledReason(): string | null {
-  if (!app.isPackaged) return '개발 모드에서는 앱 업데이트를 확인하지 않습니다. 설치판에서만 동작합니다.'
-  if (process.platform !== 'win32') return '이 운영체제용 설치판이 없어 앱 업데이트를 확인하지 않습니다.'
+  if (!app.isPackaged) return msg().errors.updateDevMode
+  if (process.platform !== 'win32') return msg().errors.updateUnsupportedOs
   return null
 }
 
@@ -118,7 +119,7 @@ export async function checkAppUpdate(): Promise<AppUpdateStatus> {
 /** 확인에서 찾은 새 버전을 받기 시작한다. 진행률과 결과는 상태 이벤트로 알린다 */
 export function downloadAppUpdate(): IpcResult<null> {
   const version = state.kind === 'available' ? state.version : state.kind === 'error' ? state.version : null
-  if (version === null) return fail('invalid-input', '받을 새 버전이 없습니다. 먼저 업데이트를 확인하세요.')
+  if (version === null) return fail('invalid-input', msg().errors.noUpdateToDownload)
 
   phase = 'download'
   const token = new CancellationToken()
@@ -146,7 +147,7 @@ export function cancelAppUpdateDownload(): boolean {
 
 /** 받아 둔 업데이트를 설치한다. 앱을 닫고 조용히 설치한 뒤 다시 연다 */
 export function installAppUpdate(): IpcResult<null> {
-  if (state.kind !== 'downloaded') return fail('invalid-input', '설치할 업데이트가 없습니다.')
+  if (state.kind !== 'downloaded') return fail('invalid-input', msg().errors.noUpdateToInstall)
   // 응답을 먼저 돌려준 뒤 닫는다
   setImmediate(() => autoUpdater.quitAndInstall(true, true))
   return ok(null)

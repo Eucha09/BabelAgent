@@ -4,6 +4,7 @@ import { UsageLimitRow, type UsageLimits } from '@shared/schema/usage'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { agentQueryOptions } from './session'
 import { loadAgentSdk } from './sdk'
+import { msg } from '../i18n'
 
 const TIMEOUT_MS = 30_000
 
@@ -22,7 +23,7 @@ export async function readUsageLimits(
   } catch (error) {
     return fail(
       'unknown',
-      'Agent SDK를 불러오지 못했습니다.',
+      msg().errors.sdkLoadFailed,
       error instanceof Error ? error.message : String(error)
     )
   }
@@ -44,20 +45,17 @@ export async function readUsageLimits(
         if (!rows) continue
         const parsed = z.array(UsageLimitRow).safeParse(rows)
         if (!parsed.success) {
-          return fail('unknown', '사용량 정보 형식이 예상과 다릅니다.', parsed.error.message)
+          return fail('unknown', msg().errors.usageFormat, parsed.error.message)
         }
         return ok({ limits: parsed.data, fetchedAt: new Date().toISOString() })
       }
       if (message.type === 'result') break
     }
-    return fail(
-      'unknown',
-      '사용량 정보를 받지 못했습니다. 구독 계정이 아니거나 서버가 값을 주지 않았습니다.'
-    )
+    return fail('unknown', msg().errors.usageMissing)
   } catch (error) {
     return fail(
       'unknown',
-      '사용량 조회에 실패했습니다.',
+      msg().errors.usageFailed,
       error instanceof Error ? error.message : String(error)
     )
   } finally {

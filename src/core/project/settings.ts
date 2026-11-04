@@ -5,6 +5,7 @@ import {
   type ProjectSettingsPatch,
   type StyleRule
 } from '@shared/schema/project'
+import type { Messages } from '@shared/i18n'
 
 /**
  * project.json 에 화면에서 고친 값을 합친다. 묶음(game, batch …) 안에서는 패치에 있는 항목만 바꾸고,
@@ -126,18 +127,18 @@ export const MAX_LEN_RATIO_LIMIT = 10
  * 저장하기 전에 사람이 고칠 수 있는 문제를 모은다. 화면이 칸마다 보여 주고, 메인이 저장 직전에 한 번 더 본다.
  * 스키마(zod)가 형식을 보고, 여기서는 값의 뜻을 본다.
  */
-export function validateProjectSettings(config: ProjectConfig): SettingsProblem[] {
+export function validateProjectSettings(config: ProjectConfig, t: Messages): SettingsProblem[] {
   const problems: SettingsProblem[] = []
   const add = (field: SettingsField, message: string): void => {
     problems.push({ field, message })
   }
 
-  if (config.name.trim() === '') add('name', '프로젝트 이름을 입력하세요.')
+  if (config.name.trim() === '') add('name', t.settingsCheck.nameRequired)
 
-  if (!isLanguageTag(config.sourceLanguage)) add('sourceLanguage', `언어 코드가 아닙니다: "${config.sourceLanguage}"`)
+  if (!isLanguageTag(config.sourceLanguage)) add('sourceLanguage', t.settingsCheck.notLanguageCode(config.sourceLanguage))
 
   const invalid = config.targetLanguages.filter((code) => !isLanguageTag(code))
-  if (invalid.length > 0) add('targetLanguages', `언어 코드가 아닙니다: ${invalid.join(', ')}`)
+  if (invalid.length > 0) add('targetLanguages', t.settingsCheck.notLanguageCodes(invalid.join(', ')))
   const seen = new Set<string>()
   const duplicates = new Set<string>()
   for (const code of config.targetLanguages) {
@@ -145,46 +146,46 @@ export function validateProjectSettings(config: ProjectConfig): SettingsProblem[
     if (seen.has(lower)) duplicates.add(code)
     seen.add(lower)
   }
-  if (duplicates.size > 0) add('targetLanguages', `중복된 언어: ${[...duplicates].join(', ')}`)
+  if (duplicates.size > 0) add('targetLanguages', t.settingsCheck.duplicateLanguages([...duplicates].join(', ')))
   if (config.targetLanguages.some((code) => sameLanguage(code, config.sourceLanguage))) {
-    add('targetLanguages', '원문 언어를 대상 언어로 둘 수 없습니다.')
+    add('targetLanguages', t.settingsCheck.sourceAsTarget)
   }
 
   if (config.styleRules.some((rule) => rule.text.trim() === '')) {
-    add('styleRules', '비어 있는 규칙이 있습니다. 내용을 쓰거나 지우세요.')
+    add('styleRules', t.settingsCheck.emptyRule)
   }
   if (new Set(config.styleRules.map((rule) => rule.id)).size !== config.styleRules.length) {
-    add('styleRules', '규칙 id 가 겹칩니다.')
+    add('styleRules', t.settingsCheck.duplicateRuleIds)
   }
 
   const { maxRows, maxSourceChars, concurrency } = config.batch
-  if (!Number.isInteger(maxRows) || maxRows < 1) add('batch.maxRows', '1 이상의 정수를 입력하세요.')
-  if (!Number.isInteger(maxSourceChars) || maxSourceChars < 1) add('batch.maxSourceChars', '1 이상의 정수를 입력하세요.')
+  if (!Number.isInteger(maxRows) || maxRows < 1) add('batch.maxRows', t.settingsCheck.positiveInteger)
+  if (!Number.isInteger(maxSourceChars) || maxSourceChars < 1) add('batch.maxSourceChars', t.settingsCheck.positiveInteger)
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > MAX_CONCURRENCY) {
-    add('batch.concurrency', `1~${MAX_CONCURRENCY} 사이의 정수를 입력하세요.`)
+    add('batch.concurrency', t.settingsCheck.integerRange(MAX_CONCURRENCY))
   }
 
   const low = config.review.lowConfidence
-  if (!Number.isFinite(low) || low < 0 || low > 1) add('review.lowConfidence', '0~1 사이의 숫자를 입력하세요.')
+  if (!Number.isFinite(low) || low < 0 || low > 1) add('review.lowConfidence', t.settingsCheck.zeroToOne)
 
   const ratio = config.context.maxLenRatio
   if (!Number.isFinite(ratio) || ratio < 1 || ratio > MAX_LEN_RATIO_LIMIT) {
-    add('context.maxLenRatio', `1~${MAX_LEN_RATIO_LIMIT} 사이의 숫자를 입력하세요.`)
+    add('context.maxLenRatio', t.settingsCheck.numberRange(MAX_LEN_RATIO_LIMIT))
   }
 
   const { escapeChar, formatters } = config.smartStrings
-  if ([...escapeChar].length !== 1) add('smartStrings.escapeChar', '글자 하나를 입력하세요.')
-  else if (escapeChar === '{' || escapeChar === '}') add('smartStrings.escapeChar', '중괄호는 이스케이프 문자로 쓸 수 없습니다.')
+  if ([...escapeChar].length !== 1) add('smartStrings.escapeChar', t.settingsCheck.oneCharacter)
+  else if (escapeChar === '{' || escapeChar === '}') add('smartStrings.escapeChar', t.settingsCheck.braceEscape)
   const badNames = formatters.filter((name) => !FORMATTER_NAME.test(name))
-  if (badNames.length > 0) add('smartStrings.formatters', `포매터 이름은 영문·숫자·_ 만 씁니다: ${badNames.join(', ')}`)
+  if (badNames.length > 0) add('smartStrings.formatters', t.settingsCheck.formatterNames(badNames.join(', ')))
 
-  for (const message of exportLocaleProblems(config)) add('export.locales', message)
+  for (const message of exportLocaleProblems(config, t)) add('export.locales', message)
 
   return problems
 }
 
 /** 프로젝트 언어(원문 + 대상)의 내보내기 로케일 칸. 목록에서 빠진 언어의 값은 보지 않는다. */
-function exportLocaleProblems(config: ProjectConfig): string[] {
+function exportLocaleProblems(config: ProjectConfig, t: Messages): string[] {
   const messages: string[] = []
   const languages = [config.sourceLanguage, ...config.targetLanguages]
   const names = new Map<string, string>()
@@ -192,13 +193,13 @@ function exportLocaleProblems(config: ProjectConfig): string[] {
     const locale = config.export.locales[language]
     if (!locale) continue
     const code = locale.unityLocaleCode
-    if (code !== '' && !LOCALE_CODE.test(code)) messages.push(`${language}: 로케일 코드가 올바르지 않습니다: "${code}"`)
+    if (code !== '' && !LOCALE_CODE.test(code)) messages.push(t.settingsCheck.localeCode(language, code))
     const name = locale.columnName
     if (name === '') continue
-    if (name !== name.trim() || /[\r\n]/.test(name)) messages.push(`${language}: 열 이름 앞뒤에 공백이나 줄바꿈을 둘 수 없습니다.`)
-    else if (RESERVED_COLUMN_NAMES.includes(name)) messages.push(`${language}: "${name}" 은 Unity 가 쓰는 열 이름입니다.`)
+    if (name !== name.trim() || /[\r\n]/.test(name)) messages.push(t.settingsCheck.columnWhitespace(language))
+    else if (RESERVED_COLUMN_NAMES.includes(name)) messages.push(t.settingsCheck.reservedColumn(language, name))
     const other = names.get(name)
-    if (other !== undefined) messages.push(`${other}·${language}: 열 이름 "${name}" 이 겹칩니다.`)
+    if (other !== undefined) messages.push(t.settingsCheck.duplicateColumn(`${other}·${language}`, name))
     names.set(name, language)
   }
   return messages

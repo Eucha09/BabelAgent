@@ -7,7 +7,6 @@ import type {
   RetranslateTermResult,
   GlossaryChange,
   GlossaryEntry,
-  GlossarySkipReason,
   GlossaryView,
   StartTermTranslateInput,
   TermsScope
@@ -16,13 +15,13 @@ import type { JobControlInput, JobLogEntry, JobView } from '@shared/schema/jobs'
 import type { OpenProject } from '@shared/schema/project'
 import type { MasterRow, StringsRow } from '@shared/schema/strings'
 import type { IpcError } from '@shared/types'
-import { effortLabel, modelLabel } from '../../state/translate-options'
+import { useI18n } from '../../i18n'
 import { AddTermDialog } from '../AddTermDialog'
 import { RetranslateTermDialog } from '../RetranslateTermDialog'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { GlossaryGrid, type EditEntry, type GlossaryGridRow } from '../GlossaryGrid'
 import { JobLog } from '../JobLog'
-import { JOB_TITLE, JobProgress } from '../JobProgress'
+import { JobProgress } from '../JobProgress'
 import { KeyChecklist, type ChecklistItem } from '../KeyChecklist'
 import { TermTranslateCard } from '../TermTranslateCard'
 
@@ -33,14 +32,6 @@ const GLOSSARY_FILE = 'glossary.csv'
 type StatusFilter = 'all' | 'pending' | 'approved'
 
 const FILTERS: readonly StatusFilter[] = ['all', 'pending', 'approved']
-const FILTER_LABEL: Record<StatusFilter, string> = { all: '전체', pending: '승인 대기', approved: '승인' }
-
-const SKIP_LABEL: Record<GlossarySkipReason, string> = {
-  missing: '파일에 없음',
-  changed: '그 사이 바뀜',
-  exists: '같은 용어가 있음',
-  invalid: '용어가 빔'
-}
 
 function toMaster(row: StringsRow): MasterRow {
   return {
@@ -85,6 +76,7 @@ type Props = {
  * 비교하므로, 용어 추출 작업이 도는 중에도 편집할 수 있다. 승인·삭제·추가는 누르는 즉시 저장한다.
  */
 export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Props): React.JSX.Element {
+  const { t, locale } = useI18n()
   const { config } = project
   const lowConfidence = config.review.lowConfidence
   const [view, setView] = useState<GlossaryView | null>(null)
@@ -159,10 +151,10 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
         dirty: !sameEntry(entry, base),
         selected: selected.has(id),
         low: confidence !== null && confidence < lowConfidence,
-        problem: key === '' ? '용어가 비었습니다' : (counts.get(key) ?? 0) > 1 ? '다른 용어와 겹칩니다' : null
+        problem: key === '' ? t.glossaryScreen.emptyTerm : (counts.get(key) ?? 0) > 1 ? t.glossaryScreen.duplicateTerm : null
       }
     })
-  }, [drafts, entries, lowConfidence, selected])
+  }, [drafts, entries, lowConfidence, selected, t])
 
   const rows = useMemo(
     () =>
@@ -215,7 +207,10 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
   )
 
   /** 변경을 보내고, 저장된 행의 편집은 비운다. 건너뛴 행은 이유를 알린다. */
-  const send = async (changes: { row: GlossaryGridRow | null; change: GlossaryChange }[], verb: string): Promise<void> => {
+  const send = async (
+    changes: { row: GlossaryGridRow | null; change: GlossaryChange }[],
+    done: (count: number) => string
+  ): Promise<void> => {
     if (changes.length === 0) return
     setBusy(true)
     try {
@@ -227,19 +222,19 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
       setError(null)
       setView(result.value.view)
       const applied = new Set(result.value.applied)
-      const done = changes.flatMap(({ row, change }) => {
+      const finished = changes.flatMap(({ row, change }) => {
         if (!row) return []
         const name = change.next ? change.next.term.trim() : row.base.term
         return applied.has(name) ? [row.id] : []
       })
-      setDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !done.includes(id))))
-      setSelected((prev) => new Set([...prev].filter((id) => !done.includes(id))))
-      const parts = [`용어 ${result.value.applied.length}개를 ${verb}.`]
+      setDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !finished.includes(id))))
+      setSelected((prev) => new Set([...prev].filter((id) => !finished.includes(id))))
+      const parts = [done(result.value.applied.length)]
       if (result.value.skipped.length > 0) {
-        const reasons = result.value.skipped.map((item) => `${item.term}: ${SKIP_LABEL[item.reason]}`).join(', ')
-        parts.push(`건너뜀 ${result.value.skipped.length}개(${reasons}).`)
+        const reasons = result.value.skipped.map((item) => `${item.term}: ${t.glossaryScreen.skip[item.reason]}`).join(', ')
+        parts.push(t.glossaryScreen.skipped(result.value.skipped.length, reasons))
         if (result.value.skipped.some((item) => item.reason === 'changed')) {
-          parts.push('바뀐 행은 지금 파일 내용을 확인한 뒤 다시 저장하세요.')
+          parts.push(t.glossaryScreen.recheckChanged)
         }
       }
       onMessage(parts.join(' '))
@@ -251,7 +246,7 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
   const save = (): Promise<void> =>
     send(
       dirtyRows.map((row) => ({ row, change: { original: row.base.term, next: row.entry, expected: row.base } })),
-      '저장했습니다'
+      t.glossaryScreen.saved
     )
 
   const approve = (): Promise<void> =>
@@ -269,14 +264,14 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
           expected: row.base
         }
       })),
-      '승인했습니다'
+      t.glossaryScreen.approved
     )
 
   const remove = async (): Promise<void> => {
     setConfirmDelete(false)
     await send(
       chosen.map((row) => ({ row, change: { original: row.base.term, next: null, expected: row.base } })),
-      '지웠습니다'
+      t.glossaryScreen.deleted
     )
   }
 
@@ -287,10 +282,10 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
     const id = termKey(result.entry.term)
     setSelected((prev) => new Set([...prev, id]))
     setFocusId(id)
-    const parts = [`"${result.entry.term}" 을 승인 대기로 추가했습니다(원문 ${result.found}행 중 ${result.examples}행 참고).`]
+    const parts = [t.glossaryScreen.added(result.entry.term, result.found, result.examples)]
     if (result.conflicts.length > 0) {
-      const counts = result.conflicts.map((item) => `${item.language} ${item.keys.length}행`).join(', ')
-      parts.push(`기존 번역 중 이 번역과 다른 행이 있습니다(${counts}) — 승인하면 용어집 위반으로 표시됩니다.`)
+      const counts = result.conflicts.map((item) => t.glossaryScreen.conflictRows(item.language, item.keys.length)).join(', ')
+      parts.push(t.glossaryScreen.addedConflicts(counts))
     }
     onMessage(parts.join(' '))
   }
@@ -303,9 +298,9 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
     setRetranslateId(null)
     const changes = languages
       .filter((language) => (result.translations[language] ?? '') !== (row.entry.translations[language] ?? ''))
-      .map((language) => `${language} ${row.entry.translations[language] || '(없음)'} → ${result.translations[language] ?? ''}`)
+      .map((language) => `${language} ${row.entry.translations[language] || t.glossaryScreen.none} → ${result.translations[language] ?? ''}`)
     const noteChanged = result.note.trim() !== row.entry.note.trim()
-    if (noteChanged) changes.push(result.note.trim() === '' ? '지침 비움' : '지침 다시 씀')
+    if (noteChanged) changes.push(result.note.trim() === '' ? t.glossaryScreen.noteCleared : t.glossaryScreen.noteRewritten)
     onEdit(row.id, (entry) => ({
       ...entry,
       translations: { ...entry.translations, ...result.translations },
@@ -316,19 +311,19 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
     setFocusId(row.id)
     const parts = [
       changes.length > 0
-        ? `"${result.term}" 재번역 결과를 칸에 넣었습니다(${changes.join(', ')}). 확인하고 [저장]하세요.`
-        : `"${result.term}" 은 지금 번역과 지침이 그대로 제안됐습니다.`
+        ? t.glossaryScreen.retranslated(result.term, changes.join(', '))
+        : t.glossaryScreen.retranslatedSame(result.term)
     ]
     if (result.conflicts.length > 0) {
-      const counts = result.conflicts.map((item) => `${item.language} ${item.keys.length}행`).join(', ')
-      parts.push(`기존 번역 중 새 번역과 다른 행이 있습니다(${counts}).`)
+      const counts = result.conflicts.map((item) => t.glossaryScreen.conflictRows(item.language, item.keys.length)).join(', ')
+      parts.push(t.glossaryScreen.retranslatedConflicts(counts))
     }
     onMessage(parts.join(' '))
   }
 
   const discardEdits = (): void => {
     setDrafts({})
-    onMessage('고친 칸을 모두 되돌렸습니다.')
+    onMessage(t.glossaryScreen.editsDiscarded)
   }
 
   const startExtract = async (): Promise<void> => {
@@ -340,7 +335,7 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
         return
       }
       setError(null)
-      onMessage(`용어 추출을 시작했습니다: ${result.value.snapshot.totalRows}행`)
+      onMessage(t.glossaryScreen.extractStarted(result.value.snapshot.totalRows))
     } finally {
       setBusy(false)
     }
@@ -355,7 +350,7 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
         return
       }
       setError(null)
-      onMessage(`용어 번역을 시작했습니다: 용어 ${result.value.snapshot.totalRows}개 (${input.languages.join(', ')})`)
+      onMessage(t.glossaryScreen.translateStarted(result.value.snapshot.totalRows, input.languages.join(', ')))
     } finally {
       setBusy(false)
     }
@@ -374,29 +369,30 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
 
   return (
     <div className="workbench-screen">
-      <h2 className="screen-title">용어집</h2>
+      <h2 className="screen-title">{t.screens.glossary.label}</h2>
 
-      {config.targetLanguages.length === 0 ? (
-        <div className="message">대상 언어가 없습니다. 프로젝트 화면에서 정하세요.</div>
-      ) : null}
+      {config.targetLanguages.length === 0 ? <div className="message">{t.glossaryScreen.noTargets}</div> : null}
 
       <section className="card">
-        <h3>용어 추출</h3>
+        <h3>{t.glossaryScreen.extract}</h3>
         <div className="scope-options">
           <label className={scope === 'all' ? 'scope-option selected' : 'scope-option'}>
             <input type="radio" name="terms-scope" checked={scope === 'all'} disabled={running || busy} onChange={() => setScope('all')} />
-            <span>전체 원문</span>
+            <span>{t.glossaryScreen.scopeAll}</span>
             <span className="scope-count">{master.filter((row) => row.source.trim() !== '').length}</span>
           </label>
           <label className={scope === 'selected' ? 'scope-option selected' : 'scope-option'}>
             <input type="radio" name="terms-scope" checked={scope === 'selected'} disabled={running || busy} onChange={() => setScope('selected')} />
-            <span>선택 행</span>
+            <span>{t.glossaryScreen.scopeSelected}</span>
             <span className="scope-count">{scopeKeys.size}</span>
           </label>
         </div>
         <p className="hint">
-          모델 {modelLabel(config.translate.model)} · 사고 {effortLabel(config.translate.effort)} · 배치 {config.batch.maxRows}행 /{' '}
-          {config.batch.maxSourceChars.toLocaleString()}자 · 작업자 {clampConcurrency(config.batch.concurrency)}
+          {[
+            t.translateOptions.summary(t.translateOptions.model[config.translate.model], t.translateOptions.effort[config.translate.effort]),
+            t.translateOptions.batch(config.batch.maxRows, config.batch.maxSourceChars.toLocaleString(locale)),
+            t.translateOptions.workers(clampConcurrency(config.batch.concurrency))
+          ].join(' · ')}
         </p>
         <div className="row" style={{ marginTop: 'var(--space-3)' }}>
           <button
@@ -405,27 +401,27 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
             disabled={running || busy || plan.rows === 0}
             onClick={() => void startExtract()}
           >
-            추출 시작
+            {t.glossaryScreen.startExtract}
           </button>
           <span className="hint">
-            {plan.rows}행 · 배치 {plan.batches}개
-            {running && job.kind !== 'terms' ? ` — ${JOB_TITLE[job.kind]} 중` : ''}
+            {t.job.rowsAndBatches(plan.rows, plan.batches)}
+            {running && job.kind !== 'terms' ? t.job.busyWith(t.job.title[job.kind]) : ''}
           </span>
         </div>
-        {extracted ? <p className="hint" style={{ marginTop: 'var(--space-2)' }}>추출이 끝났습니다. 번역은 [용어 번역]으로 채우세요.</p> : null}
+        {extracted ? <p className="hint" style={{ marginTop: 'var(--space-2)' }}>{t.glossaryScreen.extracted}</p> : null}
       </section>
 
       {scope === 'selected' ? (
         <section className="card">
           <div className="row checklist-toolbar">
-            <strong>용어를 찾을 행</strong>
-            <span className="hint">선택 {scopeKeys.size}</span>
+            <strong>{t.glossaryScreen.rowsToSearch}</strong>
+            <span className="hint">{t.common.selected(scopeKeys.size)}</span>
             <span className="spacer" />
             <button type="button" disabled={running} onClick={() => setScopeKeys(new Set(master.map((row) => row.key)))}>
-              모두
+              {t.common.selectAll}
             </button>
             <button type="button" disabled={running} onClick={() => setScopeKeys(new Set())}>
-              선택 해제
+              {t.common.clearSelection}
             </button>
           </div>
           <KeyChecklist items={checklist} selected={scopeKeys} disabled={running} onChange={setScopeKeys} />
@@ -438,14 +434,14 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
         languages={languages}
         chosenTerms={chosen.map((row) => row.base.term)}
         disabled={running || busy}
-        blockedBy={running && job.kind !== 'term-translate' ? JOB_TITLE[job.kind] : null}
+        blockedBy={running && job.kind !== 'term-translate' ? t.job.title[job.kind] : null}
         onStart={(input) => void startTranslate(input)}
       />
 
       {ownJob ? <JobProgress job={job} busy={busy} onControl={(action) => void control(action)} /> : null}
       {ownLog.length > 0 ? (
         <details className="card job-log-card">
-          <summary>작업 로그 ({ownLog.length})</summary>
+          <summary>{t.job.logCount(ownLog.length)}</summary>
           <JobLog entries={ownLog} />
         </details>
       ) : null}
@@ -458,13 +454,11 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
       ) : null}
       {view?.notices.map((notice) => (
         <div className="message" key={notice.file}>
-          {notice.file} 은 {notice.encoding.toUpperCase()}로 읽었습니다. 저장은 UTF-8로 합니다.
+          {t.common.readEncoding(notice.file, notice.encoding.toUpperCase())}
         </div>
       ))}
       {view && view.duplicates.length > 0 ? (
-        <div className="message">
-          같은 용어가 여러 행 있습니다: {view.duplicates.join(', ')} — 첫 행만 고칠 수 있습니다.
-        </div>
+        <div className="message">{t.glossaryScreen.duplicates(view.duplicates.join(', '))}</div>
       ) : null}
 
       <div className="review-filters">
@@ -476,7 +470,7 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
               className={filter === value ? 'filter-chip selected' : 'filter-chip'}
               onClick={() => setFilter(value)}
             >
-              {FILTER_LABEL[value]}
+              {t.glossaryScreen.filter[value]}
               <span className="filter-count">{counts[value]}</span>
             </button>
           ))}
@@ -485,61 +479,62 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
           className="filter-search"
           type="search"
           value={search}
-          placeholder="용어·번역·지침 검색"
+          placeholder={t.glossaryScreen.search}
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
 
       <div className="grid-toolbar">
         <div className="grid-meta">
-          {rows.length} / {allRows.length}개 · 선택 {chosen.length}
-          {dirtyRows.length > 0 ? ` · 고친 행 ${dirtyRows.length}` : ''}
-          {busy ? ' · 저장 중…' : ''}
+          {t.glossaryScreen.meta(rows.length, allRows.length, chosen.length)}
+          {dirtyRows.length > 0 ? t.glossaryScreen.editedRows(dirtyRows.length) : ''}
+          {busy ? t.glossaryScreen.saving : ''}
         </div>
         <div className="row">
           <button type="button" disabled={busy} onClick={() => setAdding(true)}>
-            용어 추가
+            {t.glossaryScreen.add}
           </button>
           <button
             type="button"
             disabled={busy || rows.length === 0}
             onClick={() => setSelected(new Set([...selected, ...rows.map((row) => row.id)]))}
           >
-            보이는 행 선택
+            {t.glossaryScreen.selectVisible}
           </button>
           <button type="button" disabled={busy || chosen.length === 0} onClick={() => setSelected(new Set())}>
-            선택 해제
+            {t.common.clearSelection}
           </button>
           <button type="button" className="danger" disabled={busy || chosen.length === 0} onClick={() => setConfirmDelete(true)}>
-            선택 삭제
+            {t.glossaryScreen.deleteSelected}
           </button>
           <button
             type="button"
             disabled={busy || chosen.length !== 1 || languages.length === 0}
-            title={chosen.length === 1 ? '선택한 용어의 번역을 에이전트로 다시 받습니다' : '용어를 하나만 선택하세요'}
+            title={chosen.length === 1 ? t.glossaryScreen.retranslateHint : t.glossaryScreen.pickOne}
             onClick={() => setRetranslateId(chosen[0]?.id ?? null)}
           >
-            선택 재번역
+            {t.glossaryScreen.retranslateSelected}
           </button>
           <button
             type="button"
             disabled={busy || chosenPending.length === 0 || blocked(chosenPending)}
-            title="선택한 승인 대기 용어와 승인 대기 언어를 승인합니다. 고친 칸이 있으면 함께 저장합니다"
+            title={t.glossaryScreen.approveHint}
             onClick={() => void approve()}
           >
-            선택 승인 ({chosenPending.length})
+            {t.glossaryScreen.approveSelected(chosenPending.length)}
           </button>
           <button type="button" disabled={busy || dirtyRows.length === 0} onClick={discardEdits}>
-            변경 취소
+            {t.common.discardChanges}
           </button>
           <button
             type="button"
             className="primary"
             disabled={busy || dirtyRows.length === 0 || blocked(dirtyRows)}
-            title={blocked(dirtyRows) ? '빨간 칸의 용어를 먼저 고치세요' : undefined}
+            title={blocked(dirtyRows) ? t.glossaryScreen.fixRedFirst : undefined}
             onClick={() => void save()}
           >
-            저장{dirtyRows.length > 0 ? ` (${dirtyRows.length})` : ''}
+            {t.common.save}
+            {dirtyRows.length > 0 ? ` (${dirtyRows.length})` : ''}
           </button>
         </div>
       </div>
@@ -574,16 +569,16 @@ export function Glossary({ project, job, jobLog, onMessage, onDirtyChange }: Pro
 
       {confirmDelete ? (
         <ConfirmDialog
-          title="용어 삭제"
-          confirmLabel={`${chosen.length}개 삭제`}
+          title={t.glossaryScreen.deleteTitle}
+          confirmLabel={t.glossaryScreen.deleteConfirm(chosen.length)}
           danger
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => void remove()}
         >
-          <p>선택한 용어 {chosen.length}개를 glossary.csv 에서 지웁니다.</p>
+          <p>{t.glossaryScreen.deleteBody(chosen.length)}</p>
           <p className="confirm-quote">{chosen.slice(0, 20).map((row) => row.base.term).join(', ')}{chosen.length > 20 ? ' …' : ''}</p>
           {approvedChosen > 0 ? (
-            <p className="hint field-error">승인된 용어 {approvedChosen}개가 포함되어 있습니다.</p>
+            <p className="hint field-error">{t.glossaryScreen.deleteApproved(approvedChosen)}</p>
           ) : null}
         </ConfirmDialog>
       ) : null}

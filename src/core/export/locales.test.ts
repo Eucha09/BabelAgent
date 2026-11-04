@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultColumnName, matchUnityLocale, resolveLocales, unityEnglishName } from './locales'
+import { ko } from '@shared/i18n/ko'
 
 describe('unityEnglishName (Unity Mono 이름표)', () => {
   it('Unity 가 쓰는 이름을 돌려준다', () => {
@@ -65,7 +66,7 @@ describe('matchUnityLocale', () => {
 
 describe('resolveLocales', () => {
   it('설정이 없으면 프로젝트 코드와 기본 이름', () => {
-    const { locales, warnings } = resolveLocales(['ko', 'en'], 'ko', {}, null)
+    const { locales, warnings } = resolveLocales(['ko', 'en'], 'ko', {}, null, ko)
     expect(locales.map((locale) => [locale.unityLocaleCode, locale.columnName, locale.codeOrigin, locale.nameOrigin])).toEqual([
       ['ko', 'Korean(ko)', 'project', 'auto'],
       ['en', 'English(en)', 'project', 'auto']
@@ -75,15 +76,15 @@ describe('resolveLocales', () => {
   })
 
   it('설정한 코드와 이름이 앞선다', () => {
-    const { locales } = resolveLocales(['zh-Hans'], 'ko', { 'zh-Hans': { unityLocaleCode: 'zh-CN', columnName: '' } }, null)
+    const { locales } = resolveLocales(['zh-Hans'], 'ko', { 'zh-Hans': { unityLocaleCode: 'zh-CN', columnName: '' } }, null, ko)
     expect(locales[0]).toMatchObject({ unityLocaleCode: 'zh-CN', codeOrigin: 'setting', columnName: 'Chinese (Simplified)(zh-CN)' })
-    const named = resolveLocales(['en'], 'ko', { en: { unityLocaleCode: '', columnName: 'EN text' } }, null)
+    const named = resolveLocales(['en'], 'ko', { en: { unityLocaleCode: '', columnName: 'EN text' } }, null, ko)
     expect(named.locales[0]).toMatchObject({ columnName: 'EN text', nameOrigin: 'setting' })
   })
 
   it('Unity 를 연결하면 맞는 로케일 코드를 쓰고, 없으면 경고한다', () => {
     const unity = [{ code: 'en-US', name: 'English (United States) (en-US)' }]
-    const { locales, warnings } = resolveLocales(['en', 'ja'], 'ko', {}, unity)
+    const { locales, warnings } = resolveLocales(['en', 'ja'], 'ko', {}, unity, ko)
     expect(locales[0]).toMatchObject({ unityLocaleCode: 'en-US', codeOrigin: 'unity', columnName: 'English (United States)(en-US)' })
     expect(locales[0]?.unityLocale?.code).toBe('en-US')
     expect(locales[1]).toMatchObject({ unityLocaleCode: 'ja', codeOrigin: 'project', unityLocale: null })

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { meetsVersion, parseClaudeVersion, pickClaudeExecutable, updateOutcome } from '@core/cli/claude'
 import type { ClaudeCliStatus, ClaudeExecutable, ClaudeInstallDone, ClaudeUpdateResult } from '@shared/schema/cli'
 import { fail, ok, type IpcResult } from '@shared/types'
+import { msg } from '../i18n'
 
 /**
  * 앱이 쓰는 Claude Code 실행 파일 하나를 정하고(로그인·상태 조회·에이전트 세션 공통), 버전 확인·업데이트·설치를 맡는다.
@@ -136,9 +137,10 @@ async function readVersion(executable: string, env: NodeJS.ProcessEnv): Promise<
   const result = await run(executable, ['--version'], env, VERSION_TIMEOUT_MS)
   const version = result.exitCode === 0 ? parseClaudeVersion(result.output) : null
   if (version !== null) return { version, error: null }
-  if (result.timedOut) return { version: null, error: `${VERSION_TIMEOUT_MS / 1000}초 안에 응답하지 않았습니다.` }
+  if (result.timedOut) return { version: null, error: msg().errors.cliTimeout(VERSION_TIMEOUT_MS / 1000) }
   const tail = result.output.replace(ANSI, '').trim().slice(-OUTPUT_TAIL)
-  return { version: null, error: `종료 코드 ${result.exitCode ?? '없음'}${tail ? `: ${tail}` : ''}` }
+  const exit = msg().errors.exitCode(result.exitCode === null ? msg().errors.noExitCode : String(result.exitCode))
+  return { version: null, error: `${exit}${tail ? `: ${tail}` : ''}` }
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -189,9 +191,9 @@ async function statusAfterUpdate(cliPath: string | null, configDir: string | nul
 async function runUpdate(cliPath: string | null, configDir: string | null): Promise<IpcResult<ClaudeUpdateResult>> {
   const env = claudeEnv(configDir)
   const before = await claudeStatus(cliPath, configDir)
-  if (!before.executable) return fail('cli-not-found', 'Claude Code 를 찾지 못했습니다. 먼저 설치하세요.')
+  if (!before.executable) return fail('cli-not-found', msg().errors.cliNotFoundInstall)
   if (before.version === null) {
-    return fail('cli-not-found', 'Claude Code 를 실행하지 못했습니다.', before.runError ?? undefined)
+    return fail('cli-not-found', msg().errors.cliCannotRun, before.runError ?? undefined)
   }
   if (!before.canUpdate) {
     return ok({ outcome: 'skipped', before: before.version, after: before.version, status: before })
@@ -200,7 +202,7 @@ async function runUpdate(cliPath: string | null, configDir: string | null): Prom
   const after = await statusAfterUpdate(cliPath, configDir)
   const outcome = updateOutcome(before.version, after.version, result.exitCode)
   const detail = result.timedOut
-    ? '업데이트가 제한 시간 안에 끝나지 않았습니다.'
+    ? msg().errors.updateTimedOut
     : result.output.replace(ANSI, '').trim().slice(-OUTPUT_TAIL)
   return ok({
     outcome,
@@ -220,9 +222,9 @@ let installProcess: ChildProcess | null = null
  */
 export function startClaudeInstall(onDone: (payload: ClaudeInstallDone) => void): IpcResult<null> {
   if (!isWindows) {
-    return fail('unknown', '이 운영체제에서는 앱이 설치 창을 열지 못합니다. 터미널에서 공식 설치 명령을 실행하세요.', 'curl -fsSL https://claude.ai/install.sh | bash')
+    return fail('unknown', msg().errors.installUnsupportedOs, 'curl -fsSL https://claude.ai/install.sh | bash')
   }
-  if (installProcess) return fail('unknown', '설치 창이 이미 열려 있습니다.')
+  if (installProcess) return fail('unknown', msg().errors.installAlreadyOpen)
   const script = [
     "$Host.UI.RawUI.WindowTitle = 'Claude Code install'",
     `try { irm ${INSTALL_SCRIPT_URL} | iex } catch { Write-Host $_ -ForegroundColor Red }`,

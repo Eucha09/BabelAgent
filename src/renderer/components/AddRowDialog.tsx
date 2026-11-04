@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { validateNewKey, type KeyProblem } from '@core/strings/keys'
+import { validateNewKey } from '@core/strings/keys'
+import { useT } from '../i18n'
 
 export type NewRowInput = { key: string; source: string; context: string }
 
@@ -11,12 +12,6 @@ type Props = {
   onAdd: (input: NewRowInput) => void
 }
 
-const PROBLEM_TEXT: Record<KeyProblem, string> = {
-  empty: '키를 입력하세요.',
-  duplicate: '이미 있는 키입니다.',
-  newline: '키에 줄바꿈을 넣을 수 없습니다.'
-}
-
 /** 원문 행 추가. 키는 번역 연결의 기준이라 저장 후에는 그리드에서 바꿀 수 없다. */
 export function AddRowDialog({
   existingKeys,
@@ -24,6 +19,7 @@ export function AddRowDialog({
   onCancel,
   onAdd
 }: Props): React.JSX.Element {
+  const t = useT()
   const [key, setKey] = useState('')
   const [source, setSource] = useState('')
   const [context, setContext] = useState('')
@@ -41,25 +37,27 @@ export function AddRowDialog({
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h3>행 추가</h3>
+        <h3>{t.addRow.title}</h3>
         <p className="hint" style={{ marginBottom: 'var(--space-3)' }}>
           {insertAfterKey ? (
             <>
-              <code>{insertAfterKey}</code> 바로 아래에 넣습니다.
+              {t.addRow.insertAfterBefore}
+              <code>{insertAfterKey}</code>
+              {t.addRow.insertAfterAfter}
             </>
           ) : (
-            '맨 끝에 넣습니다.'
+            t.addRow.insertEnd
           )}
         </p>
 
         <div className="field">
-          <label htmlFor="new-key">키 *</label>
+          <label htmlFor="new-key">{t.columns.key} *</label>
           <input
             id="new-key"
             className="mono"
             value={key}
             autoFocus
-            placeholder="예: ui.options.title"
+            placeholder={t.addRow.keyPlaceholder}
             onChange={(event) => {
               setKey(event.target.value)
               setTouched(true)
@@ -71,12 +69,12 @@ export function AddRowDialog({
               }
             }}
           />
-          {touched && problem ? <p className="hint field-error">{PROBLEM_TEXT[problem]}</p> : null}
-          <p className="hint">저장한 뒤에는 키를 바꿀 수 없습니다.</p>
+          {touched && problem ? <p className="hint field-error">{t.addRow.problem[problem]}</p> : null}
+          <p className="hint">{t.addRow.keyLocked}</p>
         </div>
 
         <div className="field">
-          <label htmlFor="new-source">원문</label>
+          <label htmlFor="new-source">{t.columns.source}</label>
           <textarea
             id="new-source"
             rows={3}
@@ -86,22 +84,22 @@ export function AddRowDialog({
         </div>
 
         <div className="field">
-          <label htmlFor="new-context">컨텍스트</label>
+          <label htmlFor="new-context">{t.columns.context}</label>
           <textarea
             id="new-context"
             rows={2}
             value={context}
-            placeholder="이 문장이 나오는 상황"
+            placeholder={t.addRow.contextPlaceholder}
             onChange={(event) => setContext(event.target.value)}
           />
         </div>
 
         <div className="modal-actions">
           <button type="button" onClick={onCancel}>
-            취소
+            {t.common.cancel}
           </button>
           <button type="button" className="primary" onClick={submit} disabled={touched && problem !== null}>
-            추가
+            {t.addRow.add}
           </button>
         </div>
       </div>

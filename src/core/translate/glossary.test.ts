@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { describeInjectedTerms, filterTermsForTexts, parseGlossary, termsWithoutConfirmedTranslation } from './glossary'
+import { ko } from '@shared/i18n/ko'
 
 const records = [
   { term: 'Babel', translation_en: 'Babel', status: 'approved', note: '고유명사', strict: 'true' },
@@ -78,12 +79,12 @@ describe('filterTermsForTexts', () => {
 
 describe('describeInjectedTerms', () => {
   it('용어가 없으면 0개', () => {
-    expect(describeInjectedTerms([])).toEqual({ text: '용어 0개' })
+    expect(describeInjectedTerms([], ko)).toEqual({ text: '용어 0개' })
   })
 
   it('이름은 여섯 개까지 쓰고, 상세에는 확정 번역과 strict 를 모두 담는다', () => {
     const terms = Array.from({ length: 7 }, (_, index) => ({ term: `t${index}`, translation: index === 0 ? 'T0' : '', note: '', strict: index === 0 }))
-    const described = describeInjectedTerms(terms)
+    const described = describeInjectedTerms(terms, ko)
     expect(described.text).toBe('용어 7개: t0, t1, t2, t3, t4, t5 …')
     expect(described.detail?.split('\n')[0]).toBe('t0 → T0 (strict)')
     expect(described.detail?.split('\n')).toHaveLength(7)

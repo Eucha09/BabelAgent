@@ -1,3 +1,4 @@
+import type { Messages } from '@shared/i18n'
 import type { QaDiagnostic, QaRuleId, QaSeverity } from '@shared/schema/qa'
 import type { TranslationStatus } from '@shared/schema/project'
 import { findGlossaryViolations, type QaGlossaryTerm } from './glossary'
@@ -68,21 +69,21 @@ function diagnostic(
 const braces = (names: readonly string[]): string => names.map((name) => `{${name}}`).join(', ')
 const angles = (ids: readonly string[]): string => ids.map((id) => `<${id}>`).join(', ')
 
-function describeBraceProblems(text: string, problems: readonly BraceProblem[]): string {
+function describeBraceProblems(text: string, problems: readonly BraceProblem[], t: Messages): string {
   return problems
     .map((problem) => {
       const around = text.slice(Math.max(0, problem.index - 8), problem.index + 9).replace(/\n/g, '⏎')
-      const what = problem.kind === 'unclosed' ? '닫히지 않은 {' : '짝 없는 }'
-      return `${what} — ${problem.index + 1}번째 글자 근처 "${around}"`
+      const what = problem.kind === 'unclosed' ? t.qa.unclosedBrace : t.qa.orphanBrace
+      return t.qa.braceAt(what, problem.index + 1, around)
     })
     .join('\n')
 }
 
 /** 원문 쪽 검사. 번역과 상관없이 vars 열이 원문과 맞는지 본다. */
-function checkSourceMeta(row: QaRowInput, ctx: QaContext, sourceVars: readonly string[]): QaDiagnostic[] {
+function checkSourceMeta(row: QaRowInput, ctx: QaContext, sourceVars: readonly string[], t: Messages): QaDiagnostic[] {
   const meta = parseVarsMeta(row.vars)
   if (!meta.ok) {
-    return [diagnostic('var.meta_invalid', row.key, 'vars 열을 읽을 수 없어 빈 목록으로 봅니다.', [], meta.reason)]
+    return [diagnostic('var.meta_invalid', row.key, t.qa.varsUnreadable, [], meta.reason)]
   }
   // 빈 vars 는 "메타데이터 없음". 쓰지 않는 프로젝트에서 모든 행이 경고로 덮이지 않게 한다.
   if (row.vars.trim() === '') return []
@@ -95,39 +96,39 @@ function checkSourceMeta(row: QaRowInput, ctx: QaContext, sourceVars: readonly s
   )
   if (diff.missing.length === 0 && diff.extra.length === 0) return []
   const parts = [
-    diff.missing.length > 0 ? `원문에만 있음: ${braces(diff.missing)}` : '',
-    diff.extra.length > 0 ? `vars 에만 있음: ${diff.extra.join(', ')}` : ''
+    diff.missing.length > 0 ? t.qa.onlyInSource(braces(diff.missing)) : '',
+    diff.extra.length > 0 ? t.qa.onlyInVars(diff.extra.join(', ')) : ''
   ].filter((part) => part !== '')
   return [
     diagnostic(
       'var.meta_mismatch',
       row.key,
-      'vars 열의 변수 이름이 원문과 다릅니다.',
+      t.qa.varsMismatch,
       [...diff.missing, ...diff.extra],
-      `${parts.join(' · ')}\n기준은 원문입니다. 어느 쪽이 맞는지 확인해 vars 열을 고치세요.`
+      `${parts.join(' · ')}\n${t.qa.varsMismatchHint}`
     )
   ]
 }
 
 /** 행 하나를 검사한다. 순서는 원문 메타 → 빈 번역 → stale → 중괄호·변수 → 태그 → 길이 → 용어집. */
-export function checkRow(row: QaRowInput, ctx: QaContext): QaDiagnostic[] {
+export function checkRow(row: QaRowInput, ctx: QaContext, t: Messages): QaDiagnostic[] {
   const { smart } = ctx
   const sourceParse = parseSmart(row.source, smart)
   const sourceVars = extractVariables(sourceParse.tokens)
-  const results = checkSourceMeta(row, ctx, sourceVars)
+  const results = checkSourceMeta(row, ctx, sourceVars, t)
 
   const translation = row.translation
   if (!translation) return results
   const text = translation.text
   if (text.trim() === '') {
     if (translation.status !== 'untranslated') {
-      results.push(diagnostic('text.empty', row.key, '번역문이 비어 있습니다.'))
+      results.push(diagnostic('text.empty', row.key, t.qa.empty))
     }
     return results
   }
 
   if (translation.status === 'stale' || translation.sourceHash !== row.sourceHash) {
-    results.push(diagnostic('status.stale', row.key, '번역한 뒤 원문이 바뀌었습니다. 새 원문과 비교해 주세요.'))
+    results.push(diagnostic('status.stale', row.key, t.qa.stale))
   }
 
   // 중괄호와 변수
@@ -137,19 +138,19 @@ export function checkRow(row: QaRowInput, ctx: QaContext): QaDiagnostic[] {
       diagnostic(
         'smart.brace_unbalanced',
         row.key,
-        '중괄호 짝이 맞지 않습니다.',
+        t.qa.braces,
         parsed.problems.map((problem) => `${problem.kind}@${problem.index}`),
-        describeBraceProblems(text, parsed.problems)
+        describeBraceProblems(text, parsed.problems, t)
       )
     )
   }
 
   const variables = compareVariables(sourceVars, extractVariables(parsed.tokens), smart.caseSensitive)
   if (variables.missing.length > 0) {
-    results.push(diagnostic('var.missing', row.key, `원문의 변수가 번역문에 없습니다: ${braces(variables.missing)}`, variables.missing))
+    results.push(diagnostic('var.missing', row.key, t.qa.missingVars(braces(variables.missing)), variables.missing))
   }
   if (variables.extra.length > 0) {
-    results.push(diagnostic('var.extra', row.key, `원문에 없는 변수가 번역문에 있습니다: ${braces(variables.extra)}`, variables.extra))
+    results.push(diagnostic('var.extra', row.key, t.qa.extraVars(braces(variables.extra)), variables.extra))
   }
 
   if (smart.enabled) {
@@ -162,9 +163,9 @@ export function checkRow(row: QaRowInput, ctx: QaContext): QaDiagnostic[] {
         diagnostic(
           'smart.unknown_formatter',
           row.key,
-          `포매터 목록에 없는 이름: ${unknown.join(', ')}`,
+          t.qa.unknownFormatters(unknown.join(', ')),
           unknown,
-          'project.json 의 smartStrings.formatters 에 없습니다. 커스텀 포매터라면 목록에 추가하세요.'
+          t.qa.unknownFormattersHint
         )
       )
     }
@@ -176,25 +177,25 @@ export function checkRow(row: QaRowInput, ctx: QaContext): QaDiagnostic[] {
   const tagDiff = compareTagSets(tagIds(sourceTags), tagIds(translationTags))
   if (tagDiff.missing.length > 0 || tagDiff.extra.length > 0) {
     const parts = [
-      tagDiff.missing.length > 0 ? `빠짐: ${angles(tagDiff.missing)}` : '',
-      tagDiff.extra.length > 0 ? `추가됨: ${angles(tagDiff.extra)}` : ''
+      tagDiff.missing.length > 0 ? t.qa.tagsMissing(angles(tagDiff.missing)) : '',
+      tagDiff.extra.length > 0 ? t.qa.tagsExtra(angles(tagDiff.extra)) : ''
     ].filter((part) => part !== '')
     results.push(
-      diagnostic('tag.set_mismatch', row.key, '리치 텍스트 태그가 원문과 다릅니다.', [...tagDiff.missing, ...tagDiff.extra], parts.join(' · '))
+      diagnostic('tag.set_mismatch', row.key, t.qa.tagsMismatch, [...tagDiff.missing, ...tagDiff.extra], parts.join(' · '))
     )
   }
   const structure = structureProblemsBeyondSource(checkTagStructure(sourceTags), checkTagStructure(translationTags))
   const structureParts = [
-    structure.unclosed.length > 0 ? `닫히지 않음: ${angles(structure.unclosed)}` : '',
-    structure.orphanClosers.length > 0 ? `여는 태그 없이 닫힘: ${structure.orphanClosers.map((name) => `</${name}>`).join(', ')}` : '',
-    structure.crossed.length > 0 ? `중첩 순서 어긋남: ${angles(structure.crossed)}` : ''
+    structure.unclosed.length > 0 ? t.qa.tagsUnclosed(angles(structure.unclosed)) : '',
+    structure.orphanClosers.length > 0 ? t.qa.tagsOrphan(structure.orphanClosers.map((name) => `</${name}>`).join(', ')) : '',
+    structure.crossed.length > 0 ? t.qa.tagsCrossed(angles(structure.crossed)) : ''
   ].filter((part) => part !== '')
   if (structureParts.length > 0) {
     results.push(
       diagnostic(
         'tag.unclosed',
         row.key,
-        '태그 짝이 맞지 않습니다.',
+        t.qa.tagsUnpaired,
         [...structure.unclosed, ...structure.orphanClosers, ...structure.crossed],
         structureParts.join(' · ')
       )
@@ -209,11 +210,11 @@ export function checkRow(row: QaRowInput, ctx: QaContext): QaDiagnostic[] {
     const measured = measureDisplayLength(text, smart, examples, smart.caseSensitive)
     if (measured.length > maxLen) {
       const assumptions = measured.assumptions.map((item) =>
-        item.example === null ? `{${item.name}} 은 example 이 없어 자리표시자 그대로 셈` : `{${item.name}} = "${item.example}"`
+        item.example === null ? t.qa.noExample(item.name) : t.qa.example(item.name, item.example)
       )
-      const detail = ['태그는 빼고, 분기가 있는 포매터는 가장 긴 분기로 셌습니다.', ...assumptions].join('\n')
+      const detail = [t.qa.lengthRule, ...assumptions].join('\n')
       results.push(
-        diagnostic('len.over_max', row.key, `길이 초과: ${measured.length} / ${maxLen}자`, [`${measured.length}/${maxLen}`], detail)
+        diagnostic('len.over_max', row.key, t.qa.tooLong(measured.length, maxLen), [`${measured.length}/${maxLen}`], detail)
       )
     }
   }
@@ -228,7 +229,7 @@ export function checkRow(row: QaRowInput, ctx: QaContext): QaDiagnostic[] {
       diagnostic(
         violation.strict ? 'glossary.violation_strict' : 'glossary.violation',
         row.key,
-        `용어집 번역을 쓰지 않았습니다: ${violation.term} → ${violation.translation}`,
+        t.qa.glossary(violation.term, violation.translation),
         [`${violation.term} → ${violation.translation}`]
       )
     )

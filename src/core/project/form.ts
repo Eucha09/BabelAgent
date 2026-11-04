@@ -2,6 +2,7 @@ import type { ExportLocale } from '@shared/schema/export'
 import type { ProjectConfig, StyleRule } from '@shared/schema/project'
 import type { TranslateEffort, TranslateModel } from '@shared/schema/jobs'
 import { normalizeExportLocales, validateProjectSettings, type SettingsProblem } from './settings'
+import type { Messages } from '@shared/i18n'
 
 /**
  * 프로젝트 화면의 입력 상태. 숫자 칸은 입력 중에 비거나 잘못될 수 있으므로 글자로 들고 있다가
@@ -76,7 +77,11 @@ function toNumber(text: string): number {
  * 입력을 설정으로 바꾸고 문제를 모은다. base 는 화면을 연 시점의 설정 — 화면에 없는 항목
  * (schemaVersion, grammar, 내보내기의 로케일 밖 항목)은 거기서 가져온다.
  */
-export function fromProjectForm(form: ProjectForm, base: ProjectConfig): { config: ProjectConfig; problems: SettingsProblem[] } {
+export function fromProjectForm(
+  form: ProjectForm,
+  base: ProjectConfig,
+  t: Messages
+): { config: ProjectConfig; problems: SettingsProblem[] } {
   const config: ProjectConfig = {
     ...base,
     name: form.name.trim(),
@@ -102,5 +107,5 @@ export function fromProjectForm(form: ProjectForm, base: ProjectConfig): { confi
     },
     export: { ...base.export, locales: normalizeExportLocales(form.exportLocales) }
   }
-  return { config, problems: validateProjectSettings(config) }
+  return { config, problems: validateProjectSettings(config, t) }
 }

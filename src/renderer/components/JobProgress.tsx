@@ -1,21 +1,6 @@
 import { useEffect, useState } from 'react'
-import { JOB_UNIT, type JobControlInput, type JobKind, type JobState, type JobView } from '@shared/schema/jobs'
-import { effortLabel, modelLabel } from '../state/translate-options'
-
-const STATE_LABEL: Record<JobState, string> = {
-  running: '진행 중',
-  paused: '일시정지',
-  'waiting-limit': '사용량 한도 대기',
-  done: '완료',
-  cancelled: '취소됨'
-}
-
-export const JOB_TITLE: Record<JobKind, string> = {
-  translate: '번역 작업',
-  context: '컨텍스트 추정',
-  terms: '용어 추출',
-  'term-translate': '용어 번역'
-}
+import type { JobControlInput, JobView } from '@shared/schema/jobs'
+import { useT } from '../i18n'
 
 function countdown(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000))
@@ -41,6 +26,7 @@ export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element 
     return () => clearInterval(id)
   }, [snapshot.resumeAt])
 
+  const t = useT()
   const total = Math.max(1, snapshot.totalRows)
   const donePercent = (snapshot.doneRows / total) * 100
   const failedPercent = (snapshot.failedRows / total) * 100
@@ -49,39 +35,40 @@ export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element 
   return (
     <div className="card job-card">
       <div className="job-head">
-        <h3>{JOB_TITLE[job.kind]}</h3>
-        <span className={`job-state ${snapshot.state}`}>{STATE_LABEL[snapshot.state]}</span>
+        <h3>{t.job.title[job.kind]}</h3>
+        <span className={`job-state ${snapshot.state}`}>{t.job.state[snapshot.state]}</span>
       </div>
       <p className="hint">
-        {job.summary} · 모델 {modelLabel(job.model)} · 사고 {effortLabel(job.effort)}
+        {job.summary}
+        {t.job.settingsUsed(t.translateOptions.model[job.model], t.translateOptions.effort[job.effort])}
         {job.notes.map((note) => ` · ${note}`).join('')}
       </p>
 
-      <div className="job-bar" title={`완료 ${snapshot.doneRows} / 실패 ${snapshot.failedRows} / 전체 ${snapshot.totalRows}`}>
+      <div className="job-bar" title={t.job.barTitle(snapshot.doneRows, snapshot.failedRows, snapshot.totalRows)}>
         <span className="job-bar-done" style={{ width: `${donePercent}%` }} />
         <span className="job-bar-failed" style={{ width: `${failedPercent}%` }} />
       </div>
       <div className="job-stats">
         <span>
           {snapshot.doneRows} / {snapshot.totalRows}
-          {JOB_UNIT[job.kind]}
+          {t.job.unit[job.kind]}
         </span>
         <span className="hint">
-          배치 완료 {batchCount('done')} ·{' '}
-          {/* 한도 대기 중에 남은 배치는 중단 신호를 받고 CLI 를 닫는 중이다 */}
-          {snapshot.state === 'waiting-limit' ? '정리 중' : '진행'} {batchCount('running')} · 대기{' '}
-          {batchCount('queued')} · 실패{' '}
-          {batchCount('failed')}
+          {[
+            t.job.batchesDone(batchCount('done')),
+            // 한도 대기 중에 남은 배치는 중단 신호를 받고 CLI 를 닫는 중이다
+            snapshot.state === 'waiting-limit' ? t.job.batchesStopping(batchCount('running')) : t.job.batchesRunning(batchCount('running')),
+            t.job.batchesQueued(batchCount('queued')),
+            t.job.batchesFailed(batchCount('failed'))
+          ].join(' · ')}
         </span>
       </div>
 
       {snapshot.state === 'waiting-limit' ? (
         <div className="message">
-          <strong>사용량 한도에 걸려 멈췄습니다.</strong>
+          <strong>{t.job.limitStopped}</strong>
           <p className="hint">
-            {snapshot.resumeAt !== null
-              ? `${countdown(snapshot.resumeAt - now)} 뒤 다시 시작합니다.`
-              : '한도가 풀린 뒤 [지금 재시도]를 누르세요.'}
+            {snapshot.resumeAt !== null ? t.job.limitResumeIn(countdown(snapshot.resumeAt - now)) : t.job.limitManual}
           </p>
         </div>
       ) : null}
@@ -89,36 +76,36 @@ export function JobProgress({ job, busy, onControl }: Props): React.JSX.Element 
       <div className="row" style={{ marginTop: 'var(--space-3)' }}>
         {snapshot.state === 'running' ? (
           <button type="button" disabled={busy} onClick={() => onControl('pause')}>
-            일시정지
+            {t.job.pause}
           </button>
         ) : null}
         {snapshot.state === 'paused' ? (
           <button type="button" className="primary" disabled={busy} onClick={() => onControl('resume')}>
-            재개
+            {t.job.resume}
           </button>
         ) : null}
         {snapshot.state === 'waiting-limit' ? (
           <button type="button" className="primary" disabled={busy} onClick={() => onControl('retry')}>
-            지금 재시도
+            {t.job.retryNow}
           </button>
         ) : null}
         {snapshot.state !== 'done' && snapshot.state !== 'cancelled' ? (
           <button type="button" className="danger" disabled={busy} onClick={() => onControl('cancel')}>
-            취소
+            {t.job.cancel}
           </button>
         ) : null}
       </div>
 
       {snapshot.failures.length > 0 ? (
         <div className="job-failures">
-          <strong>실패한 배치 ({snapshot.failures.length})</strong>
+          <strong>{t.job.failures(snapshot.failures.length)}</strong>
           {snapshot.failures.map((failure) => (
             <div key={failure.batchId} className="job-failure">
-              <span className="mono">배치 {failure.batchId}</span> {failure.reason}
+              <span className="mono">{t.job.batch(failure.batchId)}</span> {failure.reason}
               {failure.detail ? <pre>{failure.detail}</pre> : null}
             </div>
           ))}
-          <p className="hint">실패한 배치는 기록하지 않았습니다. 다시 실행하면 남은 것만 처리합니다.</p>
+          <p className="hint">{t.job.failuresHint}</p>
         </div>
       ) : null}
     </div>

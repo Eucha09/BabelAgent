@@ -4,6 +4,7 @@ import { createDefaultProjectConfig, type ProjectConfig } from '@shared/schema/p
 import type { MasterRow, TranslationRow } from '@shared/schema/strings'
 import { sourceHash } from '../hash'
 import { exportLanguages, glyphsByLanguage, planExport, smartTable, type ExportPlanInput } from './plan'
+import { ko } from '@shared/i18n/ko'
 
 const base = createDefaultProjectConfig({ name: 'My Game', sourceLanguage: 'ko', targetLanguages: ['en', 'ja'], schemaVersion: 1 })
 
@@ -59,7 +60,7 @@ describe('exportLanguages', () => {
 
 describe('planExport', () => {
   it('템플릿·Unity 없이 자동 생성한다', () => {
-    const plan = planExport(input())
+    const plan = planExport(input(), ko)
     expect(plan.headerSource).toBe('auto')
     expect(plan.columns.map((column) => column.name)).toEqual(['Key', 'Id', 'Korean(ko)', 'English(en)', 'Japanese(ja)'])
     expect(plan.problems).toEqual([])
@@ -69,14 +70,14 @@ describe('planExport', () => {
   })
 
   it('Smart 항목은 smart=true 행, 구문은 있는데 미정인 행은 따로 센다', () => {
-    const plan = planExport(input())
+    const plan = planExport(input(), ko)
     expect(plan.smart).toEqual([{ key: 'a', id: '', source: '{0}개' }])
     expect(plan.smartUnset).toBe(1)
     expect(smartTable(plan.smart)).toEqual({ header: ['Key', 'Id'], rows: [['a', '']] })
   })
 
   it('언어를 고르지 않으면 막는다', () => {
-    expect(planExport(input({ request: request({ languages: [] }) })).problems).toContain('내보낼 언어를 고르세요.')
+    expect(planExport(input({ request: request({ languages: [] }) }), ko).problems).toContain('내보낼 언어를 고르세요.')
   })
 
   it('Unity 를 연결하면 로케일 코드와 Id 를 쓰고 파일 이름은 컬렉션 이름', () => {
@@ -92,7 +93,7 @@ describe('planExport', () => {
           tables: [{ collection: 'UI', entries: [{ id: '9223372036854775807', key: 'a' }, { id: '7', key: 'gone' }] }],
           notices: []
         }
-      })
+      }), ko
     )
     expect(plan.columns.map((column) => column.name)).toEqual(['Key', 'Id', 'Korean (South Korea)(ko-KR)', 'English(en)', 'Japanese(ja)'])
     expect(plan.build.rows[0]?.[1]).toBe('9223372036854775807')
@@ -103,7 +104,7 @@ describe('planExport', () => {
   })
 
   it('Unity 를 읽지 못하면 자동 생성으로 대신하고 알린다', () => {
-    const plan = planExport(input({ unity: { state: 'failed', projectPath: '../Game', reason: 'Assets 폴더가 없습니다.' } }))
+    const plan = planExport(input({ unity: { state: 'failed', projectPath: '../Game', reason: 'Assets 폴더가 없습니다.' } }), ko)
     expect(plan.columns.map((column) => column.name)).toEqual(['Key', 'Id', 'Korean(ko)', 'English(en)', 'Japanese(ja)'])
     expect(plan.warnings[0]).toContain('Assets 폴더가 없습니다.')
     expect(plan.problems).toEqual([])
@@ -122,7 +123,7 @@ describe('planExport', () => {
           ],
           notices: []
         }
-      })
+      }), ko
     )
     expect(plan.build.rows[0]?.[1]).toBe('')
     expect(plan.unity.state === 'ok' && plan.unity.notices.length).toBe(1)
@@ -134,7 +135,7 @@ describe('planExport', () => {
       export: { ...base.export, template: { path: 'templates/unity_template.csv', columns: [{ name: 'Old', role: 'key', language: '' }] } }
     }
     const plan = planExport(
-      input({ template: { state: 'ok', path: 'templates/unity_template.csv', header: ['English(en)', 'Key', 'Memo'] } }, config)
+      input({ template: { state: 'ok', path: 'templates/unity_template.csv', header: ['English(en)', 'Key', 'Memo'] } }, config), ko
     )
     expect(plan.headerSource).toBe('template')
     expect(plan.columns.map((column) => column.name)).toEqual(['English(en)', 'Key'])
@@ -145,13 +146,13 @@ describe('planExport', () => {
   })
 
   it('템플릿을 읽지 못하면 자동 생성 헤더를 쓴다', () => {
-    const plan = planExport(input({ template: { state: 'failed', path: 'templates/x.csv', reason: '파일이 없습니다.' } }))
+    const plan = planExport(input({ template: { state: 'failed', path: 'templates/x.csv', reason: '파일이 없습니다.' } }), ko)
     expect(plan.headerSource).toBe('auto')
     expect(plan.warnings[0]).toContain('파일이 없습니다.')
   })
 
   it('글자 목록 옵션이면 값 열 언어마다 파일을 더한다', () => {
-    const plan = planExport(input({ request: request({ glyphs: true, languages: ['ko', 'en'], fileName: 'out' }) }))
+    const plan = planExport(input({ request: request({ glyphs: true, languages: ['ko', 'en'], fileName: 'out' }) }), ko)
     expect(plan.files).toEqual(['out.csv', 'out_smart.csv', 'out_chars_ko.txt', 'out_chars_en.txt'])
     const glyphs = glyphsByLanguage(plan, base.smartStrings)
     expect(glyphs.get('ko')).toBe('개기님닫')

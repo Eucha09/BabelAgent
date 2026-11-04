@@ -1,7 +1,8 @@
 import { useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { TranslationStatus } from '@shared/schema/project'
-import { STATUS_LABEL } from './StringsGrid'
+import { useT } from '../i18n'
+import { statusLabel } from '../state/labels'
 
 /** status 는 번역 화면에서만 준다(승인된 행은 고를 수 없다). 컨텍스트·용어 화면은 원문만 보여 준다. */
 export type ChecklistItem = { key: string; source: string; status?: TranslationStatus }
@@ -17,6 +18,7 @@ const ROW_HEIGHT = 30
 
 /** 작업할 행을 고르는 체크 목록. 번역에서는 승인된 행을 고를 수 없다. */
 export function KeyChecklist({ items, selected, disabled, onChange }: Props): React.JSX.Element {
+  const t = useT()
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -44,7 +46,7 @@ export function KeyChecklist({ items, selected, disabled, onChange }: Props): Re
               key={item.key}
               className={approved ? 'checklist-row approved' : 'checklist-row'}
               style={{ height: ROW_HEIGHT, transform: `translateY(${virtual.start}px)` }}
-              title={approved ? '승인된 행은 번역하지 않습니다' : item.source}
+              title={approved ? t.common.approvedNotTranslated : item.source}
             >
               <input
                 type="checkbox"
@@ -55,7 +57,7 @@ export function KeyChecklist({ items, selected, disabled, onChange }: Props): Re
               <span className="token-key checklist-key">{item.key}</span>
               <span className="checklist-source">{item.source}</span>
               {item.status ? (
-                <span className={`status-badge ${item.status}`}>{STATUS_LABEL[item.status] ?? item.status}</span>
+                <span className={`status-badge ${item.status}`}>{statusLabel(item.status, t)}</span>
               ) : (
                 <span />
               )}

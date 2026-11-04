@@ -6,6 +6,7 @@ import { runSubmitSession } from '../agent/submit-session'
 import { mcpToolName, type SubmitServer } from '../agent/tools'
 import type { JobLog } from './runner'
 import type { BatchOutcome } from './scheduler'
+import { msg } from '../i18n'
 
 type Sdk = Awaited<ReturnType<typeof loadAgentSdk>>
 
@@ -66,7 +67,7 @@ export async function runAgentBatch<T>(input: {
   const fake = fakeLimit(signal)
   if (fake) {
     const outcome = await fake
-    if (outcome.kind === 'limit') ctx.log({ level: 'warn', batchId, message: `${label} 사용량 한도 (가짜, BABEL_FAKE_LIMIT)` })
+    if (outcome.kind === 'limit') ctx.log({ level: 'warn', batchId, message: msg().jobLog.fakeLimit(label) })
     return { kind: 'outcome', outcome }
   }
 
@@ -74,7 +75,7 @@ export async function runAgentBatch<T>(input: {
   try {
     sdk = await loadAgentSdk()
   } catch (error) {
-    return { kind: 'outcome', outcome: { kind: 'failed', reason: 'Agent SDK를 불러오지 못했습니다.', detail: String(error) } }
+    return { kind: 'outcome', outcome: { kind: 'failed', reason: msg().errors.sdkLoadFailed, detail: String(error) } }
   }
 
   const submit = input.buildServer(sdk)
@@ -95,25 +96,25 @@ export async function runAgentBatch<T>(input: {
   if (accepted) return { kind: 'accepted', items: accepted }
 
   if (limit) {
-    ctx.log({ level: 'warn', batchId, message: `${label} 사용량 한도 — 모든 작업자를 멈춥니다` })
+    ctx.log({ level: 'warn', batchId, message: msg().jobLog.limitStop(label) })
     return { kind: 'outcome', outcome: { kind: 'limit', resetsAt: limit.resetsAt } }
   }
   if (signal.aborted) {
-    ctx.log({ level: 'info', batchId, message: `${label} 중단 — 기록하지 않았습니다` })
+    ctx.log({ level: 'info', batchId, message: msg().jobLog.aborted(label) })
     return { kind: 'outcome', outcome: { kind: 'aborted' } }
   }
 
   const problems = submit.lastProblems()
   const reason = problems
-    ? '제출이 검증을 통과하지 못했습니다.'
+    ? msg().jobLog.submitRejected
     : agentError
-      ? '에이전트 실행 중 오류가 났습니다.'
-      : '에이전트가 결과를 제출하지 않았습니다.'
+      ? msg().jobLog.agentFailed
+      : msg().jobLog.noSubmission
   const detail = problems ?? agentError ?? undefined
   ctx.log(
     detail === undefined
-      ? { level: 'error', batchId, message: `${label} 실패: ${reason}` }
-      : { level: 'error', batchId, message: `${label} 실패: ${reason}`, detail }
+      ? { level: 'error', batchId, message: msg().jobLog.failed(label, reason) }
+      : { level: 'error', batchId, message: msg().jobLog.failed(label, reason), detail }
   )
   return { kind: 'outcome', outcome: detail === undefined ? { kind: 'failed', reason } : { kind: 'failed', reason, detail } }
 }
@@ -129,7 +130,7 @@ export function logSubmitFailure(
   log({
     level: 'warn',
     batchId,
-    message: `${label} · ${tool} → 검증 실패 (${event.attempt}번째${event.final ? ', 더 받지 않음' : ', 수정 대기'})`,
+    message: msg().jobLog.validationFailed(label, tool, event.attempt, event.final),
     detail: event.problems
   })
 }

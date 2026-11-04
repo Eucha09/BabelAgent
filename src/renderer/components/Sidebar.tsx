@@ -1,5 +1,6 @@
-import { SCREENS, type ScreenId } from '../state/screens'
 import type { OpenProject } from '@shared/schema/project'
+import { useT } from '../i18n'
+import { SCREENS, type ScreenId } from '../state/screens'
 
 type Props = {
   project: OpenProject | null
@@ -20,35 +21,38 @@ export function Sidebar({
   onClose,
   busy
 }: Props): React.JSX.Element {
+  const t = useT()
   return (
     <nav className="sidebar">
       <div className="project-box">
         <div className="nav-section" style={{ padding: 0, marginBottom: 'var(--space-1)' }}>
-          프로젝트
+          {t.sidebar.project}
         </div>
-        <div className="project-name">{project ? project.config.name : '열린 프로젝트 없음'}</div>
+        <div className="project-name">{project ? project.config.name : t.sidebar.noProject}</div>
         <div className="project-path">
-          {project ? `${project.config.sourceLanguage} → ${project.config.targetLanguages.join(', ') || '대상 언어 없음'}` : '폴더를 열거나 새로 만드세요'}
+          {project
+            ? `${project.config.sourceLanguage} → ${project.config.targetLanguages.join(', ') || t.sidebar.noTargets}`
+            : t.sidebar.openOrCreate}
         </div>
         <div className="row">
           {project ? (
             <button type="button" onClick={onClose} disabled={busy}>
-              닫기
+              {t.sidebar.close}
             </button>
           ) : (
             <>
               <button type="button" onClick={onOpen} disabled={busy}>
-                열기
+                {t.sidebar.open}
               </button>
               <button type="button" onClick={onCreate} disabled={busy}>
-                새로 만들기
+                {t.sidebar.create}
               </button>
             </>
           )}
         </div>
       </div>
 
-      <div className="nav-section">단계</div>
+      <div className="nav-section">{t.sidebar.steps}</div>
       <ul className="nav">
         {SCREENS.map((screen) => {
           const disabled = screen.requiresProject && !project
@@ -59,9 +63,9 @@ export function Sidebar({
                 className={`nav-item${current === screen.id ? ' selected' : ''}`}
                 onClick={() => onSelect(screen.id)}
                 disabled={disabled}
-                title={disabled ? '프로젝트를 먼저 열어야 합니다' : screen.description}
+                title={disabled ? t.sidebar.needsProject : t.screens[screen.id].description}
               >
-                <span>{screen.label}</span>
+                <span>{t.screens[screen.id].label}</span>
               </button>
             </li>
           )

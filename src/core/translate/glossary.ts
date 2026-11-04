@@ -1,5 +1,6 @@
 import { glossaryStatusOf, isStrict, isTranslationConfirmed, translationColumn } from '../glossary/entries'
 import { findTermsInSource } from '../qa/glossary'
+import type { Messages } from '@shared/i18n'
 
 /** 번역 프롬프트에 넣을 용어 하나. */
 export type GlossaryTerm = {
@@ -67,11 +68,11 @@ export function filterTermsForTexts<T extends Pick<GlossaryTerm, 'term'>>(
 const TERMS_IN_MESSAGE = 6
 
 /** 배치에 넣은 용어를 작업 로그 한 줄로. 이 줄로 "배치에 그 배치의 용어만 들어갔는지"를 확인한다. */
-export function describeInjectedTerms(terms: readonly GlossaryTerm[]): { text: string; detail?: string } {
-  if (terms.length === 0) return { text: '용어 0개' }
+export function describeInjectedTerms(terms: readonly GlossaryTerm[], t: Messages): { text: string; detail?: string } {
+  if (terms.length === 0) return { text: t.injectedTerms.none }
   const names = terms.map((term) => term.term)
   const shown = names.slice(0, TERMS_IN_MESSAGE).join(', ')
-  const text = `용어 ${terms.length}개: ${shown}${names.length > TERMS_IN_MESSAGE ? ' …' : ''}`
+  const text = t.injectedTerms.list(terms.length, `${shown}${names.length > TERMS_IN_MESSAGE ? ' …' : ''}`)
   const detail = terms
     .map((term) => `${term.term}${term.translation ? ` → ${term.translation}` : ''}${term.strict ? ' (strict)' : ''}`)
     .join('\n')

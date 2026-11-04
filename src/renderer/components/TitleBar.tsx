@@ -1,4 +1,5 @@
 import type { OpenProject } from '@shared/schema/project'
+import { useT } from '../i18n'
 import { AppIcon } from './AppIcon'
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
  * 오른쪽 끝은 OS 창 버튼(titleBarOverlay)이 그려지므로 CSS에서 비워 둔다.
  */
 export function TitleBar({ project, screenLabel }: Props): React.JSX.Element {
+  const t = useT()
   return (
     <header className="titlebar">
       <span className="app-mark">
@@ -19,14 +21,14 @@ export function TitleBar({ project, screenLabel }: Props): React.JSX.Element {
       </span>
 
       <span className="chip mono" title={project?.dir ?? ''}>
-        {project ? project.dir : '프로젝트 없음'}
+        {project ? project.dir : t.titleBar.noProject}
       </span>
 
       <span className="chip">{screenLabel}</span>
 
       {project ? (
         <span className="chip mono">
-          {project.config.sourceLanguage} → {project.config.targetLanguages.join(' · ') || '없음'}
+          {project.config.sourceLanguage} → {project.config.targetLanguages.join(' · ') || t.titleBar.none}
         </span>
       ) : null}
     </header>

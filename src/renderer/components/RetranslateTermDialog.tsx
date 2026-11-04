@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import type { GlossaryEntry, RetranslateTermResult } from '@shared/schema/glossary'
 import type { IpcError, IpcResult } from '@shared/types'
+import { useT } from '../i18n'
 
 export type RetranslateRequest = {
   requestId: string
@@ -36,6 +37,7 @@ function useElapsedSeconds(startedAt: number | null): number {
  * 결과는 그 행의 칸에 미저장 편집으로 들어가고, 사람이 [저장]해야 반영된다.
  */
 export function RetranslateTermDialog({ entry, languages, onRun, onCancelRun, onDone, onClose }: Props): React.JSX.Element {
+  const t = useT()
   const [instruction, setInstruction] = useState('')
   const [run, setRun] = useState<{ requestId: string; startedAt: number } | null>(null)
   const [error, setError] = useState<IpcError | null>(null)
@@ -68,33 +70,33 @@ export function RetranslateTermDialog({ entry, languages, onRun, onCancelRun, on
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h3>용어 재번역</h3>
+        <h3>{t.retranslateTerm.title}</h3>
         <p className="confirm-quote">{entry.term}</p>
         <dl className="dl" style={{ margin: 'var(--space-3) 0' }}>
           {languages.map((language) => (
             <Fragment key={language}>
-              <dt>지금 {language}</dt>
-              <dd>{entry.translations[language]?.trim() || <span className="muted">(없음)</span>}</dd>
+              <dt>{t.retranslateTerm.current(language)}</dt>
+              <dd>{entry.translations[language]?.trim() || <span className="muted">{t.retranslateTerm.none}</span>}</dd>
             </Fragment>
           ))}
-          <dt>지금 지침</dt>
-          <dd>{entry.note.trim() || <span className="muted">(없음)</span>}</dd>
+          <dt>{t.retranslateTerm.currentNote}</dt>
+          <dd>{entry.note.trim() || <span className="muted">{t.retranslateTerm.none}</span>}</dd>
         </dl>
         <div className="field">
-          <label htmlFor="retranslate-instruction">지시 (선택)</label>
+          <label htmlFor="retranslate-instruction">{t.retranslateTerm.instruction}</label>
           <textarea
             id="retranslate-instruction"
             rows={2}
             value={instruction}
             autoFocus
             disabled={run !== null}
-            placeholder="예: 더 짧게. 비우면 더 나은 대안을 받습니다"
+            placeholder={t.retranslateTerm.instructionPlaceholder}
             onChange={(event) => setInstruction(event.target.value)}
           />
-          <p className="hint">결과는 칸에 채워지고, [저장]해야 반영됩니다.</p>
+          <p className="hint">{t.retranslateTerm.hint}</p>
         </div>
 
-        {run ? <p className="hint">에이전트가 다시 번역하는 중… {elapsed}초</p> : null}
+        {run ? <p className="hint">{t.retranslateTerm.running(elapsed)}</p> : null}
         {error ? (
           <div className="message error">
             <strong>{error.message}</strong>
@@ -105,15 +107,15 @@ export function RetranslateTermDialog({ entry, languages, onRun, onCancelRun, on
         <div className="modal-actions">
           {run ? (
             <button type="button" onClick={() => onCancelRun(run.requestId)}>
-              중단
+              {t.retranslateTerm.stop}
             </button>
           ) : (
             <button type="button" onClick={onClose}>
-              닫기
+              {t.common.close}
             </button>
           )}
           <button type="button" className="primary" disabled={run !== null || languages.length === 0} onClick={() => void start()}>
-            재번역
+            {t.retranslateTerm.run}
           </button>
         </div>
       </div>

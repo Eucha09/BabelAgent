@@ -4,6 +4,7 @@ import { AuthStatusJson, type AuthLoginDone, type AuthStatus, type LoginMethod }
 import { fail, ok, type IpcResult } from '@shared/types'
 import { claudeEnv as authEnv, resolveClaudeExecutable } from './claude-cli'
 import { effectiveConfigDir } from './session'
+import { msg } from '../i18n'
 
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g
 const STATUS_TIMEOUT_MS = 20_000
@@ -12,7 +13,7 @@ function clean(text: string): string {
   return text.replace(ANSI, '')
 }
 
-const CLI_MISSING = 'Claude Code 를 찾지 못했습니다. 설정 화면에서 설치하거나 실행 파일 경로를 지정하세요.'
+const cliMissing = (): string => msg().errors.cliMissing
 
 /** `claude auth status --json`으로 현재 로그인 상태를 읽는다. */
 export async function readAuthStatus(
@@ -20,7 +21,7 @@ export async function readAuthStatus(
   configDir: string | null
 ): Promise<IpcResult<AuthStatus>> {
   const executable = resolveClaudeExecutable(cliPath)
-  if (!executable) return fail('cli-not-found', CLI_MISSING)
+  if (!executable) return fail('cli-not-found', cliMissing())
 
   return new Promise<IpcResult<AuthStatus>>((resolve) => {
     const child = spawn(executable, ['auth', 'status', '--json'], {
@@ -31,7 +32,7 @@ export async function readAuthStatus(
     let stderr = ''
     const timer = setTimeout(() => {
       child.kill()
-      resolve(fail('unknown', '인증 상태 조회가 끝나지 않았습니다.'))
+      resolve(fail('unknown', msg().errors.authTimeout))
     }, STATUS_TIMEOUT_MS)
 
     child.stdout.on('data', (chunk: Buffer) => {
@@ -42,7 +43,7 @@ export async function readAuthStatus(
     })
     child.on('error', (error) => {
       clearTimeout(timer)
-      resolve(fail('cli-not-found', CLI_MISSING, error.message))
+      resolve(fail('cli-not-found', cliMissing(), error.message))
     })
     child.on('close', (code) => {
       clearTimeout(timer)
@@ -53,13 +54,13 @@ export async function readAuthStatus(
         raw = JSON.parse(text)
       } catch {
         resolve(
-          fail('unknown', '인증 상태를 읽지 못했습니다.', clean(`${text}\n${stderr}`).trim() || `종료 코드 ${code}`)
+          fail('unknown', msg().errors.authReadFailed, clean(`${text}\n${stderr}`).trim() || msg().errors.exitCode(String(code)))
         )
         return
       }
       const parsed = AuthStatusJson.safeParse(raw)
       if (!parsed.success) {
-        resolve(fail('unknown', '인증 상태 형식이 예상과 다릅니다.', text))
+        resolve(fail('unknown', msg().errors.authFormat, text))
         return
       }
       resolve(ok({ ...parsed.data, configDir: effectiveConfigDir(configDir), cliPath: executable }))
@@ -81,15 +82,15 @@ export function startLogin(
   method: LoginMethod,
   onDone: (payload: AuthLoginDone) => void
 ): IpcResult<null> {
-  if (loginProcess) return fail('unknown', '로그인 창이 이미 열려 있습니다.')
+  if (loginProcess) return fail('unknown', msg().errors.loginAlreadyOpen)
 
   const executable = resolveClaudeExecutable(cliPath)
-  if (!executable) return fail('cli-not-found', CLI_MISSING)
+  if (!executable) return fail('cli-not-found', cliMissing())
   const command = `"${executable}" auth login --${method}`
   if (process.platform !== 'win32') {
     return fail(
       'unknown',
-      '이 운영체제에서는 앱이 로그인 창을 열지 못합니다. 터미널에서 아래 명령을 실행한 뒤 [상태 새로고침]을 누르세요.',
+      msg().errors.loginUnsupportedOs,
       command
     )
   }
@@ -97,7 +98,7 @@ export function startLogin(
   if (['.cmd', '.bat'].includes(extname(executable).toLowerCase())) {
     return fail(
       'unknown',
-      'CLI 경로가 배치 파일이라 로그인 창을 열 수 없습니다. 터미널에서 아래 명령을 실행하거나, 설정에서 claude.exe 경로를 지정하세요.',
+      msg().errors.loginBatchFile,
       command
     )
   }
@@ -132,7 +133,7 @@ export async function logout(
   configDir: string | null
 ): Promise<IpcResult<null>> {
   const executable = resolveClaudeExecutable(cliPath)
-  if (!executable) return fail('cli-not-found', CLI_MISSING)
+  if (!executable) return fail('cli-not-found', cliMissing())
 
   return new Promise<IpcResult<null>>((resolve) => {
     const child = spawn(executable, ['auth', 'logout'], {
@@ -146,10 +147,10 @@ export async function logout(
     child.stderr?.on('data', (chunk: Buffer) => {
       output += chunk.toString()
     })
-    child.on('error', (error) => resolve(fail('cli-not-found', CLI_MISSING, error.message)))
+    child.on('error', (error) => resolve(fail('cli-not-found', cliMissing(), error.message)))
     child.on('close', (code) => {
       if (code === 0) resolve(ok(null))
-      else resolve(fail('unknown', '로그아웃에 실패했습니다.', clean(output).trim()))
+      else resolve(fail('unknown', msg().errors.logoutFailed, clean(output).trim()))
     })
   })
 }

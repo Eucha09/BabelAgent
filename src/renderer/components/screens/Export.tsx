@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
-  ExportColumnOrigin,
   ExportMissing,
   ExportPreview,
   ExportRequest,
@@ -9,7 +8,7 @@ import type {
 } from '@shared/schema/export'
 import type { OpenProject, ProjectSettingsPatch } from '@shared/schema/project'
 import type { IpcError, IpcResult } from '@shared/types'
-import { RULE_LABEL } from '../../state/review'
+import { useT } from '../../i18n'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { TokenText } from '../TokenText'
 import type { ReviewFocus } from './Review'
@@ -29,25 +28,8 @@ type Props = {
 
 type Options = Pick<ExportRequest, 'sharedComments' | 'localeComments' | 'missing' | 'glyphs'>
 
-const ORIGIN_LABEL: Record<ExportColumnOrigin, string> = {
-  auto: '자동',
-  setting: '설정',
-  unity: 'Unity',
-  template: '템플릿'
-}
-
-const MISSING_OPTIONS: { value: ExportMissing; label: string; hint: string }[] = [
-  { value: 'empty', label: '비우기', hint: 'Unity 의 기존 번역이 빈 값으로 덮입니다.' },
-  { value: 'source', label: '원문 넣기', hint: '원문을 그대로 넣습니다.' },
-  { value: 'skip', label: '행 빼기', hint: '비는 행을 뺍니다. CSV(Merge)... 로 가져오세요.' }
-]
-
-const ROLE_LABEL: Record<Exclude<TemplateColumn['role'], 'value' | 'comments'>, string> = {
-  key: 'Key',
-  id: 'Id',
-  sharedComments: 'Shared Comments (컨텍스트)',
-  omit: '내보내지 않음'
-}
+/** 미번역·원문 변경 칸 선택지 순서. 이름과 설명은 카탈로그 `exportScreen.missing` */
+const MISSING_VALUES: readonly ExportMissing[] = ['empty', 'source', 'skip']
 
 /** 템플릿 매핑 선택 상자의 값: `역할:언어` */
 const roleValue = (column: TemplateColumn): string => `${column.role}:${column.language}`
@@ -78,6 +60,7 @@ function pickOptions(config: OpenProject['config']): Options {
  * 미리보기는 쓰지 않고 계산만 한다. [내보내기]를 누르면 메인이 다시 읽고 다시 검사한 뒤 export/ 에 쓴다.
  */
 export function Export({ project, onSettings, onProjectReplaced, onOpenReview, onOpenProjectSettings, onMessage }: Props): React.JSX.Element {
+  const t = useT()
   const { config } = project
   const allLanguages = useMemo(() => [config.sourceLanguage, ...config.targetLanguages], [config.sourceLanguage, config.targetLanguages])
   const [languages, setLanguages] = useState<string[]>(allLanguages)
@@ -203,7 +186,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
       }
       setError(null)
       setResult(written.value)
-      onMessage(`${written.value.outputDir}/ 에 파일 ${written.value.files.length}개를 내보냈습니다.`)
+      onMessage(t.exportScreen.exportedMessage(written.value.outputDir, written.value.files.length))
       await refresh(requestRef.current)
     } finally {
       setBusy(false)
@@ -226,7 +209,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
         return
       }
       setMappingDraft(null)
-      onMessage('템플릿 열 매핑을 저장했습니다.')
+      onMessage(t.exportScreen.mappingSaved)
     } finally {
       setBusy(false)
     }
@@ -236,7 +219,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
     setLanguages((prev) => (checked ? allLanguages.filter((item) => item === language || prev.includes(item)) : prev.filter((item) => item !== language)))
   }
 
-  const missingHint = MISSING_OPTIONS.find((item) => item.value === options.missing)?.hint ?? ''
+  const missingHint = t.exportScreen.missing[options.missing].hint
   const unity = preview?.unity ?? null
   const template = preview?.template ?? null
   const mapping = template?.state === 'ok' ? (mappingDraft ?? template.columns) : []
@@ -249,19 +232,19 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
   return (
     <div className="export-screen">
       <div className="strings-header">
-        <h2 className="screen-title">내보내기</h2>
+        <h2 className="screen-title">{t.screens.export.label}</h2>
         <div className="row">
           <button type="button" disabled={loading || busy} onClick={() => void refresh(request)}>
-            {loading ? '계산 중…' : '다시 계산'}
+            {loading ? t.exportScreen.calculating : t.exportScreen.recalculate}
           </button>
           <button
             type="button"
             className="primary"
             disabled={busy || loading || blocked}
-            title={preview?.blocked ? '막는 문제를 먼저 고치세요' : undefined}
+            title={preview?.blocked ? t.exportScreen.blockedHint : undefined}
             onClick={startExport}
           >
-            내보내기
+            {t.exportScreen.export}
           </button>
         </div>
       </div>
@@ -275,8 +258,9 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
 
       {result ? (
         <div className="message ok">
-          <strong>내보냈습니다</strong> — {result.outputDir}/ 에 {result.files.join(', ')} · {result.summary.rows}행
-          {result.smartCount > 0 ? ` · Smart 항목 ${result.smartCount}개` : ''}
+          <strong>{t.exportScreen.exported}</strong>
+          {t.exportScreen.exportedDetail(result.outputDir, result.files.join(', '), result.summary.rows)}
+          {result.smartCount > 0 ? t.exportScreen.smartCount(result.smartCount) : ''}
           <div className="row" style={{ marginTop: 'var(--space-2)' }}>
             <button
               type="button"
@@ -286,16 +270,16 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
                 })
               }
             >
-              폴더 열기
+              {t.exportScreen.openFolder}
             </button>
           </div>
         </div>
       ) : null}
 
       <section className="card">
-        <h3>언어와 옵션</h3>
+        <h3>{t.exportScreen.languagesAndOptions}</h3>
         <div className="export-languages">
-          <span className="field-label">내보낼 언어</span>
+          <span className="field-label">{t.exportScreen.languagesToExport}</span>
           <div className="check-row">
             {allLanguages.map((language) => (
               <label key={language} className="check">
@@ -305,7 +289,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
                   onChange={(event) => toggleLanguage(language, event.target.checked)}
                 />
                 <code>{language}</code>
-                {language === config.sourceLanguage ? <span className="check-note">원문</span> : null}
+                {language === config.sourceLanguage ? <span className="check-note">{t.exportScreen.source}</span> : null}
               </label>
             ))}
           </div>
@@ -317,7 +301,7 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
               checked={options.sharedComments}
               onChange={(event) => void saveOptions({ sharedComments: event.target.checked })}
             />
-            <span>Shared Comments 열에 컨텍스트(context) 넣기</span>
+            <span>{t.exportScreen.sharedComments}</span>
           </label>
           <label className="check">
             <input
@@ -325,36 +309,36 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
               checked={options.localeComments}
               onChange={(event) => void saveOptions({ localeComments: event.target.checked })}
             />
-            <span>언어별 Comments 열에 번역 메모(note) 넣기</span>
+            <span>{t.exportScreen.localeComments}</span>
           </label>
           {options.sharedComments || options.localeComments ? (
-            <p className="hint">빈 주석 칸은 Unity 의 기존 주석을 지웁니다.</p>
+            <p className="hint">{t.exportScreen.commentsWarning}</p>
           ) : null}
           <label className="check">
             <input type="checkbox" checked={options.glyphs} onChange={(event) => void saveOptions({ glyphs: event.target.checked })} />
-            <span>언어별 글자 목록 파일도 만들기(폰트 아틀라스용)</span>
+            <span>{t.exportScreen.glyphs}</span>
           </label>
         </div>
         <div className="form-grid">
           <label className="field">
-            <span className="field-label">미번역·원문 변경 칸</span>
+            <span className="field-label">{t.exportScreen.missingLabel}</span>
             <select
               value={options.missing}
               onChange={(event) => {
-                const next = MISSING_OPTIONS.find((item) => item.value === event.target.value)
-                if (next) void saveOptions({ missing: next.value })
+                const next = MISSING_VALUES.find((value) => value === event.target.value)
+                if (next) void saveOptions({ missing: next })
               }}
             >
-              {MISSING_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
+              {MISSING_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {t.exportScreen.missing[value].label}
                 </option>
               ))}
             </select>
             <span className="hint">{missingHint}</span>
           </label>
           <label className="field">
-            <span className="field-label">파일 이름 (확장자 제외)</span>
+            <span className="field-label">{t.exportScreen.fileName}</span>
             <input
               value={fileName}
               placeholder={preview ? preview.files[0]?.name.replace(/\.csv$/, '') : ''}
@@ -366,74 +350,72 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
       </section>
 
       <section className="card">
-        <h3>Unity 프로젝트 (선택)</h3>
+        <h3>{t.exportScreen.unity}</h3>
         {unity === null || unity.state === 'none' ? (
           <>
-            <p className="hint">로케일 코드와 기존 키 Id 를 읽어 옵니다. Unity 프로젝트에는 쓰지 않습니다.</p>
+            <p className="hint">{t.exportScreen.unityHint}</p>
             <div className="row" style={{ marginTop: 'var(--space-3)' }}>
-              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.linkUnity, 'Unity 프로젝트를 연결했습니다.')}>
-                Unity 프로젝트 연결
+              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.linkUnity, t.exportScreen.linked)}>
+                {t.exportScreen.linkUnity}
               </button>
             </div>
           </>
         ) : unity.state === 'failed' ? (
           <>
             <div className="message error" style={{ marginTop: 0 }}>
-              <strong>Unity 프로젝트를 읽지 못했습니다</strong> — 기본 자동 생성으로 내보냅니다.
+              <strong>{t.exportScreen.unityFailed}</strong>
+              {t.exportScreen.unityFallback}
               <pre>{unity.reason}</pre>
             </div>
             <p className="hint">
-              폴더: <code>{unity.projectPath}</code>
+              {t.exportScreen.folderLabel}
+              <code>{unity.projectPath}</code>
             </p>
             <div className="row" style={{ marginTop: 'var(--space-3)' }}>
               <button type="button" disabled={busy} onClick={() => void reloadUnity()}>
-                다시 읽기
+                {t.exportScreen.reload}
               </button>
-              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.linkUnity, 'Unity 프로젝트를 연결했습니다.')}>
-                다른 폴더
+              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.linkUnity, t.exportScreen.linked)}>
+                {t.exportScreen.otherFolder}
               </button>
-              <button type="button" className="ghost" disabled={busy} onClick={() => void projectAction(api.export.unlinkUnity, 'Unity 연결을 풀었습니다.')}>
-                연결 해제
+              <button type="button" className="ghost" disabled={busy} onClick={() => void projectAction(api.export.unlinkUnity, t.exportScreen.unlinked)}>
+                {t.exportScreen.unlink}
               </button>
             </div>
           </>
         ) : (
           <>
             <dl className="dl">
-              <dt>폴더</dt>
+              <dt>{t.exportScreen.folder}</dt>
               <dd>{unity.projectPath}</dd>
-              <dt>로케일</dt>
-              <dd>{unity.locales.length === 0 ? '없음' : unity.locales.map((locale) => locale.code).join(', ')}</dd>
-              <dt>컬렉션</dt>
+              <dt>{t.exportScreen.locales}</dt>
+              <dd>{unity.locales.length === 0 ? t.exportScreen.none : unity.locales.map((locale) => locale.code).join(', ')}</dd>
+              <dt>{t.exportScreen.collection}</dt>
               <dd>
                 {unity.collections.length > 1 ? (
                   <select
                     value={unity.tableCollection ?? ''}
                     disabled={busy}
                     onChange={(event) =>
-                      void projectAction(() => api.export.selectCollection(event.target.value), '컬렉션을 골랐습니다.')
+                      void projectAction(() => api.export.selectCollection(event.target.value), t.exportScreen.collectionPicked)
                     }
                   >
-                    <option value="">(고르세요)</option>
+                    <option value="">{t.exportScreen.choose}</option>
                     {unity.collections.map((collection) => (
                       <option key={collection.name} value={collection.name}>
-                        {collection.name} · 키 {collection.entries}개
+                        {t.exportScreen.collectionOption(collection.name, collection.entries)}
                       </option>
                     ))}
                   </select>
                 ) : (
-                  (unity.tableCollection ?? '없음')
+                  (unity.tableCollection ?? t.exportScreen.none)
                 )}
               </dd>
-              <dt>키 Id</dt>
-              <dd>
-                찾음 {unity.idFound} · 새 키 {unity.newKeys} · Unity 에만 있음 {unity.unityOnlyKeys}
-              </dd>
+              <dt>{t.exportScreen.keyIds}</dt>
+              <dd>{t.exportScreen.idSummary(unity.idFound, unity.newKeys, unity.unityOnlyKeys)}</dd>
             </dl>
             {unity.unityOnlyKeys > 0 ? (
-              <p className="hint field-error">
-                Unity 에만 있는 키 {unity.unityOnlyKeys}개는 CSV... 로 가져오면 지워집니다. CSV(Merge)... 로 가져오세요.
-              </p>
+              <p className="hint field-error">{t.exportScreen.unityOnlyWarning(unity.unityOnlyKeys)}</p>
             ) : null}
             {unity.notices.map((notice) => (
               <p key={notice} className="hint">
@@ -442,13 +424,13 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
             ))}
             <div className="row" style={{ marginTop: 'var(--space-3)' }}>
               <button type="button" disabled={busy} onClick={() => void reloadUnity()}>
-                다시 읽기
+                {t.exportScreen.reload}
               </button>
-              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.linkUnity, 'Unity 프로젝트를 연결했습니다.')}>
-                다른 폴더
+              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.linkUnity, t.exportScreen.linked)}>
+                {t.exportScreen.otherFolder}
               </button>
-              <button type="button" className="ghost" disabled={busy} onClick={() => void projectAction(api.export.unlinkUnity, 'Unity 연결을 풀었습니다.')}>
-                연결 해제
+              <button type="button" className="ghost" disabled={busy} onClick={() => void projectAction(api.export.unlinkUnity, t.exportScreen.unlinked)}>
+                {t.exportScreen.unlink}
               </button>
             </div>
           </>
@@ -456,43 +438,45 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
       </section>
 
       <section className="card">
-        <h3>템플릿 (선택)</h3>
+        <h3>{t.exportScreen.template}</h3>
         {template === null || template.state === 'none' ? (
           <>
-            <p className="hint">Unity CSV 확장의 열 구성을 바꾼 경우에만 필요합니다.</p>
+            <p className="hint">{t.exportScreen.templateHint}</p>
             <div className="row" style={{ marginTop: 'var(--space-3)' }}>
-              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.setTemplate, '템플릿을 등록했습니다.')}>
-                템플릿 등록
+              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.setTemplate, t.exportScreen.templateRegistered)}>
+                {t.exportScreen.registerTemplate}
               </button>
             </div>
           </>
         ) : template.state === 'failed' ? (
           <>
             <div className="message error" style={{ marginTop: 0 }}>
-              <strong>템플릿을 읽지 못했습니다</strong> — 자동 생성 헤더를 씁니다.
+              <strong>{t.exportScreen.templateFailed}</strong>
+              {t.exportScreen.templateFallback}
               <pre>
                 {template.path}: {template.reason}
               </pre>
             </div>
             <div className="row" style={{ marginTop: 'var(--space-3)' }}>
-              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.setTemplate, '템플릿을 등록했습니다.')}>
-                다시 등록
+              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.setTemplate, t.exportScreen.templateRegistered)}>
+                {t.exportScreen.reregister}
               </button>
-              <button type="button" className="ghost" disabled={busy} onClick={() => void projectAction(api.export.clearTemplate, '템플릿 등록을 풀었습니다.')}>
-                등록 해제
+              <button type="button" className="ghost" disabled={busy} onClick={() => void projectAction(api.export.clearTemplate, t.exportScreen.templateCleared)}>
+                {t.exportScreen.unregister}
               </button>
             </div>
           </>
         ) : (
           <>
             <p className="hint">
-              <code>{template.path}</code> · 열 {template.header.length}개
+              <code>{template.path}</code>
+              {t.exportScreen.templateColumns(template.header.length)}
             </p>
             <table className="locale-table template-table">
               <thead>
                 <tr>
-                  <th>템플릿 열</th>
-                  <th>역할</th>
+                  <th>{t.exportScreen.templateColumn}</th>
+                  <th>{t.exportScreen.roleHeader}</th>
                 </tr>
               </thead>
               <tbody>
@@ -511,20 +495,20 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
                       >
                         {(['key', 'id', 'sharedComments'] as const).map((role) => (
                           <option key={role} value={`${role}:`}>
-                            {ROLE_LABEL[role]}
+                            {t.exportScreen.role[role]}
                           </option>
                         ))}
                         {allLanguages.map((language) => (
                           <option key={`value:${language}`} value={`value:${language}`}>
-                            값 · {language}
+                            {t.exportScreen.roleValue(language)}
                           </option>
                         ))}
                         {allLanguages.map((language) => (
                           <option key={`comments:${language}`} value={`comments:${language}`}>
-                            주석(메모) · {language}
+                            {t.exportScreen.roleComments(language)}
                           </option>
                         ))}
-                        <option value="omit:">{ROLE_LABEL.omit}</option>
+                        <option value="omit:">{t.exportScreen.role.omit}</option>
                       </select>
                     </td>
                   </tr>
@@ -533,16 +517,16 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
             </table>
             <div className="row" style={{ marginTop: 'var(--space-3)' }}>
               <button type="button" className="primary" disabled={busy || !mappingDirty} onClick={() => void saveMapping(mapping)}>
-                매핑 저장
+                {t.exportScreen.saveMapping}
               </button>
               <button type="button" disabled={busy || mappingDraft === null} onClick={() => setMappingDraft(null)}>
-                되돌리기
+                {t.exportScreen.revert}
               </button>
-              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.setTemplate, '템플릿을 다시 등록했습니다.')}>
-                다시 등록
+              <button type="button" disabled={busy} onClick={() => void projectAction(api.export.setTemplate, t.exportScreen.templateReregistered)}>
+                {t.exportScreen.reregister}
               </button>
-              <button type="button" className="ghost" disabled={busy} onClick={() => void projectAction(api.export.clearTemplate, '템플릿 등록을 풀었습니다.')}>
-                등록 해제
+              <button type="button" className="ghost" disabled={busy} onClick={() => void projectAction(api.export.clearTemplate, t.exportScreen.templateCleared)}>
+                {t.exportScreen.unregister}
               </button>
             </div>
           </>
@@ -553,13 +537,16 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
         <>
           <section className="card wide">
             <h3>
-              헤더 미리보기 <span className="hint">· {preview.headerSource === 'template' ? '템플릿' : '자동 생성'}</span>
+              {t.exportScreen.headerPreview}{' '}
+              <span className="hint">
+                · {preview.headerSource === 'template' ? t.exportScreen.origin.template : t.exportScreen.autoGenerated}
+              </span>
             </h3>
             <div className="header-chips">
               {preview.columns.map((column, index) => (
                 <span key={`${index}:${column.name}`} className="chip header-chip">
                   <code>{column.name}</code>
-                  <span className="header-chip-origin">{ORIGIN_LABEL[column.origin]}</span>
+                  <span className="header-chip-origin">{t.exportScreen.origin[column.origin]}</span>
                 </span>
               ))}
             </div>
@@ -577,9 +564,9 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
               <table className="locale-table" style={{ marginTop: 'var(--space-3)' }}>
                 <thead>
                   <tr>
-                    <th>언어</th>
-                    <th>Unity 로케일 코드</th>
-                    <th>열 이름</th>
+                    <th>{t.localeTable.language}</th>
+                    <th>{t.localeTable.localeCode}</th>
+                    <th>{t.localeTable.columnName}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -587,18 +574,25 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
                     <tr key={language.language}>
                       <td>
                         <code>{language.language}</code>
-                        {language.isSource ? <span className="hint"> 원문</span> : null}
+                        {language.isSource ? <span className="hint"> {t.localeTable.source}</span> : null}
                       </td>
                       <td>
                         <code>{language.unityLocaleCode}</code>
                         <span className="hint">
                           {' '}
-                          {language.codeOrigin === 'setting' ? '설정' : language.codeOrigin === 'unity' ? 'Unity' : '프로젝트 코드'}
+                          {language.codeOrigin === 'setting'
+                            ? t.exportScreen.codeOrigin.setting
+                            : language.codeOrigin === 'unity'
+                              ? t.exportScreen.codeOrigin.unity
+                              : t.exportScreen.codeOrigin.project}
                         </span>
                       </td>
                       <td>
                         <code>{language.columnName}</code>
-                        <span className="hint"> {language.nameOrigin === 'setting' ? '설정' : '자동'}</span>
+                        <span className="hint">
+                          {' '}
+                          {language.nameOrigin === 'setting' ? t.exportScreen.nameOrigin.setting : t.exportScreen.nameOrigin.auto}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -607,10 +601,10 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
             ) : null}
             <div className="row" style={{ marginTop: 'var(--space-2)' }}>
               <button type="button" className="ghost" onClick={onOpenProjectSettings}>
-                코드·열 이름 고치기
+                {t.exportScreen.editCodes}
               </button>
             </div>
-            <p className="hint">열 이름이 Unity 와 다르면 그 열은 무시됩니다.</p>
+            <p className="hint">{t.exportScreen.columnIgnored}</p>
             {preview.sampleRows.length > 0 ? (
               <div className="sample">
                 <table>
@@ -640,20 +634,20 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
           <section className="card wide">
             <h3>QA</h3>
             {errorCount === 0 ? (
-              <p className="hint">QA 오류 없음 · 경고 {preview.qaWarnings}개</p>
+              <p className="hint">{t.exportScreen.qaClean(preview.qaWarnings)}</p>
             ) : (
               <>
-                <p className="hint field-error">QA 오류가 있어 내보낼 수 없습니다 · 경고 {preview.qaWarnings}개</p>
+                <p className="hint field-error">{t.exportScreen.qaBlocked(preview.qaWarnings)}</p>
                 <ul className="export-qa-list">
                   {preview.qaErrors.map((item, index) => (
                     <li key={`${item.language}:${item.key}:${item.ruleId}:${index}`} className="export-qa-item">
                       <span className="badge error">{item.language}</span>
                       <code className="token-key">{item.key}</code>
                       <span className="diagnostic-message">
-                        <span className="diagnostic-rule">{RULE_LABEL[item.ruleId]}</span> {item.message}
+                        <span className="diagnostic-rule">{t.qaRule[item.ruleId]}</span> {item.message}
                       </span>
                       <button type="button" className="ghost" onClick={() => onOpenReview({ language: item.language, key: item.key })}>
-                        검토에서 보기
+                        {t.exportScreen.openInReview}
                       </button>
                     </li>
                   ))}
@@ -668,12 +662,10 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
           </section>
 
           <section className="card wide">
-            <h3>Smart 항목 {preview.smart.length}개</h3>
-            <p className="hint">Unity CSV 는 Smart 여부를 옮기지 않습니다. Unity 에서 직접 표시하세요.</p>
+            <h3>{t.exportScreen.smartTitle(preview.smart.length)}</h3>
+            <p className="hint">{t.exportScreen.smartHint}</p>
             {preview.smartUnset > 0 ? (
-              <p className="hint export-warning">
-                Smart 여부가 미정인 행이 {preview.smartUnset}개 있습니다(원문 화면의 [Smart 제안 적용]).
-              </p>
+              <p className="hint export-warning">{t.exportScreen.smartUnset(preview.smartUnset)}</p>
             ) : null}
             {preview.smart.length > 0 ? (
               <ul className="export-smart-list">
@@ -689,46 +681,59 @@ export function Export({ project, onSettings, onProjectReplaced, onOpenReview, o
           </section>
 
           <section className="card wide">
-            <h3>요약</h3>
+            <h3>{t.exportScreen.summary}</h3>
             <dl className="dl">
-              <dt>내보낼 행</dt>
+              <dt>{t.exportScreen.rowsToExport}</dt>
               <dd>
                 {preview.summary.rows}
                 {preview.summary.skippedRows > 0
-                  ? ` · 뺀 행 ${preview.summary.skippedRows} (${preview.summary.skippedKeys.join(', ')}${preview.summary.skippedRows > preview.summary.skippedKeys.length ? ' …' : ''})`
+                  ? t.exportScreen.skippedRows(
+                      preview.summary.skippedRows,
+                      `${preview.summary.skippedKeys.join(', ')}${preview.summary.skippedRows > preview.summary.skippedKeys.length ? ' …' : ''}`
+                    )
                   : ''}
               </dd>
               {preview.summary.languages.map((language) => (
                 <div key={language.language} style={{ display: 'contents' }}>
                   <dt>{language.language}</dt>
                   <dd>
-                    채움 {language.filled} · 비움 {language.blank}
-                    {language.sourceFilled > 0 ? ` · 원문으로 ${language.sourceFilled}` : ''}
+                    {t.exportScreen.filled(language.filled, language.blank)}
+                    {language.sourceFilled > 0 ? t.exportScreen.sourceFilled(language.sourceFilled) : ''}
                   </dd>
                 </div>
               ))}
-              <dt>출력</dt>
+              <dt>{t.exportScreen.output}</dt>
               <dd>
                 {preview.files.map((file) => (
                   <div key={file.name}>
                     {preview.outputDir}/{file.name}
-                    {file.exists ? <span className="hint"> (있음 · 덮어씀)</span> : null}
+                    {file.exists ? <span className="hint">{t.exportScreen.overwrites}</span> : null}
                   </div>
                 ))}
               </dd>
             </dl>
             <p className="hint" style={{ marginTop: 'var(--space-3)' }}>
-              Unity 에서는 <strong>CSV(Merge)...</strong> 로 가져오세요. <strong>CSV...</strong> 는 파일에 없는 키를 지웁니다.
+              {t.exportScreen.importBefore}
+              <strong>CSV(Merge)...</strong>
+              {t.exportScreen.importMiddle}
+              <strong>CSV...</strong>
+              {t.exportScreen.importAfter}
             </p>
           </section>
         </>
       ) : loading ? (
-        <p className="hint">계산 중…</p>
+        <p className="hint">{t.exportScreen.calculating}</p>
       ) : null}
 
       {confirmFiles !== null ? (
-        <ConfirmDialog title="파일 덮어쓰기" confirmLabel="덮어쓰기" danger onCancel={() => setConfirmFiles(null)} onConfirm={() => void runExport(true)}>
-          <p>{preview?.outputDir ?? 'export'}/ 에 이미 있는 파일을 새로 씁니다.</p>
+        <ConfirmDialog
+          title={t.exportScreen.overwriteTitle}
+          confirmLabel={t.exportScreen.overwrite}
+          danger
+          onCancel={() => setConfirmFiles(null)}
+          onConfirm={() => void runExport(true)}
+        >
+          <p>{t.exportScreen.overwriteBody(preview?.outputDir ?? 'export')}</p>
           <ul>
             {confirmFiles.map((name) => (
               <li key={name}>

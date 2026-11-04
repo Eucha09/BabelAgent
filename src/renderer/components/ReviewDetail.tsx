@@ -4,19 +4,15 @@ import type { TranslationStatus } from '@shared/schema/project'
 import type { QaDiagnostic } from '@shared/schema/qa'
 import type { RerollCandidate } from '@shared/schema/review'
 import type { IpcError } from '@shared/types'
-import { RULE_LABEL } from '../state/review'
+import { useT } from '../i18n'
+import { statusLabel } from '../state/labels'
 import type { ReviewRow } from './ReviewGrid'
 import { SourceDiff } from './SourceDiff'
-import { STATUS_LABEL } from './StringsGrid'
 import { TokenText } from './TokenText'
 
 export type ManualStatus = Extract<TranslationStatus, 'draft' | 'review' | 'approved'>
 
-const STATUS_ACTIONS: { status: ManualStatus; label: string }[] = [
-  { status: 'draft', label: '초안' },
-  { status: 'review', label: '검토' },
-  { status: 'approved', label: '승인' }
-]
+const STATUS_ACTIONS: readonly ManualStatus[] = ['draft', 'review', 'approved']
 
 type Props = {
   row: ReviewRow
@@ -39,13 +35,14 @@ type Props = {
 }
 
 function DiagnosticList({ diagnostics }: { diagnostics: readonly QaDiagnostic[] }): React.JSX.Element {
-  if (diagnostics.length === 0) return <p className="hint">QA 진단 없음</p>
+  const t = useT()
+  if (diagnostics.length === 0) return <p className="hint">{t.reviewDetail.noDiagnostics}</p>
   return (
     <ul className="diagnostic-list">
       {diagnostics.map((item, index) => (
         <li key={`${item.ruleId}-${index}`} className={`diagnostic ${item.severity}`}>
-          <span className={`qa-pill ${item.severity}`}>{item.severity === 'error' ? '오류' : '경고'}</span>
-          <span className="diagnostic-rule">{RULE_LABEL[item.ruleId]}</span>
+          <span className={`qa-pill ${item.severity}`}>{item.severity === 'error' ? t.reviewDetail.error : t.reviewDetail.warning}</span>
+          <span className="diagnostic-rule">{t.qaRule[item.ruleId]}</span>
           <span className="diagnostic-message">{item.message}</span>
           {item.detail ? <span className="diagnostic-detail">{item.detail}</span> : null}
         </li>
@@ -81,6 +78,7 @@ export function ReviewDetail({
   onApplyCandidate,
   onDiscardCandidate
 }: Props): React.JSX.Element {
+  const t = useT()
   const [note, setNote] = useState(row.note)
   const [instruction, setInstruction] = useState('')
   const elapsed = useElapsedSeconds(rerollStartedAt)
@@ -90,9 +88,9 @@ export function ReviewDetail({
   const stale = row.status === 'stale' || row.diagnostics.some((item) => item.ruleId === 'status.stale')
 
   const statusTitle = (status: ManualStatus): string | undefined => {
-    if (empty) return '번역문이 없습니다'
-    if (status === 'approved' && errors > 0) return 'QA 오류를 고친 뒤 승인할 수 있습니다'
-    if (row.status === 'stale') return '지금 원문을 보고 판단했다는 뜻으로 원문변경 표시가 풀립니다'
+    if (empty) return t.reviewDetail.emptyTranslation
+    if (status === 'approved' && errors > 0) return t.reviewDetail.fixErrorsFirst
+    if (row.status === 'stale') return t.reviewDetail.staleClears
     return undefined
   }
 
@@ -100,23 +98,23 @@ export function ReviewDetail({
     <section className="review-detail">
       <header className="review-detail-head">
         <code className="token-key">{row.key}</code>
-        <span className={`status-badge ${row.status}`}>{STATUS_LABEL[row.status] ?? row.status}</span>
-        {row.confidence ? <span className="hint mono">신뢰도 {row.confidence}</span> : null}
+        <span className={`status-badge ${row.status}`}>{statusLabel(row.status, t)}</span>
+        {row.confidence ? <span className="hint mono">{t.reviewDetail.confidence(row.confidence)}</span> : null}
         <span className="spacer" />
-        <button type="button" onClick={onStartEdit} disabled={busy} title="Enter 또는 더블클릭으로도 편집합니다">
-          번역 편집
+        <button type="button" onClick={onStartEdit} disabled={busy} title={t.reviewDetail.editHint}>
+          {t.reviewDetail.edit}
         </button>
         <div className="segmented">
-          {STATUS_ACTIONS.map((action) => (
+          {STATUS_ACTIONS.map((status) => (
             <button
-              key={action.status}
+              key={status}
               type="button"
-              className={row.status === action.status ? 'selected' : undefined}
-              disabled={busy || empty || row.status === action.status || (action.status === 'approved' && errors > 0)}
-              title={statusTitle(action.status)}
-              onClick={() => onSetStatus(action.status)}
+              className={row.status === status ? 'selected' : undefined}
+              disabled={busy || empty || row.status === status || (status === 'approved' && errors > 0)}
+              title={statusTitle(status)}
+              onClick={() => onSetStatus(status)}
             >
-              {action.label}
+              {t.status[status]}
             </button>
           ))}
         </div>
@@ -125,35 +123,39 @@ export function ReviewDetail({
       <div className="review-detail-body">
         <div className="review-detail-col">
           <div className="detail-block">
-            <div className="detail-label">원문</div>
+            <div className="detail-label">{t.reviewDetail.source}</div>
             <TokenText className="detail-text" text={row.source} syntax={syntax} />
           </div>
           {stale ? (
             <div className="detail-block">
-              <div className="detail-label">원문 변경</div>
+              <div className="detail-label">{t.reviewDetail.sourceChanged}</div>
               <SourceDiff before={row.source_snapshot} after={row.source} />
             </div>
           ) : null}
           <div className="detail-block">
-            <div className="detail-label">번역</div>
-            {empty ? <span className="hint">미번역</span> : <TokenText className="detail-text" text={row.translation} syntax={syntax} />}
+            <div className="detail-label">{t.reviewDetail.translation}</div>
+            {empty ? (
+              <span className="hint">{t.reviewDetail.untranslated}</span>
+            ) : (
+              <TokenText className="detail-text" text={row.translation} syntax={syntax} />
+            )}
           </div>
           <dl className="dl detail-meta">
             {row.context ? (
               <>
-                <dt>컨텍스트</dt>
+                <dt>{t.columns.context}</dt>
                 <dd>{row.context}</dd>
               </>
             ) : null}
             {row.ui_type ? (
               <>
-                <dt>UI 유형</dt>
+                <dt>{t.columns.ui_type}</dt>
                 <dd>{row.ui_type}</dd>
               </>
             ) : null}
             {row.max_len ? (
               <>
-                <dt>최대 길이</dt>
+                <dt>{t.columns.max_len}</dt>
                 <dd>{row.max_len}</dd>
               </>
             ) : null}
@@ -172,46 +174,46 @@ export function ReviewDetail({
 
         <div className="review-detail-col">
           <div className="detail-block">
-            <div className="detail-label">메모</div>
+            <div className="detail-label">{t.reviewDetail.note}</div>
             <textarea
               rows={2}
               value={note}
               disabled={busy || empty}
-              placeholder={empty ? '번역이 있어야 메모를 남길 수 있습니다' : '검토 메모'}
+              placeholder={empty ? t.reviewDetail.noteNeedsTranslation : t.reviewDetail.notePlaceholder}
               onChange={(event) => setNote(event.target.value)}
             />
             <div className="row detail-actions">
               <button type="button" disabled={busy || empty || note === row.note} onClick={() => onSaveNote(note)}>
-                메모 저장
+                {t.reviewDetail.saveNote}
               </button>
             </div>
           </div>
 
           <div className="detail-block">
-            <div className="detail-label">재번역</div>
+            <div className="detail-label">{t.reviewDetail.reroll}</div>
             <textarea
               rows={2}
               value={instruction}
               disabled={rerollStartedAt !== null}
-              placeholder="추가 지시(선택). 예: 더 짧게"
+              placeholder={t.reviewDetail.rerollPlaceholder}
               onChange={(event) => setInstruction(event.target.value)}
             />
             <div className="row detail-actions">
               {rerollStartedAt !== null ? (
                 <>
-                  <span className="hint">재번역 중… {elapsed}초</span>
+                  <span className="hint">{t.reviewDetail.rerolling(elapsed)}</span>
                   <button type="button" onClick={onCancelReroll}>
-                    취소
+                    {t.common.cancel}
                   </button>
                 </>
               ) : (
                 <button
                   type="button"
                   disabled={rerollElsewhere}
-                  title={rerollElsewhere ? '다른 행을 재번역하는 중입니다' : '일회성 세션으로 이 행만 다시 번역해 후보를 받습니다'}
+                  title={rerollElsewhere ? t.reviewDetail.rerollElsewhere : t.reviewDetail.rerollHint}
                   onClick={() => onReroll(instruction)}
                 >
-                  재번역
+                  {t.reviewDetail.reroll}
                 </button>
               )}
             </div>
@@ -228,25 +230,25 @@ export function ReviewDetail({
             return (
               <div key={candidate.requestId} className="candidate">
                 <div className="candidate-head">
-                  <span className="detail-label">후보</span>
-                  <span className="hint mono">신뢰도 {candidate.confidence.toFixed(2)}</span>
-                  {candidate.instruction ? <span className="hint">지시: {candidate.instruction}</span> : null}
+                  <span className="detail-label">{t.reviewDetail.candidate}</span>
+                  <span className="hint mono">{t.reviewDetail.confidence(candidate.confidence.toFixed(2))}</span>
+                  {candidate.instruction ? <span className="hint">{t.reviewDetail.instruction(candidate.instruction)}</span> : null}
                 </div>
                 <TokenText className="detail-text" text={candidate.text} syntax={syntax} />
-                {candidate.note ? <p className="hint">메모: {candidate.note}</p> : null}
+                {candidate.note ? <p className="hint">{t.reviewDetail.candidateNote(candidate.note)}</p> : null}
                 {candidate.diagnostics.length > 0 ? <DiagnosticList diagnostics={candidate.diagnostics} /> : null}
                 <div className="row detail-actions">
                   <button
                     type="button"
                     className="primary"
                     disabled={busy || candidate.text === row.translation}
-                    title={candidateErrors > 0 ? 'QA 오류가 있는 후보입니다. 적용한 뒤 고칠 수 있습니다' : '번역을 이 후보로 바꾸고 초안으로 둡니다'}
+                    title={candidateErrors > 0 ? t.reviewDetail.candidateHasErrors : t.reviewDetail.candidateApplyHint}
                     onClick={() => onApplyCandidate(candidate)}
                   >
-                    적용
+                    {t.reviewDetail.apply}
                   </button>
                   <button type="button" disabled={busy} onClick={() => onDiscardCandidate(candidate)}>
-                    버리기
+                    {t.reviewDetail.discard}
                   </button>
                 </div>
               </div>

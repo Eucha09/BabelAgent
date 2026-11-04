@@ -17,42 +17,20 @@ import type { JobControlInput, JobLogEntry, JobView } from '@shared/schema/jobs'
 import type { OpenProject } from '@shared/schema/project'
 import type { MasterRow, StringsRow } from '@shared/schema/strings'
 import type { IpcError } from '@shared/types'
-import { effortLabel, modelLabel } from '../../state/translate-options'
+import type { Messages } from '@shared/i18n'
+import { useI18n } from '../../i18n'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { ContextGrid, type ContextGridRow } from '../ContextGrid'
 import { JobLog } from '../JobLog'
-import { JOB_TITLE, JobProgress } from '../JobProgress'
+import { JobProgress } from '../JobProgress'
 import { KeyChecklist, type ChecklistItem } from '../KeyChecklist'
 
 const api = window.babel
 
 const SUGGESTIONS_FILE = 'context_suggestions.csv'
 
-export const FIELD_LABEL: Record<ContextField, string> = {
-  context: '컨텍스트',
-  ui_type: 'UI 유형',
-  max_len: '최대 길이',
-  vars: '변수 설명'
-}
-
-function fieldHint(field: ContextField, maxLenRatio: number): string {
-  switch (field) {
-    case 'context':
-      return '문장이 나오는 상황·화자·가리키는 대상'
-    case 'ui_type':
-      return 'dialogue, button, tooltip 같은 분류. 이미 쓰는 값을 따릅니다'
-    case 'max_len':
-      return `버튼·탭 같은 짧은 UI 문구에만 제안합니다. 원문 길이 × ${maxLenRatio}(최소 ${MIN_SUGGESTED_MAX_LEN}자) 이상`
-    case 'vars':
-      return '원문의 변수마다 종류·의미·예시. 변수가 없는 행은 묻지 않습니다'
-  }
-}
-
-const SKIP_LABEL: Record<ApplyContextResult['skipped'][number]['reason'], string> = {
-  missing: '원문에 없음',
-  changed: '그 사이 원문 칸이 바뀜',
-  invalid: '값 형식 오류',
-  empty: '적용할 값 없음'
+function fieldHint(field: ContextField, maxLenRatio: number, t: Messages): string {
+  return field === 'max_len' ? t.contextScreen.fieldHint.max_len(maxLenRatio, MIN_SUGGESTED_MAX_LEN) : t.contextScreen.fieldHint[field]
 }
 
 function toMaster(row: StringsRow): MasterRow {
@@ -69,12 +47,15 @@ function toMaster(row: StringsRow): MasterRow {
   }
 }
 
-function describeApply({ applied, skipped }: ApplyContextResult): string {
-  const parts = [`${applied.length}행을 원문에 적용했습니다.`]
+function describeApply({ applied, skipped }: ApplyContextResult, t: Messages): string {
+  const parts = [t.contextScreen.applied(applied.length)]
   if (skipped.length > 0) {
     const counts = new Map<string, number>()
-    for (const item of skipped) counts.set(SKIP_LABEL[item.reason], (counts.get(SKIP_LABEL[item.reason]) ?? 0) + 1)
-    parts.push(`${skipped.length}행은 건너뛰었습니다(${[...counts].map(([label, count]) => `${label} ${count}`).join(' · ')}).`)
+    for (const item of skipped) {
+      const label = t.contextScreen.skip[item.reason]
+      counts.set(label, (counts.get(label) ?? 0) + 1)
+    }
+    parts.push(t.contextScreen.skipped(skipped.length, [...counts].map(([label, count]) => `${label} ${count}`).join(' · ')))
   }
   return parts.join(' ')
 }
@@ -95,6 +76,7 @@ type Props = {
  * context_suggestions.csv 에 쌓이고, 사람이 여기서 고치고 승인해야 strings_master.csv 에 들어간다.
  */
 export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Props): React.JSX.Element {
+  const { t, locale } = useI18n()
   const { config } = project
   const syntax = config.smartStrings
   const lowConfidence = config.review.lowConfidence
@@ -163,7 +145,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
         const problems: Partial<Record<ContextField, string>> = {}
         for (const field of CONTEXT_FIELDS) {
           if (suggestion[field] === '') continue
-          const problem = fieldValueProblem(field, values[field])
+          const problem = fieldValueProblem(field, values[field], t)
           if (problem) problems[field] = problem
         }
         const confidence = parseConfidence(suggestion.confidence)
@@ -176,7 +158,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
           edited: CONTEXT_FIELDS.some((field) => values[field] !== suggestion[field])
         }
       }),
-    [suggestions, drafts, selected, lowConfidence]
+    [suggestions, drafts, selected, lowConfidence, t]
   )
 
   const dirty = rows.some((row) => row.edited)
@@ -240,7 +222,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
         return
       }
       setError(null)
-      onMessage(`컨텍스트 추정을 시작했습니다: ${result.value.snapshot.totalRows}행`)
+      onMessage(t.contextScreen.started(result.value.snapshot.totalRows))
     } finally {
       setBusy(false)
     }
@@ -272,7 +254,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
         return
       }
       setError(null)
-      onMessage(describeApply(result.value))
+      onMessage(describeApply(result.value, t))
       const applied = new Set(result.value.applied)
       setSelected((prev) => new Set([...prev].filter((key) => !applied.has(key))))
       setDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => !applied.has(key))))
@@ -294,7 +276,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
         return
       }
       setError(null)
-      onMessage(`제안 ${result.value}행을 버렸습니다.`)
+      onMessage(t.contextScreen.discarded(result.value))
       setSelected(new Set())
       await load()
     } finally {
@@ -307,41 +289,45 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
 
   return (
     <div className="workbench-screen">
-      <h2 className="screen-title">컨텍스트</h2>
+      <h2 className="screen-title">{t.screens.context.label}</h2>
 
       <section className="card">
-        <h3>컨텍스트 추정</h3>
+        <h3>{t.contextScreen.infer}</h3>
         <div className="check-row">
           {CONTEXT_FIELDS.map((field) => (
-            <label key={field} className="check" title={fieldHint(field, config.context.maxLenRatio)}>
+            <label key={field} className="check" title={fieldHint(field, config.context.maxLenRatio, t)}>
               <input type="checkbox" checked={fields.has(field)} disabled={running || busy} onChange={() => toggleField(field)} />
-              <span>{FIELD_LABEL[field]}</span>
+              <span>{t.contextScreen.field[field]}</span>
             </label>
           ))}
         </div>
         <div className="scope-options">
-          <label className={scope === 'empty' ? 'scope-option selected' : 'scope-option'} title="고른 필드 중 빈 칸이 있는 모든 행">
+          <label className={scope === 'empty' ? 'scope-option selected' : 'scope-option'} title={t.contextScreen.scopeEmptyHint}>
             <input type="radio" name="context-scope" checked={scope === 'empty'} disabled={running || busy} onChange={() => setScope('empty')} />
-            <span>빈 칸 있는 행</span>
+            <span>{t.contextScreen.scopeEmpty}</span>
             <span className="scope-count">{emptyCount}</span>
           </label>
-          <label className={scope === 'selected' ? 'scope-option selected' : 'scope-option'} title="아래 목록에서 고른 행">
+          <label className={scope === 'selected' ? 'scope-option selected' : 'scope-option'} title={t.contextScreen.scopeSelectedHint}>
             <input type="radio" name="context-scope" checked={scope === 'selected'} disabled={running || busy} onChange={() => setScope('selected')} />
-            <span>선택 행</span>
+            <span>{t.contextScreen.scopeSelected}</span>
             <span className="scope-count">{scopeKeys.size}</span>
           </label>
         </div>
         <p className="hint">
-          모델 {modelLabel(config.translate.model)} · 사고 {effortLabel(config.translate.effort)} · 배치 {config.batch.maxRows}행 /{' '}
-          {config.batch.maxSourceChars.toLocaleString()}자 · 작업자 {clampConcurrency(config.batch.concurrency)}
+          {[
+            t.translateOptions.summary(t.translateOptions.model[config.translate.model], t.translateOptions.effort[config.translate.effort]),
+            t.translateOptions.batch(config.batch.maxRows, config.batch.maxSourceChars.toLocaleString(locale)),
+            t.translateOptions.workers(clampConcurrency(config.batch.concurrency))
+          ].join(' · ')}
         </p>
         <div className="row" style={{ marginTop: 'var(--space-3)' }}>
           <button type="button" className="primary" disabled={running || busy || plan.rows === 0} onClick={() => void start()}>
-            추정 시작
+            {t.contextScreen.start}
           </button>
           <span className="hint">
-            {plan.rows}행 · 배치 {plan.batches}개{plan.skipped > 0 ? ` · 제안 대기 ${plan.skipped}행 제외` : ''}
-            {running && job.kind !== 'context' ? ` — ${JOB_TITLE[job.kind]} 중` : ''}
+            {t.job.rowsAndBatches(plan.rows, plan.batches)}
+            {plan.skipped > 0 ? t.contextScreen.skippedPending(plan.skipped) : ''}
+            {running && job.kind !== 'context' ? t.job.busyWith(t.job.title[job.kind]) : ''}
           </span>
         </div>
       </section>
@@ -349,14 +335,14 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
       {scope === 'selected' ? (
         <section className="card">
           <div className="row checklist-toolbar">
-            <strong>추정할 행</strong>
-            <span className="hint">선택 {scopeKeys.size}</span>
+            <strong>{t.contextScreen.rowsToInfer}</strong>
+            <span className="hint">{t.common.selected(scopeKeys.size)}</span>
             <span className="spacer" />
             <button type="button" disabled={running} onClick={() => setScopeKeys(new Set(master.map((row) => row.key)))}>
-              모두
+              {t.common.selectAll}
             </button>
             <button type="button" disabled={running} onClick={() => setScopeKeys(new Set())}>
-              선택 해제
+              {t.common.clearSelection}
             </button>
           </div>
           <KeyChecklist items={checklist} selected={scopeKeys} disabled={running} onChange={setScopeKeys} />
@@ -366,7 +352,7 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
       {ownJob ? <JobProgress job={job} busy={busy} onControl={(action) => void control(action)} /> : null}
       {ownLog.length > 0 ? (
         <details className="card job-log-card">
-          <summary>작업 로그 ({ownLog.length})</summary>
+          <summary>{t.job.logCount(ownLog.length)}</summary>
           <JobLog entries={ownLog} />
         </details>
       ) : null}
@@ -379,41 +365,41 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
       ) : null}
       {view?.notices.map((notice) => (
         <div className="message" key={notice.file}>
-          {notice.file} 은 {notice.encoding.toUpperCase()}로 읽었습니다. 저장은 UTF-8로 합니다.
+          {t.common.readEncoding(notice.file, notice.encoding.toUpperCase())}
         </div>
       ))}
 
       <div className="grid-toolbar">
         <div className="grid-meta">
-          제안 {rows.length}행 · 신뢰도 낮음 {lowCount} · 선택 {chosen.length}
-          {dirty ? ' · 고친 제안 있음' : ''}
+          {t.contextScreen.meta(rows.length, lowCount, chosen.length)}
+          {dirty ? t.contextScreen.edited : ''}
         </div>
         <div className="row">
           <button
             type="button"
             disabled={busy || confident.length === 0}
-            title={`신뢰도 ${lowConfidence} 이상이고, 원문이 바뀌지 않았고, 값 형식이 맞는 제안을 고릅니다`}
+            title={t.contextScreen.selectConfidentHint(lowConfidence)}
             onClick={() => setSelected(new Set(confident.map((row) => row.key)))}
           >
-            기준 이상 선택 ({confident.length})
+            {t.contextScreen.selectConfident(confident.length)}
           </button>
           <button type="button" disabled={busy || rows.length === 0} onClick={() => setSelected(new Set(rows.filter(selectable).map((row) => row.key)))}>
-            모두 선택
+            {t.contextScreen.selectAll}
           </button>
           <button type="button" disabled={busy || chosen.length === 0} onClick={() => setSelected(new Set())}>
-            선택 해제
+            {t.common.clearSelection}
           </button>
           <button type="button" className="danger" disabled={busy || chosen.length === 0} onClick={() => setConfirmDiscard(true)}>
-            선택 버리기
+            {t.contextScreen.discardSelected}
           </button>
           <button
             type="button"
             className="primary"
             disabled={busy || chosen.length === 0 || chosen.some((row) => !selectable(row))}
-            title={chosen.some((row) => !selectable(row)) ? '형식이 틀린 값이나 원문에 없는 행을 먼저 고치거나 선택에서 빼세요' : undefined}
+            title={chosen.some((row) => !selectable(row)) ? t.contextScreen.fixFirst : undefined}
             onClick={() => void apply()}
           >
-            선택 적용 ({chosen.length})
+            {t.contextScreen.applySelected(chosen.length)}
           </button>
         </div>
       </div>
@@ -422,13 +408,13 @@ export function Context({ project, job, jobLog, onMessage, onDirtyChange }: Prop
 
       {confirmDiscard ? (
         <ConfirmDialog
-          title="제안 버리기"
-          confirmLabel={`${chosen.length}행 버리기`}
+          title={t.contextScreen.discardTitle}
+          confirmLabel={t.contextScreen.discardConfirm(chosen.length)}
           danger
           onCancel={() => setConfirmDiscard(false)}
           onConfirm={() => void discard()}
         >
-          <p>선택한 제안 {chosen.length}행을 버립니다. 원문은 바뀌지 않습니다.</p>
+          <p>{t.contextScreen.discardBody(chosen.length)}</p>
         </ConfirmDialog>
       ) : null}
     </div>

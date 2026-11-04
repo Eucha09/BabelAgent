@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ColumnMapping, ImportPreview } from '@shared/schema/strings'
+import { useT } from '../i18n'
 
 type Props = {
   preview: ImportPreview
@@ -8,43 +9,44 @@ type Props = {
   onConfirm: (mapping: ColumnMapping) => void
 }
 
-const FIELDS: { field: keyof ColumnMapping; label: string; required: boolean }[] = [
-  { field: 'key', label: '키', required: true },
-  { field: 'source', label: '원문', required: true },
-  { field: 'context', label: '컨텍스트', required: false },
-  { field: 'ui_type', label: 'UI 유형', required: false },
-  { field: 'max_len', label: '최대 길이', required: false },
-  { field: 'vars', label: '변수', required: false },
-  { field: 'smart', label: 'Smart', required: false },
-  { field: 'tags', label: '태그', required: false }
+const FIELDS: { field: keyof ColumnMapping; required: boolean }[] = [
+  { field: 'key', required: true },
+  { field: 'source', required: true },
+  { field: 'context', required: false },
+  { field: 'ui_type', required: false },
+  { field: 'max_len', required: false },
+  { field: 'vars', required: false },
+  { field: 'smart', required: false },
+  { field: 'tags', required: false }
 ]
 
 /** 외부 CSV의 열을 strings_master 열에 연결한다. 키와 원문은 반드시 골라야 한다. */
 export function ImportDialog({ preview, busy, onCancel, onConfirm }: Props): React.JSX.Element {
+  const t = useT()
   const [mapping, setMapping] = useState<ColumnMapping>(preview.guess)
   const valid = mapping.key !== '' && mapping.source !== ''
 
   return (
     <div className="modal-backdrop">
       <div className="modal wide">
-        <h3>원문 가져오기</h3>
+        <h3>{t.importDialog.title}</h3>
         <p className="project-path">{preview.filePath}</p>
         {preview.encoding === 'cp949' ? (
-          <div className="message">이 파일은 CP949로 읽었습니다. 저장은 UTF-8로 합니다.</div>
+          <div className="message">{t.importDialog.cp949}</div>
         ) : null}
 
         <div className="mapping">
-          {FIELDS.map(({ field, label, required }) => (
+          {FIELDS.map(({ field, required }) => (
             <label key={field} className="mapping-row">
               <span className="mapping-label">
-                {label}
+                {t.columns[field]}
                 {required ? ' *' : ''}
               </span>
               <select
                 value={mapping[field]}
                 onChange={(event) => setMapping({ ...mapping, [field]: event.target.value })}
               >
-                <option value="">(사용 안 함)</option>
+                <option value="">{t.importDialog.notUsed}</option>
                 {preview.header.map((column) => (
                   <option key={column} value={column}>
                     {column}
@@ -55,7 +57,7 @@ export function ImportDialog({ preview, busy, onCancel, onConfirm }: Props): Rea
           ))}
         </div>
 
-        <p className="hint">매핑하지 않은 열과 이 파일에 없는 키는 그대로 둡니다.</p>
+        <p className="hint">{t.importDialog.hint}</p>
 
         <div className="sample">
           <table>
@@ -80,7 +82,7 @@ export function ImportDialog({ preview, busy, onCancel, onConfirm }: Props): Rea
 
         <div className="modal-actions">
           <button type="button" onClick={onCancel} disabled={busy}>
-            취소
+            {t.common.cancel}
           </button>
           <button
             type="button"
@@ -88,7 +90,7 @@ export function ImportDialog({ preview, busy, onCancel, onConfirm }: Props): Rea
             disabled={!valid || busy}
             onClick={() => onConfirm(mapping)}
           >
-            가져오기
+            {t.importDialog.import}
           </button>
         </div>
       </div>

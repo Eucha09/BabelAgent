@@ -13,6 +13,7 @@ import {
   toSuggestions
 } from './suggestions'
 import { fillFor, knownUiTypes, selectContextTargets, sourceVariables, type ContextTarget } from './targets'
+import { ko } from '@shared/i18n/ko'
 
 const config = createDefaultProjectConfig({ name: 'p', sourceLanguage: 'ko', targetLanguages: ['en'], schemaVersion: 1 })
 const syntax = config.smartStrings
@@ -219,7 +220,7 @@ describe('applySuggestionValues', () => {
   it('빈 값이 아닌 필드만 넣고 원문·해시는 그대로 둔다', () => {
     const result = applySuggestionValues(rows, [
       { key: 'a', values: { context: ' 상점 ', ui_type: '', max_len: '12' }, expected: { context: '', ui_type: '', max_len: '' } }
-    ])
+    ], ko)
     expect(result.applied).toEqual(['a'])
     expect(result.rows[0]).toEqual({ ...rows[0], context: '상점', max_len: '12' })
   })
@@ -230,17 +231,17 @@ describe('applySuggestionValues', () => {
       { key: 'x', values: { context: '제안' }, expected: { context: '' } },
       { key: 'a', values: { max_len: '열둘' }, expected: { max_len: '' } },
       { key: 'c', values: { context: ' ' }, expected: { context: '' } }
-    ])
+    ], ko)
     expect(result.applied).toEqual([])
     expect(result.skipped.map((item) => item.reason)).toEqual(['changed', 'missing', 'invalid', 'empty'])
     expect(result.rows).toEqual(rows)
   })
 
   it('값 검사: 최대 길이는 양의 정수, vars 는 JSON 배열', () => {
-    expect(fieldValueProblem('max_len', '0')).not.toBeNull()
-    expect(fieldValueProblem('max_len', '20')).toBeNull()
-    expect(fieldValueProblem('vars', '[{"name":"n"}]')).toBeNull()
-    expect(fieldValueProblem('vars', '{"name":"n"}')).not.toBeNull()
-    expect(fieldValueProblem('context', '아무 글')).toBeNull()
+    expect(fieldValueProblem('max_len', '0', ko)).not.toBeNull()
+    expect(fieldValueProblem('max_len', '20', ko)).toBeNull()
+    expect(fieldValueProblem('vars', '[{"name":"n"}]', ko)).toBeNull()
+    expect(fieldValueProblem('vars', '{"name":"n"}', ko)).not.toBeNull()
+    expect(fieldValueProblem('context', '아무 글', ko)).toBeNull()
   })
 })

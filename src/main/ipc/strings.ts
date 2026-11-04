@@ -27,12 +27,13 @@ import {
   saveMaster
 } from '../project/store'
 import { currentProject } from './project'
+import { msg } from '../i18n'
 
 const SAMPLE_ROWS = 5
 
 function requireProject(): IpcResult<OpenProject> {
   const project = currentProject()
-  if (!project) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+  if (!project) return fail('not-a-project', msg().errors.notAProject)
   return ok(project)
 }
 
@@ -46,7 +47,7 @@ function resolveLanguage(project: OpenProject, requested: string | null): string
 export function registerStringsIpc(): void {
   ipcMain.handle(IPC.stringsList, (_event, raw: unknown): IpcResult<StringsView> => {
     const parsed = StringsListInput.safeParse(raw)
-    if (!parsed.success) return fail('unknown', '요청 형식이 올바르지 않습니다.')
+    if (!parsed.success) return fail('unknown', msg().errors.invalidRequest)
     const found = requireProject()
     if (!found.ok) return found
     const project = found.value
@@ -73,17 +74,17 @@ export function registerStringsIpc(): void {
 
   ipcMain.handle(IPC.stringsSave, (_event, raw: unknown): IpcResult<SaveStringsResult> => {
     const parsed = SaveStringsInput.safeParse(raw)
-    if (!parsed.success) return fail('unknown', '저장 요청 형식이 올바르지 않습니다.')
+    if (!parsed.success) return fail('unknown', msg().errors.invalidRequest)
     const found = requireProject()
     if (!found.ok) return found
 
     const problems = findKeyProblems(parsed.data.rows.map((row) => row.key))
     if (problems.emptyCount > 0 || problems.duplicates.length > 0) {
       const parts = [
-        problems.emptyCount > 0 ? `빈 키 ${problems.emptyCount}개` : '',
-        problems.duplicates.length > 0 ? `중복 키: ${problems.duplicates.join(', ')}` : ''
+        problems.emptyCount > 0 ? msg().stringsMain.emptyKeys(problems.emptyCount) : '',
+        problems.duplicates.length > 0 ? msg().stringsMain.duplicateKeys(problems.duplicates.join(', ')) : ''
       ].filter((part) => part !== '')
-      return fail('invalid-input', '키에 문제가 있어 저장하지 않았습니다.', parts.join(' · '))
+      return fail('invalid-input', msg().stringsMain.keyProblems, parts.join(' · '))
     }
 
     const { rows, deletedKeys, force } = parsed.data
@@ -94,7 +95,7 @@ export function registerStringsIpc(): void {
     if (contradictory.length > 0) {
       return fail(
         'invalid-input',
-        '지울 키가 원문에 남아 있어 저장하지 않았습니다.',
+        msg().stringsMain.deletedStillPresent,
         contradictory.join(', ')
       )
     }
@@ -112,7 +113,7 @@ export function registerStringsIpc(): void {
     const found = requireProject()
     if (!found.ok) return found
     if (existsSync(masterPath(found.value.dir))) {
-      return fail('invalid-input', `${MASTER_FILE} 이 이미 있습니다.`)
+      return fail('invalid-input', msg().errors.fileAlreadyExists(MASTER_FILE))
     }
     // 행이 없는 원문을 저장하면 헤더만 있는 파일이 생긴다. 번역 파일은 건드리지 않는다.
     const result = saveMaster(found.value.dir, [], false)
@@ -124,20 +125,20 @@ export function registerStringsIpc(): void {
     const window = BrowserWindow.fromWebContents(event.sender)
     const picked = await (window
       ? dialog.showOpenDialog(window, {
-          title: '가져올 원문 CSV 선택',
+          title: msg().dialogs.sourceCsv,
           properties: ['openFile'],
           filters: [{ name: 'CSV', extensions: ['csv'] }]
         })
       : dialog.showOpenDialog({ properties: ['openFile'] }))
 
     const filePath = picked.filePaths[0]
-    if (picked.canceled || !filePath) return fail('cancelled', '파일 선택을 취소했습니다.')
+    if (picked.canceled || !filePath) return fail('cancelled', msg().errors.filePickCancelled)
 
     try {
       const file = readTextFile(filePath)
       const table = parseCsvTable(file.text)
       if (table.header.length === 0) {
-        return fail('invalid-project', '헤더를 읽을 수 없는 CSV입니다.', basename(filePath))
+        return fail('invalid-project', msg().stringsMain.noHeader, basename(filePath))
       }
       return ok({
         filePath,
@@ -153,7 +154,7 @@ export function registerStringsIpc(): void {
 
   ipcMain.handle(IPC.stringsImport, (_event, raw: unknown): IpcResult<ImportSummary> => {
     const parsed = ImportInput.safeParse(raw)
-    if (!parsed.success) return fail('unknown', '가져오기 요청 형식이 올바르지 않습니다.')
+    if (!parsed.success) return fail('unknown', msg().errors.invalidRequest)
     const found = requireProject()
     if (!found.ok) return found
     const project = found.value

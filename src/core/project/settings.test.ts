@@ -9,10 +9,11 @@ import {
   settingsChanged,
   validateProjectSettings
 } from './settings'
+import { ko } from '@shared/i18n/ko'
 
 const base = createDefaultProjectConfig({ name: 'p', sourceLanguage: 'ko', targetLanguages: ['en'], schemaVersion: 1 })
 
-const fields = (config: ProjectConfig): string[] => validateProjectSettings(config).map((problem) => problem.field)
+const fields = (config: ProjectConfig): string[] => validateProjectSettings(config, ko).map((problem) => problem.field)
 
 describe('번역 설정 기본값', () => {
   it('새 프로젝트는 Opus · 중간', () => {
@@ -86,7 +87,7 @@ describe('buildSettingsPatch', () => {
 
 describe('validateProjectSettings', () => {
   it('기본 설정은 문제가 없다', () => {
-    expect(validateProjectSettings(base)).toEqual([])
+    expect(validateProjectSettings(base, ko)).toEqual([])
   })
 
   it('이름과 언어 코드', () => {
@@ -145,7 +146,7 @@ describe('nextStyleRuleId', () => {
 
 describe('프로젝트 화면 입력', () => {
   it('설정 → 입력 → 설정이 그대로 돌아온다', () => {
-    const { config, problems } = fromProjectForm(toProjectForm(base), base)
+    const { config, problems } = fromProjectForm(toProjectForm(base), base, ko)
     expect(problems).toEqual([])
     expect(settingsChanged(base, config)).toBe(false)
   })
@@ -156,12 +157,12 @@ describe('프로젝트 화면 입력', () => {
 
   it('숫자 칸이 비거나 숫자가 아니면 그 칸의 문제로 알린다', () => {
     const form = { ...toProjectForm(base), maxRows: '', lowConfidence: 'abc' }
-    expect(fromProjectForm(form, base).problems.map((problem) => problem.field)).toEqual(['batch.maxRows', 'review.lowConfidence'])
+    expect(fromProjectForm(form, base, ko).problems.map((problem) => problem.field)).toEqual(['batch.maxRows', 'review.lowConfidence'])
   })
 
   it('화면에 없는 항목은 base 에서 가져온다', () => {
     const withGrammar = { ...base, grammar: { enabled: true, tables: ['grammar_ko_particles.csv'] } }
-    expect(fromProjectForm(toProjectForm(withGrammar), withGrammar).config.grammar).toEqual(withGrammar.grammar)
+    expect(fromProjectForm(toProjectForm(withGrammar), withGrammar, ko).config.grammar).toEqual(withGrammar.grammar)
   })
 })
 

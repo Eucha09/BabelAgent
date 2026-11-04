@@ -1,4 +1,5 @@
 import { closeSync, fsyncSync, openSync, renameSync, writeSync } from 'node:fs'
+import { msg } from '../i18n'
 
 /**
  * 임시 파일에 쓰고 fsync 후 원자적으로 교체한다.
@@ -26,14 +27,14 @@ export function describeIoError(error: unknown, path: string): string {
   switch (code) {
     case 'EBUSY':
     case 'EPERM':
-      return `${path} 파일이 잠겨 있어 접근할 수 없습니다. 엑셀 등 다른 프로그램에서 열려 있는지 확인하세요.`
+      return msg().errors.fileLocked(path)
     case 'EACCES':
-      return `${path} 에 접근할 권한이 없습니다.`
+      return msg().errors.fileNoPermission(path)
     case 'ENOENT':
-      return `${path} 를 찾을 수 없습니다.`
+      return msg().errors.fileNotFound(path)
     case 'ENOSPC':
-      return '디스크 공간이 부족합니다.'
+      return msg().errors.diskFull
     default:
-      return `${path} 처리 중 오류: ${error instanceof Error ? error.message : String(error)}`
+      return msg().errors.fileError(path, error instanceof Error ? error.message : String(error))
   }
 }

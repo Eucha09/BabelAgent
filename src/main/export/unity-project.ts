@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { UnityScanResult } from '@core/export/plan'
 import { parseUnityAsset, SNIFF_BYTES, sniffUnityAsset, type UnitySharedTable } from '@core/export/unity-yaml'
 import type { UnityLocaleInfo } from '@shared/schema/export'
+import { msg } from '../i18n'
 
 /**
  * 연결한 Unity 프로젝트 폴더를 **읽기만** 한다. Assets/ 아래 .asset 파일의 앞부분으로 로케일·공유 데이터 에셋을 가리고
@@ -26,12 +27,12 @@ export function resolveUnityPath(projectDir: string, stored: string): string {
 /** Unity 프로젝트 폴더인지(Assets/·ProjectSettings/ 가 있는지). 아니면 이유를 돌려준다. */
 export function checkUnityProject(dir: string): string | null {
   try {
-    if (!statSync(dir).isDirectory()) return '폴더가 아닙니다.'
+    if (!statSync(dir).isDirectory()) return msg().unityProject.notAFolder
   } catch {
-    return '폴더를 찾지 못했습니다.'
+    return msg().unityProject.folderNotFound
   }
-  if (!existsSync(join(dir, 'Assets'))) return 'Assets 폴더가 없습니다. Unity 프로젝트 폴더(Assets 가 있는 폴더)를 고르세요.'
-  if (!existsSync(join(dir, 'ProjectSettings'))) return 'ProjectSettings 폴더가 없습니다. Unity 프로젝트 폴더를 고르세요.'
+  if (!existsSync(join(dir, 'Assets'))) return msg().unityProject.noAssets
+  if (!existsSync(join(dir, 'ProjectSettings'))) return msg().unityProject.noProjectSettings
   return null
 }
 
@@ -74,7 +75,7 @@ export async function scanUnityProject(dir: string, storedPath: string): Promise
   try {
     files = await listAssetFiles(join(dir, 'Assets'))
   } catch (error) {
-    return { state: 'failed', projectPath: storedPath, reason: `Assets 폴더를 읽지 못했습니다: ${error instanceof Error ? error.message : String(error)}` }
+    return { state: 'failed', projectPath: storedPath, reason: msg().unityProject.assetsUnreadable(error instanceof Error ? error.message : String(error)) }
   }
 
   const locales: UnityLocaleInfo[] = []
@@ -88,7 +89,7 @@ export async function scanUnityProject(dir: string, storedPath: string): Promise
     try {
       head = await readHead(file)
     } catch {
-      invalid.push(`${relative(dir, file)}: 읽지 못함`)
+      invalid.push(msg().unityProject.fileUnreadable(relative(dir, file)))
       continue
     }
     const kind = sniffUnityAsset(head)
@@ -99,7 +100,7 @@ export async function scanUnityProject(dir: string, storedPath: string): Promise
     yamlFiles += 1
     if (kind === 'other') continue
     try {
-      const parsed = parseUnityAsset(await readFile(file, 'utf8'), kind)
+      const parsed = parseUnityAsset(await readFile(file, 'utf8'), kind, msg())
       if (parsed.kind === 'locale') locales.push(parsed.locale)
       else if (parsed.kind === 'shared-table') tables.push(parsed.table)
       else invalid.push(`${relative(dir, file)}: ${parsed.reason}`)
@@ -112,27 +113,25 @@ export async function scanUnityProject(dir: string, storedPath: string): Promise
     return {
       state: 'failed',
       projectPath: storedPath,
-      reason: '에셋이 바이너리로 저장돼 있어 읽을 수 없습니다. Unity 의 Project Settings > Editor > Asset Serialization 을 Force Text 로 바꾸세요.'
+      reason: msg().unityProject.allBinary
     }
   }
   if (locales.length === 0 && tables.length === 0) {
-    const detail = invalid.length > 0 ? ` (읽지 못한 파일: ${invalid.slice(0, NOTICE_LIMIT).join('; ')})` : ''
+    const detail = invalid.length > 0 ? msg().unityProject.unreadableFiles(invalid.slice(0, NOTICE_LIMIT).join('; ')) : ''
     return {
       state: 'failed',
       projectPath: storedPath,
-      reason: `로케일 에셋과 String Table 공유 데이터 에셋을 찾지 못했습니다. Localization 패키지를 쓰는 프로젝트인지 확인하세요.${detail}`
+      reason: msg().unityProject.nothingFound(detail)
     }
   }
 
   const notices: string[] = []
   if (invalid.length > 0) {
-    const more = invalid.length > NOTICE_LIMIT ? ` 외 ${invalid.length - NOTICE_LIMIT}개` : ''
-    notices.push(`읽지 못한 에셋 ${invalid.length}개: ${invalid.slice(0, NOTICE_LIMIT).join('; ')}${more}`)
+    const more = invalid.length > NOTICE_LIMIT ? msg().unityProject.more(invalid.length - NOTICE_LIMIT) : ''
+    notices.push(msg().unityProject.unreadableAssets(invalid.length, invalid.slice(0, NOTICE_LIMIT).join('; '), more))
   }
   if (binaryFiles > 0) {
-    notices.push(
-      `바이너리 에셋 ${binaryFiles}개는 건너뛰었습니다. NavMesh·LightingData 처럼 Unity 가 늘 바이너리로 두는 파일이면 괜찮고, 로케일·테이블이 빠졌다면 Asset Serialization 을 Force Text 로 바꾸세요.`
-    )
+    notices.push(msg().unityProject.binarySkipped(binaryFiles))
   }
   return { state: 'ok', projectPath: storedPath, locales, tables, notices }
 }

@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { AppSettingsPatch, type AppSettings } from '@shared/schema/app-settings'
 import { IPC } from '@shared/ipc'
 import { fail, ok, type IpcResult } from '@shared/types'
+import { msg, setUiLanguage } from '../i18n'
 import { loadAppSettings, updateAppSettings } from '../store/app-settings'
 
 export function registerAppSettingsIpc(): void {
@@ -10,12 +11,14 @@ export function registerAppSettingsIpc(): void {
   ipcMain.handle(IPC.appSettingsSet, (_event, raw: unknown): IpcResult<AppSettings> => {
     const parsed = AppSettingsPatch.safeParse(raw)
     if (!parsed.success) {
-      return fail('unknown', '설정 값이 올바르지 않습니다.', parsed.error.message)
+      return fail('unknown', msg().errors.settingsInvalid, parsed.error.message)
     }
     try {
-      return ok(updateAppSettings(parsed.data))
+      const saved = updateAppSettings(parsed.data)
+      if (parsed.data.uiLanguage) setUiLanguage(parsed.data.uiLanguage)
+      return ok(saved)
     } catch (error) {
-      return fail('io', '설정을 저장하지 못했습니다.', error instanceof Error ? error.message : String(error))
+      return fail('io', msg().errors.settingsSaveFailed, error instanceof Error ? error.message : String(error))
     }
   })
 }

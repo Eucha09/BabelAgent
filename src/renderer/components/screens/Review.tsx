@@ -14,12 +14,14 @@ import { QaRuleId, type QaDiagnostic } from '@shared/schema/qa'
 import type { BulkApproveResult, RerollCandidate } from '@shared/schema/review'
 import type { StringsRow } from '@shared/schema/strings'
 import type { IpcError } from '@shared/types'
-import { BULK_SKIP_LABEL, QUICK_LABEL, RULE_LABEL } from '../../state/review'
+import type { Messages } from '@shared/i18n'
+import { useT } from '../../i18n'
+import { statusLabel } from '../../state/labels'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { ConflictDialog } from '../ConflictDialog'
 import { ReviewDetail, type ManualStatus } from '../ReviewDetail'
 import { ReviewGrid, type EditingCell, type ReviewRow } from '../ReviewGrid'
-import { STATUS_LABEL } from '../StringsGrid'
+
 
 const api = window.babel
 
@@ -40,16 +42,16 @@ function isRelevantFile(file: string, language: string): boolean {
 /** 확인 대화상자에 보여 줄 키 수 */
 const BULK_PREVIEW = 12
 
-function describeBulkResult({ approved, skipped }: BulkApproveResult): string {
-  const parts = [`${approved.length}행을 승인했습니다.`]
+function describeBulkResult({ approved, skipped }: BulkApproveResult, t: Messages): string {
+  const parts = [t.reviewScreen.approved(approved.length)]
   if (skipped.length > 0) {
     const counts = new Map<string, number>()
     for (const item of skipped) {
-      const label = BULK_SKIP_LABEL[item.reason]
+      const label = t.bulkSkip[item.reason]
       counts.set(label, (counts.get(label) ?? 0) + 1)
     }
     const reasons = [...counts].map(([label, count]) => `${label} ${count}`).join(' · ')
-    parts.push(`${skipped.length}행은 건너뛰었습니다(${reasons}).`)
+    parts.push(t.reviewScreen.skipped(skipped.length, reasons))
   }
   return parts.join(' ')
 }
@@ -66,6 +68,7 @@ type Props = {
 }
 
 export function Review({ project, job, onMessage, initialFocus = null }: Props): React.JSX.Element {
+  const t = useT()
   const { config } = project
   const syntax = config.smartStrings
   const lowConfidence = config.review.lowConfidence
@@ -148,10 +151,10 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
   useEffect(() => {
     return api.strings.onFileChanged(({ file }) => {
       if (!isRelevantFile(file, language)) return
-      if (!editingRef.current) onMessage(`${file} 이 밖에서 바뀌어 다시 읽었습니다.`)
+      if (!editingRef.current) onMessage(t.reviewScreen.reloaded(file))
       requestReload(file)
     })
-  }, [language, onMessage, requestReload])
+  }, [language, onMessage, requestReload, t])
 
   // 번역 작업이 배치를 기록하면 다시 읽는다. 앱이 쓴 파일은 감시자가 알려 주지 않는다.
   useEffect(() => {
@@ -292,20 +295,20 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
     // 글을 고치면 초안, 비우면 미번역
     const status: TranslationStatus = current.text.trim() === '' ? 'untranslated' : 'draft'
     void save(row, { text: current.text, status }, () => setEditing(current)).then((saved) => {
-      if (saved) onMessage(`${row.key} 을 저장했습니다.`)
+      if (saved) onMessage(t.reviewScreen.saved(row.key))
       flushPendingReload()
     })
-  }, [flushPendingReload, onMessage, rows, save, setEditing])
+  }, [flushPendingReload, onMessage, rows, save, setEditing, t])
 
   const setStatus = (row: StringsRow, status: ManualStatus): void => {
     void save(row, { text: row.translation, status }).then((saved) => {
-      if (saved) onMessage(`${row.key} → ${STATUS_LABEL[status] ?? status}`)
+      if (saved) onMessage(t.reviewScreen.statusChanged(row.key, t.status[status]))
     })
   }
 
   const saveNote = (row: StringsRow, note: string): void => {
     void save(row, { text: row.translation, status: row.status, note }).then((saved) => {
-      if (saved) onMessage(`${row.key} 메모를 저장했습니다.`)
+      if (saved) onMessage(t.reviewScreen.noteSaved(row.key))
     })
   }
 
@@ -345,7 +348,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
     void save(row, change).then((saved) => {
       if (!saved) return
       discardCandidate(candidate)
-      onMessage(`${row.key} 에 재번역 후보를 적용했습니다(초안).`)
+      onMessage(t.reviewScreen.candidateApplied(row.key))
     })
   }
 
@@ -361,7 +364,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
         return
       }
       setError(null)
-      onMessage(describeBulkResult(result.value))
+      onMessage(describeBulkResult(result.value, t))
     } finally {
       setSaving(false)
     }
@@ -374,10 +377,10 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
   if (config.targetLanguages.length === 0) {
     return (
       <div>
-        <h2 className="screen-title">검토/QA</h2>
+        <h2 className="screen-title">{t.screens.review.label}</h2>
         <div className="card">
-          <h3>대상 언어가 없습니다</h3>
-          <p className="hint">프로젝트 화면에서 대상 언어를 정하세요.</p>
+          <h3>{t.common.noTargetLanguages}</h3>
+          <p className="hint">{t.common.setTargetLanguages}</p>
         </div>
       </div>
     )
@@ -386,7 +389,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
   return (
     <div className="review-screen">
       <div className="strings-header">
-        <h2 className="screen-title">검토/QA</h2>
+        <h2 className="screen-title">{t.screens.review.label}</h2>
         <div className="row">
           <select
             value={language}
@@ -405,16 +408,16 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
             ))}
           </select>
           <button type="button" disabled={loading || editing !== null} onClick={() => void load(language)}>
-            QA 다시 실행
+            {t.reviewScreen.rerunQa}
           </button>
         </div>
       </div>
 
       {jobRunningHere ? (
-        <div className="message">번역 작업이 진행 중입니다. 배치가 기록될 때마다 다시 읽습니다.</div>
+        <div className="message">{t.reviewScreen.jobRunning}</div>
       ) : null}
       {externalChange ? (
-        <div className="message">{externalChange} 이 바뀌었습니다. 편집을 마치면 다시 읽습니다.</div>
+        <div className="message">{t.reviewScreen.externalChange(externalChange)}</div>
       ) : null}
       {notices.map((notice) => (
         <div className="message" key={notice}>
@@ -437,12 +440,12 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
               className={filter.quick === quick ? 'filter-chip selected' : 'filter-chip'}
               title={
                 quick === 'low-confidence'
-                  ? `${QUICK_LABEL[quick].hint} (기준 ${lowConfidence})`
-                  : QUICK_LABEL[quick].hint
+                  ? t.reviewScreen.threshold(t.quickFilter[quick].hint, lowConfidence)
+                  : t.quickFilter[quick].hint
               }
               onClick={() => changeFilter({ quick })}
             >
-              {QUICK_LABEL[quick].label}
+              {t.quickFilter[quick].label}
               <span className="filter-count">{counts[quick]}</span>
             </button>
           ))}
@@ -450,31 +453,31 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
         <div className="row">
           <select
             value={filter.status ?? ''}
-            title="상태"
+            title={t.reviewScreen.statusFilter}
             onChange={(event) => {
               const parsed = TranslationStatus.safeParse(event.target.value)
               changeFilter({ status: parsed.success ? parsed.data : null })
             }}
           >
-            <option value="">모든 상태</option>
+            <option value="">{t.reviewScreen.allStatuses}</option>
             {TranslationStatus.options.map((status) => (
               <option key={status} value={status}>
-                {STATUS_LABEL[status] ?? status}
+                {statusLabel(status, t)}
               </option>
             ))}
           </select>
           <select
             value={filter.ruleId ?? ''}
-            title="진단 종류"
+            title={t.reviewScreen.ruleFilter}
             onChange={(event) => {
               const parsed = QaRuleId.safeParse(event.target.value)
               changeFilter({ ruleId: parsed.success ? parsed.data : null })
             }}
           >
-            <option value="">모든 진단</option>
+            <option value="">{t.reviewScreen.allRules}</option>
             {ruleIds.map((ruleId) => (
               <option key={ruleId} value={ruleId}>
-                {RULE_LABEL[ruleId]}
+                {t.qaRule[ruleId]}
               </option>
             ))}
           </select>
@@ -482,7 +485,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
             className="filter-search"
             type="search"
             value={filter.search}
-            placeholder="키·원문·번역·메모 검색"
+            placeholder={t.reviewScreen.search}
             onChange={(event) => changeFilter({ search: event.target.value })}
           />
         </div>
@@ -490,18 +493,18 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
 
       <div className="grid-toolbar">
         <div className="grid-meta">
-          {visible.length} / {items.length}행 · 오류 {totals.errors}건 · 경고 {totals.warnings}건
-          {saving ? ' · 저장 중…' : ''}
-          {loading ? ' · 읽는 중…' : ''}
+          {t.reviewScreen.meta(visible.length, items.length, totals.errors, totals.warnings)}
+          {saving ? t.reviewScreen.saving : ''}
+          {loading ? t.reviewScreen.loading : ''}
         </div>
         <div className="row">
           <button
             type="button"
             disabled={bulkTargets.length === 0 || saving || loading || editing !== null}
-            title={`지금 목록에 보이는 초안 중 QA 오류·경고가 없고 신뢰도가 ${lowConfidence} 이상인 행(신뢰도가 없는 행 포함)을 승인합니다`}
+            title={t.reviewScreen.bulkHint(lowConfidence)}
             onClick={() => setConfirmBulk(true)}
           >
-            초안 일괄 승인 ({bulkTargets.length})
+            {t.reviewScreen.bulk(bulkTargets.length)}
           </button>
         </div>
       </div>
@@ -547,13 +550,13 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
           onDiscardCandidate={discardCandidate}
         />
       ) : loaded && items.length > 0 ? (
-        <p className="hint review-detail-empty">행을 고르세요.</p>
+        <p className="hint review-detail-empty">{t.reviewScreen.pickRow}</p>
       ) : null}
 
       {confirmApply ? (
         <ConfirmDialog
-          title="승인된 번역 바꾸기"
-          confirmLabel="후보 적용"
+          title={t.reviewScreen.replaceApproved}
+          confirmLabel={t.reviewScreen.applyCandidate}
           onCancel={() => setConfirmApply(null)}
           onConfirm={() => {
             applyCandidate(confirmApply)
@@ -561,8 +564,8 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
           }}
         >
           <p>
-            <code className="token-key">{confirmApply.key}</code> 은 승인된 행입니다. 후보를 적용하면 번역이 바뀌고
-            초안으로 돌아갑니다.
+            <code className="token-key">{confirmApply.key}</code>
+            {t.reviewScreen.replaceApprovedBody}
           </p>
           <p className="confirm-quote">{confirmApply.text}</p>
         </ConfirmDialog>
@@ -570,18 +573,18 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
 
       {confirmBulk ? (
         <ConfirmDialog
-          title="초안 일괄 승인"
-          confirmLabel={`${bulkTargets.length}행 승인`}
+          title={t.reviewScreen.bulkTitle}
+          confirmLabel={t.reviewScreen.bulkConfirm(bulkTargets.length)}
           onCancel={() => setConfirmBulk(false)}
           onConfirm={() => void approveBulk()}
         >
-          <p>보이는 행 중 아래 조건에 맞는 초안 {bulkTargets.length}행을 승인합니다.</p>
+          <p>{t.reviewScreen.bulkBody(bulkTargets.length)}</p>
           <ul className="confirm-list">
-            <li>상태가 초안</li>
-            <li>QA 오류·경고가 하나도 없음</li>
+            <li>{t.reviewScreen.bulkDraft}</li>
+            <li>{t.reviewScreen.bulkNoIssues}</li>
             <li>
-              신뢰도 {lowConfidence} 이상
-              {bulkWithoutConfidence > 0 ? ` — 신뢰도가 없는 ${bulkWithoutConfidence}행(사람이 고친 초안)도 포함` : ''}
+              {t.reviewScreen.bulkConfidence(lowConfidence)}
+              {bulkWithoutConfidence > 0 ? t.reviewScreen.bulkWithoutConfidence(bulkWithoutConfidence) : ''}
             </li>
           </ul>
           <p className="confirm-quote mono">
@@ -589,7 +592,7 @@ export function Review({ project, job, onMessage, initialFocus = null }: Props):
               .slice(0, BULK_PREVIEW)
               .map((item) => item.key)
               .join(', ')}
-            {bulkTargets.length > BULK_PREVIEW ? ` 외 ${bulkTargets.length - BULK_PREVIEW}행` : ''}
+            {bulkTargets.length > BULK_PREVIEW ? t.reviewScreen.bulkMore(bulkTargets.length - BULK_PREVIEW) : ''}
           </p>
         </ConfirmDialog>
       ) : null}

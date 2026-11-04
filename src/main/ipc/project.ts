@@ -17,6 +17,7 @@ import { cancelActiveJob } from '../jobs/runner'
 import { forgetReadHashes } from '../project/store'
 import { stopWatching, watchProject } from '../project/watcher'
 import { updateAppSettings } from '../store/app-settings'
+import { msg } from '../i18n'
 
 /** 메인이 들고 있는 현재 열린 프로젝트. 렌더러에서 넘어온 경로를 그대로 믿지 않기 위한 기준점. */
 let current: OpenProject | null = null
@@ -51,20 +52,20 @@ export function registerProjectIpc(): void {
     const window = BrowserWindow.fromWebContents(event.sender)
     const result = await (window
       ? dialog.showOpenDialog(window, {
-          title: '프로젝트 폴더 선택',
+          title: msg().dialogs.projectFolder,
           properties: ['openDirectory', 'createDirectory'],
-          buttonLabel: '선택'
+          buttonLabel: msg().dialogs.select
         })
       : dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] }))
     const dir = result.filePaths[0]
-    if (result.canceled || !dir) return fail('cancelled', '폴더 선택을 취소했습니다.')
+    if (result.canceled || !dir) return fail('cancelled', msg().errors.folderPickCancelled)
     return ok(dir)
   })
 
   ipcMain.handle(IPC.projectCreate, (event, raw: unknown): IpcResult<OpenProject> => {
     const parsed = CreateProjectInput.safeParse(raw)
     if (!parsed.success) {
-      return fail('unknown', '프로젝트 생성 정보가 올바르지 않습니다.', parsed.error.message)
+      return fail('unknown', msg().errors.invalidRequest, parsed.error.message)
     }
     const result = createProject(parsed.data)
     if (result.ok) {
@@ -80,7 +81,7 @@ export function registerProjectIpc(): void {
   ipcMain.handle(IPC.projectOpen, (event, raw: unknown): IpcResult<OpenProject> => {
     const parsed = OpenProjectInput.safeParse(raw)
     if (!parsed.success) {
-      return fail('unknown', '프로젝트 경로가 올바르지 않습니다.', parsed.error.message)
+      return fail('unknown', msg().errors.invalidRequest, parsed.error.message)
     }
     const result = openProject(parsed.data.dir)
     if (result.ok) {
@@ -99,14 +100,14 @@ export function registerProjectIpc(): void {
    */
   ipcMain.handle(IPC.projectSettingsSet, (_event, raw: unknown): IpcResult<OpenProject> => {
     const parsed = ProjectSettingsPatch.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '설정 형식이 올바르지 않습니다.', parsed.error.message)
-    if (!current) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest, parsed.error.message)
+    if (!current) return fail('not-a-project', msg().errors.notAProject)
 
     const next = ProjectConfig.safeParse(applySettingsPatch(current.config, parsed.data))
-    if (!next.success) return fail('invalid-input', '설정 값이 올바르지 않습니다.', next.error.message)
-    const problems = validateProjectSettings(next.data)
+    if (!next.success) return fail('invalid-input', msg().errors.settingsInvalid, next.error.message)
+    const problems = validateProjectSettings(next.data, msg())
     if (problems.length > 0) {
-      return fail('invalid-input', '설정에 고칠 곳이 있어 저장하지 않았습니다.', problems.map((problem) => problem.message).join('\n'))
+      return fail('invalid-input', msg().errors.projectSettingsInvalid, problems.map((problem) => problem.message).join('\n'))
     }
     if (!settingsChanged(current.config, next.data)) return ok(current)
 
@@ -122,15 +123,15 @@ export function registerProjectIpc(): void {
    */
   ipcMain.handle(IPC.projectRuleApply, (_event, raw: unknown): IpcResult<ApplyStyleRuleResult> => {
     const parsed = ApplyStyleRuleInput.safeParse(raw)
-    if (!parsed.success) return fail('invalid-input', '규칙 저장 요청 형식이 올바르지 않습니다.', parsed.error.message)
-    if (!current) return fail('not-a-project', '프로젝트를 먼저 열어야 합니다.')
+    if (!parsed.success) return fail('invalid-input', msg().errors.invalidRequest, parsed.error.message)
+    if (!current) return fail('not-a-project', msg().errors.notAProject)
 
-    const applied = applyStyleRuleChange(current.config.styleRules, parsed.data.change, new Date().toISOString())
+    const applied = applyStyleRuleChange(current.config.styleRules, parsed.data.change, new Date().toISOString(), msg())
     if (!applied.ok) return fail('invalid-input', applied.problem.message)
     const next = { ...current.config, styleRules: applied.rules }
-    const problems = validateProjectSettings(next)
+    const problems = validateProjectSettings(next, msg())
     if (problems.length > 0) {
-      return fail('invalid-input', '설정에 고칠 곳이 있어 저장하지 않았습니다.', problems.map((problem) => problem.message).join('\n'))
+      return fail('invalid-input', msg().errors.projectSettingsInvalid, problems.map((problem) => problem.message).join('\n'))
     }
     const saved = saveProjectConfig(current.dir, next)
     if (!saved.ok) return saved

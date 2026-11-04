@@ -3,6 +3,7 @@ import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { SmartSyntax } from '@core/qa/smart'
 import type { ContextField, ContextFieldValues, ContextSuggestionView } from '@shared/schema/context'
+import { useT } from '../i18n'
 import { useColumnSizing } from '../state/column-sizing'
 import { TokenText } from './TokenText'
 
@@ -43,10 +44,11 @@ function FieldCell({
   mono: boolean
   onEdit: Props['onEdit']
 }): React.JSX.Element {
+  const t = useT()
   if (row[field] === '') {
     const current = row.current[field]
     return (
-      <span className={mono ? 'grid-text mono muted' : 'grid-text muted'} title={current ? '원문 행에 이미 있는 값' : '제안 없음'}>
+      <span className={mono ? 'grid-text mono muted' : 'grid-text muted'} title={current ? t.contextGrid.currentValue : t.contextGrid.noSuggestion}>
         {current || '—'}
       </span>
     )
@@ -60,13 +62,14 @@ function FieldCell({
       rows={1}
       className={classes.join(' ')}
       value={row.values[field]}
-      title={problem ?? '고친 값이 적용됩니다. 비우면 이 필드는 적용하지 않습니다.'}
+      title={problem ?? t.contextGrid.editHint}
       onChange={(event) => onEdit(row.key, field, event.target.value)}
     />
   )
 }
 
 export function ContextGrid({ rows, syntax, onToggle, onEdit }: Props): React.JSX.Element {
+  const t = useT()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [columnSizing, setColumnSizing] = useColumnSizing(SIZING_KEY)
 
@@ -92,36 +95,36 @@ export function ContextGrid({ rows, syntax, onToggle, onEdit }: Props): React.JS
             className="cell-check"
             checked={info.row.original.selected}
             onChange={() => onToggle(info.row.original.key)}
-            aria-label={`${info.row.original.key} 선택`}
+            aria-label={t.grid.select(info.row.original.key)}
           />
         )
       }),
       helper.accessor('key', {
-        header: '키',
+        header: t.columns.key,
         size: 140,
         cell: (info) => (
           <span className="grid-text">
             <span className="token-key">{info.getValue()}</span>
-            {info.row.original.missing ? <span className="status-badge stale cell-badge">원문 없음</span> : null}
+            {info.row.original.missing ? <span className="status-badge stale cell-badge">{t.contextGrid.missingSource}</span> : null}
             {info.row.original.stale ? (
-              <span className="status-badge stale cell-badge" title="제안한 뒤 원문이 바뀌었습니다. 새 원문에 맞는지 확인하세요.">
-                원문 변경
+              <span className="status-badge stale cell-badge" title={t.contextGrid.sourceChangedHint}>
+                {t.contextGrid.sourceChanged}
               </span>
             ) : null}
           </span>
         )
       }),
       helper.accessor('source', {
-        header: '원문',
+        header: t.columns.source,
         size: 200,
         cell: (info) => <TokenText className="grid-text" text={info.getValue()} syntax={syntax} />
       }),
-      field('context', '컨텍스트', 220),
-      field('ui_type', 'UI 유형', 96, true),
-      field('max_len', '최대 길이', 70, true),
-      field('vars', '변수 설명 (vars)', 220, true),
+      field('context', t.columns.context, 220),
+      field('ui_type', t.columns.ui_type, 96, true),
+      field('max_len', t.columns.max_len, 70, true),
+      field('vars', t.grid.varsNotes, 220, true),
       helper.accessor('confidence', {
-        header: '신뢰도',
+        header: t.grid.confidence,
         size: 56,
         cell: (info) => (
           <span className={info.row.original.low ? 'grid-text mono confidence low' : 'grid-text mono confidence'}>
@@ -130,12 +133,12 @@ export function ContextGrid({ rows, syntax, onToggle, onEdit }: Props): React.JS
         )
       }),
       helper.accessor('note', {
-        header: '메모',
+        header: t.grid.note,
         size: 200,
         cell: (info) => <span className="grid-text">{info.getValue()}</span>
       })
     ]
-  }, [onEdit, onToggle, syntax])
+  }, [onEdit, onToggle, syntax, t])
 
   const table = useReactTable({
     data: rows,
@@ -176,7 +179,7 @@ export function ContextGrid({ rows, syntax, onToggle, onEdit }: Props): React.JS
               {header.column.getCanResize() ? (
                 <div
                   className={header.column.getIsResizing() ? 'col-resizer active' : 'col-resizer'}
-                  title="끌어서 너비 조절 · 더블클릭하면 기본 너비"
+                  title={t.common.resizeColumn}
                   onMouseDown={header.getResizeHandler()}
                   onTouchStart={header.getResizeHandler()}
                   onDoubleClick={() => header.column.resetSize()}
@@ -187,7 +190,7 @@ export function ContextGrid({ rows, syntax, onToggle, onEdit }: Props): React.JS
         </div>
 
         {rows.length === 0 ? (
-          <div className="grid-empty">승인을 기다리는 제안이 없습니다.</div>
+          <div className="grid-empty">{t.contextGrid.empty}</div>
         ) : (
           <div style={{ height: `${virtualizer.getTotalSize()}px`, width: totalWidth, position: 'relative' }}>
             {virtualizer.getVirtualItems().map((item) => {

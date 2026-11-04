@@ -5,6 +5,7 @@ import type { QaDiagnostic, QaReport } from '@shared/schema/qa'
 import type { MasterRow, TranslationRow } from '@shared/schema/strings'
 import { ok, type IpcResult } from '@shared/types'
 import { loadGlossaryTerms, loadMaster, loadTranslations } from './store'
+import { msg } from '../i18n'
 
 export function toQaInput(
   master: MasterRow,
@@ -34,7 +35,7 @@ export function qaContext(config: ProjectConfig, language: string, glossary: rea
 /** 용어집까지 읽어 검사 문맥을 만든다. 용어집을 못 읽으면 용어 검사만 빼고 알린다. */
 export function loadQaContext(project: OpenProject, language: string): { ctx: QaContext; notices: string[] } {
   const glossary = loadGlossaryTerms(project.dir, language)
-  const notices = glossary.ok ? [] : [`용어집을 읽지 못해 용어 검사를 건너뛰었습니다: ${glossary.error.message}`]
+  const notices = glossary.ok ? [] : [msg().errors.glossaryUnreadableQa(glossary.error.message)]
   return { ctx: qaContext(project.config, language, glossary.ok ? glossary.value : []), notices }
 }
 
@@ -49,7 +50,7 @@ export function runQa(project: OpenProject, language: string): IpcResult<QaRepor
   const byKey = new Map(translations.value.rows.map((row) => [row.key, row]))
   const diagnostics: Record<string, QaDiagnostic[]> = {}
   for (const row of master.value.rows) {
-    const found = checkRow(toQaInput(row, byKey.get(row.key)), ctx)
+    const found = checkRow(toQaInput(row, byKey.get(row.key)), ctx, msg())
     if (found.length > 0) diagnostics[row.key] = found
   }
   return ok({ language, diagnostics, notices })
