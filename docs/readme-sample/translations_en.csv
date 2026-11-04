@@ -1,0 +1,21 @@
+key,text,source_hash,status,confidence,note,source_snapshot
+ui.menu.start,Begin the Adventure,52d968a61f4815f2,draft,0.88,타이틀 첫 버튼이라 분위기를 살려 옮겼습니다.,모험 시작
+ui.menu.continue,Continue,aee225c6c1f75a9f,approved,0.97,,이어하기
+ui.menu.settings,Settings,115bced49291a6a0,approved,0.98,,설정
+ui.shop.buy,Buy,33500a787e27c740,draft,0.93,,구매
+ui.inventory.title,Bag,6852b2954fc85566,draft,0.62,인벤토리 창 제목이라 'Inventory'도 가능합니다. 길이 제한(10자) 안에서 원문에 가깝게 'Bag'으로 옮겼습니다.,가방
+ui.lantern.counter,{lit}/{total} Lanterns Lit,50c7596bdb7046f0,draft,0.95,,{lit}/{total} 등불 켜짐
+dlg.noeul.intro_01,"From today on, this harbor's lanterns are yours to keep.",84384385bfcedd84,draft,0.81,무뚝뚝한 말투를 살리려고 짧게 끊었습니다.,"{playerName}, 오늘부터 이 항구의 등불은 네가 지키는 거다."
+dlg.noeul.intro_02,"When the lanterns go out, the mist swallows the road. Don't forget it.",d5ec68074a12e882,approved,0.9,,등불이 꺼지면 물안개가 길을 삼킨다. 잊지 마라.
+dlg.bandi.hint_01,Sparkle! Find <color=#FFD54F>Star Oil</color> and your lantern burns longer!,58256d56628fed99,draft,0.86,들뜬 말투에 맞춰 'Star Oil'로 줄였습니다.,반짝! <color=#FFD54F>별빛 기름</color>을 찾으면 등불이 더 오래 타!
+dlg.merchant.greet,Welcome to Mistharbor! Got Shell Coins? Then I've got whatever you need.,2954a8c5e59bb915,draft,0.66,'조개 동전'이 용어집에 아직 없어 'Shell Coins'로 옮겼습니다. 용어가 정해지면 맞춰야 합니다.,물안개 항구에 어서 와요. 조개 동전만 있으면 뭐든 팔아요.
+quest.lighthouse.title,Relight the Lighthouse,94655e7b57bb731d,approved,0.92,,꺼진 등대를 밝혀라
+quest.lighthouse.desc,Light the lighthouse atop the Sunken Clocktower. You need 3 Glass Wicks.,69a500d513bf9749,stale,0.9,,가라앉은 시계탑 꼭대기의 등대에 불을 붙이세요. 유리 심지 3개가 필요합니다.
+item.starlight_oil.name,Starlight Oil,8b2908a8e50be933,approved,0.99,,별빛 기름
+item.starlight_oil.desc,Oil made from a melted drop of the night sky. Keeps a lantern burning twice as long.,2558e8aa243bda72,draft,0.9,,밤하늘을 한 방울 녹여 만든 기름. 등불이 두 배 오래 탄다.
+item.glass_wick.name,Glass Wick,98d55c30fb140c90,approved,0.99,,유리 심지
+item.glass_wick.desc,"Fragile, but a flame once lit on it never goes out.",f91fa9204722144c,draft,0.84,,"깨지기 쉽지만, 한 번 붙은 불은 절대 꺼지지 않는다."
+sys.reward.oil,You got {count:plural:{} bottle|{} bottles} of Starlight Oil.,438734b91b9932a8,draft,0.91,영어 복수형에 맞춰 plural 포매터를 넣었습니다.,별빛 기름 {count}병을 얻었습니다.
+sys.save.done,Saved.,513ee667b349daca,approved,0.99,,저장했습니다.
+tip.lantern,Lanterns clear away the <b>mist</b>. It's easy to get lost near a dark lantern.,814f532aafc77783,review,0.88,,등불은 <b>물안개</b>를 걷어 냅니다. 꺼진 등불 근처에서는 길을 잃기 쉽습니다.
+ach.first_light.title,First Spark,03438e1a9a28cc92,draft,0.9,,첫 불씨
