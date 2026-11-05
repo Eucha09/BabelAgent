@@ -1,5 +1,0 @@
-key,source_hash,context,ui_type,max_len,vars,confidence,note
-ui.shop.buy,33500a787e27c740,상점 창에서 고른 물건을 사는 버튼,button,10,,0.9,키가 ui.shop 아래에 있고 원문이 짧은 명사라 버튼으로 보았습니다.
-dlg.bandi.hint_02,075bb2a81583b364,반디가 시계탑 쪽을 가리키며 하는 혼잣말. 겁먹었지만 장난스러운 말투,dialogue,,,0.74,화자가 반디인지는 키로만 추정했습니다.
-sys.reward.coins,0e5f125ee0c82544,조개 동전을 얻었을 때 화면 위에 뜨는 알림,system,,"[{""name"":""0"",""type"":""int"",""meaning"":""얻은 조개 동전 개수"",""example"":""15""}]",0.88,sys.reward.oil 과 같은 형식의 획득 알림입니다.
-tip.lantern,814f532aafc77783,등불의 역할을 알려 주는 안내 문구,tip,,,0.62,로딩 화면 팁인지 튜토리얼 안내인지 원문만으로는 확실하지 않습니다.

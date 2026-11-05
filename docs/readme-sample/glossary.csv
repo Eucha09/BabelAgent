@@ -1,9 +1,0 @@
-term,translation_en,translation_ja,pos,note,strict,status,pending_languages,reason,confidence
-등불지기,Lanternkeeper,ランタン守,직업,주인공과 노을의 직업. 한 단어로 붙여 쓴다,true,approved,,,
-물안개 항구,Mistharbor,霧の港,지명,게임의 무대가 되는 항구 도시,false,approved,,,
-별빛 기름,Starlight Oil,星明かりの油,아이템,등불 연료. 줄여 쓰지 않는다,false,approved,,,
-유리 심지,Glass Wick,ガラスの芯,아이템,메인 퀘스트 재료,false,approved,ja,,0.9
-반디,Bandi,バンディ,인명,반딧불 정령. 이름은 소리대로 옮긴다,false,approved,,,
-노을,Noeul,ノウル,인명,늙은 등불지기. 이름은 소리대로 옮긴다,false,approved,,,
-가라앉은 시계탑,Sunken Clocktower,沈んだ時計塔,지명,메인 퀘스트의 목적지,false,pending,,퀘스트 설명에 나오는 고유한 장소 이름,0.86
-조개 동전,,,화폐,,false,pending,,상점 대사와 보상 알림에 반복해서 나오는 화폐 이름,0.93

@@ -1,0 +1,26 @@
+key,source,context
+ui.menu.start,모험 시작,
+ui.menu.continue,이어하기,
+ui.menu.settings,설정,
+ui.shop.buy,구매,
+ui.inventory.title,가방,
+ui.lantern.counter,{lit}/{total} 등불 켜짐,화면 오른쪽 위 HUD. 이 지역에서 켠 등불 수
+dlg.noeul.intro_01,"{playerName}, 오늘부터 이 항구의 등불은 네가 지키는 거다.",튜토리얼 첫 대사. 늙은 등불지기 노을이 주인공에게 일을 맡긴다
+dlg.noeul.intro_02,등불이 꺼지면 물안개가 길을 삼킨다. 잊지 마라.,
+dlg.bandi.hint_01,반짝! <color=#FFD54F>별빛 기름</color>을 찾으면 등불이 더 오래 타!,반딧불 정령 반디의 힌트. 밝고 들뜬 말투
+dlg.bandi.hint_02,"노을 할아버지가 그러는데, 시계탑엔 아무도 안 간대. 조금 무서운데…",
+dlg.merchant.greet,물안개 항구에 어서 와요. 조개 동전만 있으면 뭐든 팔아요.,항구 상인의 인사
+quest.lighthouse.title,꺼진 등대를 밝혀라,
+quest.lighthouse.desc,가라앉은 시계탑 꼭대기의 등대에 불을 붙이세요. 유리 심지 {required}개가 필요합니다.,
+quest.lighthouse.complete,등대에 불이 들어왔습니다! 물안개가 조금 걷혔습니다.,
+item.starlight_oil.name,별빛 기름,
+item.starlight_oil.desc,밤하늘을 한 방울 녹여 만든 기름. 등불이 두 배 오래 탄다.,
+item.glass_wick.name,유리 심지,
+item.glass_wick.desc,"깨지기 쉽지만, 한 번 붙은 불은 절대 꺼지지 않는다.",
+sys.reward.oil,별빛 기름 {count}병을 얻었습니다.,
+sys.reward.coins,조개 동전 {0}개를 얻었습니다.,
+sys.save.done,저장했습니다.,
+tip.lantern,등불은 <b>물안개</b>를 걷어 냅니다. 꺼진 등불 근처에서는 길을 잃기 쉽습니다.,
+tip.night,밤에는 반디 곁을 떠나지 마세요. 물안개 속에서도 길을 밝혀 줍니다.,
+ach.first_light.title,첫 불씨,업적 이름
+ach.first_light.desc,등불지기로서 처음으로 등불을 밝혔습니다.,
