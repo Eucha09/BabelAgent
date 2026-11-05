@@ -8,6 +8,8 @@ import type { StringsRow } from '@shared/schema/strings'
 import { useT } from '../i18n'
 import { useColumnSizing } from '../state/column-sizing'
 import { statusLabel } from '../state/labels'
+import { TokenText } from './TokenText'
+import { TokenTextarea } from './TokenTextarea'
 
 /** 한 줄짜리 행의 높이. 가상 스크롤의 첫 추정값이자 행의 최소 높이다. */
 const ROW_HEIGHT = 34
@@ -24,7 +26,7 @@ type DropTarget = { key: string; position: DropPosition }
 type Props = {
   rows: StringsRow[]
   language: string | null
-  /** Smart 구문 제안에 쓰는 토크나이저 설정(project.json smartStrings) */
+  /** Smart 구문 제안과 변수·태그 강조에 쓰는 토크나이저 설정(project.json smartStrings) */
   syntax: SmartSyntax
   /** 아직 저장하지 않은 새 행. 상태 칸에 따로 표시한다. */
   newKeys: ReadonlySet<string>
@@ -104,7 +106,18 @@ export function StringsGrid({
         size: 150,
         cell: (info) => <span className="token-key grid-text">{info.getValue()}</span>
       }),
-      editable('source', t.columns.source, 260),
+      // 원문은 변수·태그를 색으로 보여 주고, 포커스를 받으면 편집 칸으로 바뀐다
+      helper.accessor('source', {
+        header: t.columns.source,
+        size: 260,
+        cell: (info) => (
+          <TokenTextarea
+            value={info.getValue()}
+            syntax={syntax}
+            onChange={(value) => onEdit(info.row.original.key, 'source', value)}
+          />
+        )
+      }),
       editable('context', t.columns.context, 170),
       editable('ui_type', t.columns.ui_type, 90, true),
       editable('max_len', t.columns.max_len, 70, true),
@@ -142,7 +155,7 @@ export function StringsGrid({
       helper.accessor('translation', {
         header: language ? t.grid.translationIn(language) : t.grid.translation,
         size: 240,
-        cell: (info) => <span className="grid-text">{info.getValue()}</span>
+        cell: (info) => <TokenText className="grid-text" text={info.getValue()} syntax={syntax} />
       }),
       helper.accessor('status', {
         header: t.grid.status,
