@@ -103,13 +103,14 @@ const SubmittedTranslation = z.object({
 
 - 출력: `TranslationResponse`
 - 지시 요점: 변수와 태그를 원문과 동일한 집합으로 유지, `max_len` 준수, 용어집의 확정 번역 사용, 불확실하면 `confidence`를 낮추고 `note`에 이유.
+- `max_len`은 화면 길이로 센다고 QA 와 같은 기준을 함께 알린다(`DISPLAY_LENGTH_RULE`): 리치 텍스트 태그는 세지 않고, 변수는 `vars`의 example 로(없으면 적힌 그대로), 분기가 있는 포매터는 가장 긴 분기로 센다. 이 문장이 없으면 에이전트가 태그까지 세어 태그가 많은 문장을 필요 이상으로 줄일 수 있다(2026-11-06).
 - `note`는 원문 언어(`sourceLanguage`)로 쓴다. 메모를 읽는 검토자는 원문을 쓰는 사람이기 때문이다. 지시문 자체는 영어로 두고 언어 이름만 설정에서 넣는다 — 특정 언어를 하드코딩하지 않는다. 고정 부분이라 프로젝트의 원문 언어가 같으면 문자열이 바뀌지 않는다(캐싱 유지). 행 재번역도 같은 고정 부분을 쓰므로 후보 메모도 원문 언어로 나온다.
 - `approved` 행은 애초에 배치에 넣지 않는다.
 
 ### 컨텍스트 추정
 
 - 대상: 고른 필드(`context`, `ui_type`, `max_len`, `vars`) 중 원문에서 빈 칸이 있는 행. 승인을 기다리는 제안이 있는 행은 뺀다. 변수가 없는 원문에는 vars 를 묻지 않는다(`src/core/context/targets.ts`).
-- 고정 부분(`buildContextSystemPrompt`): 역할, 필드 설명, 규칙, 출력 규약, 게임 소개. 사람이 읽을 글(context, 변수 meaning, note)은 원문 언어로 쓰게 한다. `max_len`은 버튼·탭처럼 길이 제한이 분명할 때만 내라고 하고, 원문이 아니라 **모든 대상 언어 번역문**의 한도이니 가장 긴 번역에 여유를 더해 넉넉하게 잡으라고 지시한다(대상 언어 목록을 함께 준다).
+- 고정 부분(`buildContextSystemPrompt`): 역할, 필드 설명, 규칙, 출력 규약, 게임 소개. 사람이 읽을 글(context, 변수 meaning, note)은 원문 언어로 쓰게 한다. `max_len`은 버튼·탭처럼 길이 제한이 분명할 때만 내라고 하고, 원문이 아니라 **모든 대상 언어 번역문**의 한도이니 가장 긴 번역에 여유를 더해 넉넉하게 잡으라고 지시한다(대상 언어 목록을 함께 준다). 길이를 세는 기준은 번역과 같은 `DISPLAY_LENGTH_RULE`이다.
 - `max_len` 하한(코드): 받은 값이 원문 표시 길이 × `context.maxLenRatio`(기본 2.5, 최소 10자)보다 작으면 그 값으로 올린다(`generousMaxLen`). 원문 길이는 QA 와 같이 센다 — 태그는 빼고 변수는 제안된 example(없으면 기존 vars 의 example)로 바꾼다. 에이전트가 원문(한국어) 길이에 맞춰 빡빡하게 잡는 일이 실측에서 나와 넣었다(2026-10-22, 사용자 요청).
 - 가변 부분(`buildContextBatchPrompt`): 프로젝트에서 이미 쓰는 ui_type 목록(표기를 맞추게), 행마다 키·원문·이미 있는 메타데이터·`fill`(채울 필드)·`variables`(코드가 원문에서 뽑은 변수 이름).
 - 출력: `submit_context` 도구 `{ entries: { key, context?, ui_type?, max_len?, vars?: { name, type?, meaning, example? }[], confidence, note? }[] }` (`src/core/context/submission.ts`).

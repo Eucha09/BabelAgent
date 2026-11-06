@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultProjectConfig, type ProjectConfig } from '@shared/schema/project'
 import type { MasterRow } from '@shared/schema/strings'
-import { buildBatchPrompt, buildRerollPrompt, buildSystemPrompt, SUBMIT_TOOL } from './prompt'
+import { buildBatchPrompt, buildRerollPrompt, buildSystemPrompt, DISPLAY_LENGTH_RULE, SUBMIT_TOOL } from './prompt'
 
 function config(overrides: Partial<ProjectConfig> = {}): ProjectConfig {
   return {
@@ -38,6 +38,15 @@ describe('buildSystemPrompt', () => {
     expect(buildSystemPrompt(config(), 'en')).toContain('Write every note in ko (Korean)')
     const japanese = { ...config(), sourceLanguage: 'ja' }
     expect(buildSystemPrompt(japanese, 'en')).toContain('Write every note in ja (Japanese)')
+  })
+
+  it('max_len 은 QA 와 같은 화면 길이로 세라고 알린다(태그 제외, 변수는 example)', () => {
+    const prompt = buildSystemPrompt(config(), 'en')
+    expect(prompt).toContain('display length of the final text must not exceed')
+    expect(prompt).toContain(DISPLAY_LENGTH_RULE)
+    expect(DISPLAY_LENGTH_RULE).toContain('rich text tags such as <color=...> and <b> are not counted')
+    expect(DISPLAY_LENGTH_RULE).toContain('example value in vars')
+    expect(DISPLAY_LENGTH_RULE).toContain('longest branch')
   })
 
   it('제출 도구 이름을 쓴다', () => {

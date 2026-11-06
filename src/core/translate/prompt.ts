@@ -19,6 +19,13 @@ export function section(title: string, body: string): string {
   return `# ${title}\n${body.trim() === '' ? '(not provided)' : body.trim()}`
 }
 
+/**
+ * max_len 을 셀 때의 화면 길이 규칙. QA 의 길이 계산(`measureDisplayLength`)과 같은 기준을 에이전트에게 알린다.
+ * 이 문장이 없으면 에이전트가 태그까지 세어 태그가 많은 문장을 필요 이상으로 줄인다. 번역과 컨텍스트 추정이 같이 쓴다.
+ */
+export const DISPLAY_LENGTH_RULE =
+  '- Display length counts only what the player sees: rich text tags such as <color=...> and <b> are not counted, a placeholder counts as its example value in vars (as written when it has no example), and a formatter with branches such as {count:plural:...|...} counts as its longest branch.'
+
 /** 게임 소개와 장르. 번역·컨텍스트 추정·용어 추출의 고정 부분이 같이 쓴다. */
 export function gameSection(config: ProjectConfig): string {
   return section('Game', [config.game.intro, config.game.genre ? `Genre: ${config.game.genre}` : ''].filter(Boolean).join('\n'))
@@ -47,7 +54,8 @@ export function buildSystemPrompt(config: ProjectConfig, language: string): stri
     '',
     'Rules:',
     '- Keep every placeholder exactly as in the source: {name}, {0}, Smart String syntax such as {count:plural:...}, and rich text tags such as <color=#fff>...</color>. Do not translate, add, or remove them.',
-    '- When max_len is given, the final text must not exceed that many characters.',
+    '- When max_len is given, the display length of the final text must not exceed that many characters.',
+    DISPLAY_LENGTH_RULE,
     '- When a glossary term appears, use its fixed translation.',
     '- Follow the tone guide and style rules below.',
     '- If you are unsure, still translate, lower confidence, and explain why in note.',

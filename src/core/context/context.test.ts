@@ -3,6 +3,7 @@ import { createDefaultProjectConfig } from '@shared/schema/project'
 import type { ContextSuggestion } from '@shared/schema/context'
 import type { MasterRow } from '@shared/schema/strings'
 import { buildContextBatchPrompt, buildContextSystemPrompt, CONTEXT_TOOL } from './prompt'
+import { DISPLAY_LENGTH_RULE } from '../translate/prompt'
 import { generousMaxLen, judgeContext, MIN_SUGGESTED_MAX_LEN, toSuggestion, type SubmittedContext } from './submission'
 import {
   applySuggestionValues,
@@ -78,6 +79,10 @@ describe('프롬프트', () => {
     expect(prompt).toBe(buildContextSystemPrompt(config))
     expect(prompt).toContain(CONTEXT_TOOL)
     expect(prompt).toContain('ko (Korean)')
+  })
+
+  it('max_len 은 번역과 같은 화면 길이 기준으로 잡으라고 알린다', () => {
+    expect(buildContextSystemPrompt(config)).toContain(DISPLAY_LENGTH_RULE)
   })
 
   it('가변 부분은 채울 필드·변수 이름·기존 ui_type 을 담고 빈 열은 뺀다', () => {

@@ -1,5 +1,5 @@
 import type { ProjectConfig } from '@shared/schema/project'
-import { gameSection, languageLabel, section } from '../translate/prompt'
+import { DISPLAY_LENGTH_RULE, gameSection, languageLabel, section } from '../translate/prompt'
 import type { ContextTarget } from './targets'
 
 /** 제출 도구 이름. MCP 서버에 붙일 때와 프롬프트에서 같은 값을 쓴다. */
@@ -21,6 +21,7 @@ export function buildContextSystemPrompt(config: ProjectConfig): string {
     '- ui_type: a short lowercase category such as dialogue, button, tooltip, item_name, title, label, description, message, or system. Reuse the categories already used in the project when they fit.',
     `- max_len: the maximum display length in characters of the translated text, in every target language (${targets}), not of the source. Give it only for short UI text whose space is clearly limited (buttons, tabs, short labels). Omit it otherwise.`,
     '- Be generous with max_len. Translations are often much longer than the source, so estimate the longest natural translation among the target languages and add room on top of it. It is a guard against overflow, not a target length; when unsure, choose the larger value.',
+    DISPLAY_LENGTH_RULE,
     `- vars: for every listed variable name, its type (string, int, float, ...), meaning, and a realistic example value. Use the names exactly as listed. Write meaning in ${source}.`,
     '',
     'Rules:',
