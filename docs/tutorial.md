@@ -64,7 +64,7 @@ Babel Agent의 프로젝트는 **폴더 하나**입니다. 번역 파일과 설�
 3. **새 프로젝트** 창에서 프로젝트 이름에 `등불지기`를 적습니다. 원문 언어(`ko`)와 대상 언어(`en`, `ja`)는 이미 들어 있으니 그대로 둡니다.
 4. [만들기]를 누릅니다.
 
-<img src="images/tutorial/02-new-project.png" width="600" alt="새 프로젝트 창 — 이름, 원문 언어 ko, 대상 언어 en·ja">
+<img src="images/tutorial/02-new-project.png" width="900" alt="새 프로젝트 창 — 이름, 원문 언어 ko, 대상 언어 en·ja">
 
 프로젝트가 만들어지고 **프로젝트** 화면이 열립니다.
 
@@ -213,7 +213,7 @@ Babel Agent의 프로젝트는 **폴더 하나**입니다. 번역 파일과 설�
 2. 위쪽의 [원문 가져오기]를 누르고, 0단계에서 받은 `lanternkeeper-strings.csv`를 고릅니다.
 3. **원문 가져오기** 창이 뜹니다. 파일의 열이 키 · 원문 · 컨텍스트에 이미 짝지어져 있으니 그대로 [가져오기]를 누릅니다.
 
-<img src="images/tutorial/04-import.png" width="600" alt="원문 가져오기 창 — 키·원문·컨텍스트 열이 짝지어진 모습">
+<img src="images/tutorial/04-import.png" width="900" alt="원문 가져오기 창 — 키·원문·컨텍스트 열이 짝지어진 모습">
 
 25줄이 들어왔습니다. 그리드를 한번 둘러보세요.
 
