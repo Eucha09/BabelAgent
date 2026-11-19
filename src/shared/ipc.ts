@@ -37,6 +37,8 @@ export const IPC = {
   cliUpdate: 'cli:update',
   cliInstall: 'cli:install',
   cliInstallCancel: 'cli:install:cancel',
+  cliInstallCommandCopy: 'cli:install:copy',
+  cliPowerShellOpen: 'cli:powershell:open',
   usageRead: 'usage:read',
   jobStart: 'job:start',
   jobControl: 'job:control',

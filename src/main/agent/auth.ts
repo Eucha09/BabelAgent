@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { extname } from 'node:path'
 import { AuthStatusJson, type AuthLoginDone, type AuthStatus, type LoginMethod } from '@shared/schema/agent'
 import { fail, ok, type IpcResult } from '@shared/types'
-import { claudeEnv as authEnv, resolveClaudeExecutable } from './claude-cli'
+import { claudeEnv as authEnv, conhostPath, resolveClaudeExecutable } from './claude-cli'
 import { effectiveConfigDir } from './session'
 import { msg } from '../i18n'
 
@@ -103,7 +103,7 @@ export function startLogin(
     )
   }
 
-  const child = spawn('conhost.exe', [executable, 'auth', 'login', `--${method}`], {
+  const child = spawn(conhostPath(), [executable, 'auth', 'login', `--${method}`], {
     env: authEnv(configDir),
     stdio: 'ignore',
     windowsHide: false

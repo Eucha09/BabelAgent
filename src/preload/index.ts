@@ -196,6 +196,10 @@ const api = {
     /** 공식 설치 스크립트를 보이는 콘솔 창에서 돌린다. 창이 닫히면 onInstallDone */
     install: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.cliInstall),
     cancelInstall: (): Promise<IpcResult<boolean>> => ipcRenderer.invoke(IPC.cliInstallCancel),
+    /** 공식 설치 명령을 클립보드에 복사한다(자동 설치가 막혔을 때 직접 붙여 넣도록) */
+    copyInstallCommand: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.cliInstallCommandCopy),
+    /** 명령 없이 빈 PowerShell 창을 연다 */
+    openPowerShell: (): Promise<IpcResult<null>> => ipcRenderer.invoke(IPC.cliPowerShellOpen),
     onInstallDone: (listener: (payload: ClaudeInstallDone) => void): (() => void) =>
       subscribe(IPC_EVENT.cliInstallDone, listener)
   },

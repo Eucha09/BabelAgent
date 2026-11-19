@@ -234,7 +234,7 @@ GitHub 공개·배포를 위한 정리. 인증을 Anthropic 규정에 맞추고,
 - [x] 로그인은 Claude Code 가 자기 창에서 진행하고 앱은 로그인 코드·토큰을 받지 않는다. [Claude 계정(구독)] · [Console(API 과금)] 두 방식
 - [x] 인증 방식 표시(`apiKeySource` 기준)와 구독일 때만 사용량 막대. 앱 설정의 `auth.mode` 삭제
 - [x] 앱을 켤 때 확인 창이 Claude Code 를 찾아 최신으로 업데이트하고, 끝날 때까지 앱을 가린다. 실패하면 [다시 시도]·[지금 버전으로 계속]
-- [~] Claude Code 가 없으면 설치 안내와 [설치](공식 설치 스크립트를 보이는 창에서) — 안내 화면은 확인, 실제 설치 스크립트 실행은 확인 대기
+- [~] Claude Code 가 없으면 설치 안내와 [설치](공식 설치 스크립트를 보이는 창에서). 자동 설치가 끝나지 않으면 직접 설치 안내([PowerShell 열기]·[명령 복사]·[다시 확인]) — Windows 10 은 설치 창 흐름 확인, Windows 11 의 직접 설치 안내는 사용자 확인 대기
 - [x] 설치판(`npm run dist`)에서 Agent SDK 내장 Claude Code 제외. 설치·실행·제거
 - [x] `package.json` author: Euichan Jeong
 - [~] GitHub Actions: `v*` 태그에서 typecheck·test·빌드 후 Releases 에 바로 공개 — 첫 태그 실행 확인 대기
@@ -257,6 +257,7 @@ GitHub 공개·배포를 위한 정리. 인증을 Anthropic 규정에 맞추고,
 - 같이 고친 것: 설정 화면 CLI 경로 안내의 `%USERPROFILE%\.local\bin`이 백슬래시가 빠지고 제어 문자가 들어가 있던 것.
 - 테스트 551개(+7).
 - 첫 릴리스 v0.1.1(2026-11-01): ① 워크플로 파일과 태그가 같은 푸시로 처음 올라가 Actions 가 돌지 않았다 — 원격 태그를 지우고 다시 올려 실행(약 2분, 모든 단계 성공). ② electron-builder 26.15.3 이 같은 태그로 릴리스를 두 개 만들었다(설치 파일·latest.yml 쪽, blockmap 쪽). 태그 다운로드 주소가 blockmap 쪽을 가리켜 설치 파일과 `latest.yml`이 404 — 원인은 게시자 생성 경쟁(`PublishManager.getOrCreatePublisher`가 캐시에 넣기 전에 `await`). 워크플로를 "초안 먼저 만들기 → electron-builder 가 그 초안에 올림 → 공개"로 바꿨다.
+- Windows 11 에서 [설치]가 반응하지 않는 문제(2026-11-19, 사용자 보고): 창이 번쩍하고 닫혔다. 사용자 PC 에서 갈라 본 결과 `conhost.exe powershell.exe … "Write-Host hello"`는 되고, 같은 방식에 `irm … | iex`를 담으면 "액세스할 수 없습니다"로 실행이 거부됐다. 열린 PowerShell 에 직접 입력하면 설치되고, 다른 Windows 11 PC 에서도 같았으며 Windows 보안을 끄면 자동 설치가 됐다 — 보안 기능이 명령줄을 보고 막는다. 우회하지 않고, 설치 창이 닫힌 뒤에도 Claude Code 가 없으면 직접 설치 안내 화면으로 바꿨다. 설치 창은 `-NoExit`로 오류를 남기고, conhost 는 시스템 폴더 절대 경로로 연다(로그인 창도). 이 PC(Windows 10)에서 설치 창 대신 즉시 실패하는 명령을 넣은 빌드로 확인: [설치] → 안내 화면, [명령 복사] → 클립보드에 설치 명령, [PowerShell 열기] → `C:\Windows\System32\conhost.exe powershell.exe -NoLogo -NoProfile` 창.
 - 릴리스 배치 파일(사용자 요청): `release.bat [버전]` → `scripts/release.cjs`. 배치 파일은 `run-dev.bat`처럼 ASCII 만 쓰고(코드 페이지 문제), 한국어 안내는 Node 가 낸다. npm 은 셸을 거치지 않게 `npm_execpath`로 돌린다. 임시 클론과 로컬 bare 원격으로 확인: node 직접 실행·커밋 안 한 변경·형식 오류·낮은 버전·이미 있는 태그·원격보다 뒤처짐·취소·입력이 닫힘(모두 종료 코드 1, 바뀐 것 없음), `release.bat 0.1.1` → typecheck·test → 커밋 "릴리스 0.1.1"·주석 태그 v0.1.1 → 원격에 함께 올라감.
 
 ## 다듬기

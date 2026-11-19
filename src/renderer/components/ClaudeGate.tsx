@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Messages } from '@shared/i18n'
-import type { ClaudeCliStatus, ClaudeUpdateResult } from '@shared/schema/cli'
+import { WINDOWS_INSTALL_COMMAND, type ClaudeCliStatus, type ClaudeUpdateResult } from '@shared/schema/cli'
 import type { IpcError } from '@shared/types'
 import { useT } from '../i18n'
 
@@ -15,6 +15,11 @@ type Phase =
   /** 실행 파일은 있는데 응답하지 않았다(처음 실행·백신 검사 등). 설치를 권하지 않고 다시 시도를 권한다 */
   | { kind: 'unresponsive'; status: ClaudeCliStatus }
   | { kind: 'installing' }
+  /**
+   * 자동 설치 창이 닫혔는데 Claude Code 가 없다. 보안 프로그램이 명령줄에 설치 명령을 담은 PowerShell 실행을 막는 PC 가
+   * 있다(Windows 11 실측). 원인을 따지지 않고, 사용자가 PowerShell 에 직접 붙여 넣어 설치하도록 안내한다.
+   */
+  | { kind: 'installFailed'; status: ClaudeCliStatus }
   | { kind: 'updating'; status: ClaudeCliStatus }
   | { kind: 'failed'; status: ClaudeCliStatus | null; error: IpcError | null; result: ClaudeUpdateResult | null }
   /** 문구는 그릴 때 만든다 — 확인 중에 화면 언어가 바뀌어도 맞는 언어로 보이게 */
@@ -49,6 +54,10 @@ export function ClaudeGate({ onFinished }: Props): React.JSX.Element {
   const runId = useRef(0)
   /** 개발 모드(StrictMode)는 마운트 효과를 두 번 돌린다. 확인과 업데이트가 겹치지 않게 한 번만 시작한다 */
   const started = useRef(false)
+  /** [설치]로 자동 설치를 해 봤는지. 해 본 뒤에도 없으면 직접 설치 안내를 띄운다 */
+  const installAttempted = useRef(false)
+  /** 직접 설치 안내의 결과 한 줄(복사했다·창을 열었다·열지 못했다) */
+  const [manualNotice, setManualNotice] = useState<{ text: string; error: boolean } | null>(null)
 
   const finish = useCallback(
     (status: ClaudeCliStatus | null, message: string | null) => {
@@ -74,7 +83,11 @@ export function ClaudeGate({ onFinished }: Props): React.JSX.Element {
       return
     }
     if (!status.value.executable || status.value.version === null) {
-      setPhase({ kind: 'missing', status: status.value })
+      setPhase(
+        installAttempted.current && status.value.canInstall
+          ? { kind: 'installFailed', status: status.value }
+          : { kind: 'missing', status: status.value }
+      )
       return
     }
     setPhase({ kind: 'updating', status: status.value })
@@ -113,7 +126,25 @@ export function ClaudeGate({ onFinished }: Props): React.JSX.Element {
       setPhase({ kind: 'failed', status: null, error: started.error, result: null })
       return
     }
+    installAttempted.current = true
+    setManualNotice(null)
     setPhase({ kind: 'installing' })
+  }
+
+  const copyCommand = async (): Promise<void> => {
+    const copied = await api.cli.copyInstallCommand()
+    setManualNotice(copied.ok ? { text: t.claudeGate.copied, error: false } : { text: copied.error.message, error: true })
+  }
+
+  // 빈 PowerShell 창을 열면서 설치 명령도 복사해 둔다 — 사용자는 붙여 넣고 Enter 만 누르면 된다
+  const openPowerShell = async (): Promise<void> => {
+    const copied = await api.cli.copyInstallCommand()
+    const opened = await api.cli.openPowerShell()
+    if (!opened.ok) {
+      setManualNotice({ text: opened.error.message, error: true })
+      return
+    }
+    setManualNotice(copied.ok ? { text: t.claudeGate.powerShellOpened, error: false } : { text: copied.error.message, error: true })
   }
 
   const warning = phase.kind === 'done' ? requiredWarning(phase.status, t) : null
@@ -151,7 +182,7 @@ export function ClaudeGate({ onFinished }: Props): React.JSX.Element {
             {phase.status.canInstall ? (
               <p className="hint">
                 {t.claudeGate.installHint}
-                <code>irm https://claude.ai/install.ps1 | iex</code>
+                <code>{WINDOWS_INSTALL_COMMAND}</code>
               </p>
             ) : (
               <p className="hint">
@@ -200,6 +231,36 @@ export function ClaudeGate({ onFinished }: Props): React.JSX.Element {
             <div className="modal-actions">
               <button type="button" onClick={() => void api.cli.cancelInstall()}>
                 {t.claudeGate.closeInstall}
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {phase.kind === 'installFailed' ? (
+          <>
+            <h3>{t.claudeGate.installFailed}</h3>
+            <p>{t.claudeGate.installFailedBody}</p>
+            <ol className="gate-steps">
+              <li>{t.claudeGate.manualStep1}</li>
+              <li>{t.claudeGate.manualStep2}</li>
+              <li>{t.claudeGate.manualStep3}</li>
+            </ol>
+            <div className="gate-command">
+              <code>{WINDOWS_INSTALL_COMMAND}</code>
+              <button type="button" onClick={() => void copyCommand()}>
+                {t.claudeGate.copyCommand}
+              </button>
+            </div>
+            {manualNotice ? <p className={manualNotice.error ? 'field-error' : 'hint'}>{manualNotice.text}</p> : null}
+            <div className="modal-actions">
+              <button type="button" onClick={() => finish(phase.status, t.claudeGate.openedWithout)}>
+                {t.claudeGate.later}
+              </button>
+              <button type="button" onClick={() => void openPowerShell()}>
+                {t.claudeGate.openPowerShell}
+              </button>
+              <button type="button" className="primary" onClick={() => void check()}>
+                {t.claudeGate.recheck}
               </button>
             </div>
           </>

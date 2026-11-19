@@ -76,6 +76,7 @@
 | `cli:status` | 앱이 쓰는 Claude Code 실행 파일(경로·출처)·버전·실행 실패 이유·최소 버전 |
 | `cli:update` | `claude update` 후 앞뒤 버전 비교(updated / current / failed / skipped). 동시에 들어온 요청은 하나로 합친다. 작업이 도는 중에는 거부 |
 | `cli:install` / `cli:install:cancel` | 공식 설치 스크립트를 보이는 콘솔 창에서 실행 / 그 창 닫기 |
+| `cli:install:copy` / `cli:powershell:open` | 자동 설치가 끝나지 않았을 때의 직접 설치 안내: 공식 설치 명령(고정 문자열)을 클립보드에 복사 / 명령 없이 빈 PowerShell 창 열기 |
 | `row:reroll` | 행 단위 재번역(일회성 세션, 사용자 지시 포함). 결과는 쓰지 않고 후보와 그 진단을 돌려준다. 한도에 걸려도 자동으로 다시 시도하지 않는다 |
 | `row:reroll:cancel` | 진행 중인 재번역 취소 |
 | `agent:chat:send` | 에이전트 패널 메시지 전송 |
@@ -180,6 +181,7 @@ Anthropic 문서로 확인한 규칙(2026-10-30, code.claude.com/docs/en/legal-a
 - 그래서 앱은 로그인·토큰·키를 만지지 않고, 로그인은 Claude Code 자기 창에서 끝나며, 구독과 Console 두 버튼을 모두 둔다. 사용자마다 자기 계정·키로 인증한다. 공개 배포 전에는 Anthropic 에 사용 사례를 확인한다.
 - Claude Code 실행 파일 선택·버전 확인·업데이트·설치는 `src/main/agent/claude-cli.ts`, 판정 로직은 `src/core/cli/claude.ts`(테스트). 시작 확인 창은 `ClaudeGate`.
 - 공식 설치판(native installer)은 스스로도 업데이트된다. 앱은 켤 때 `claude update`를 한 번 더 돌려 확인한다. Windows 는 실행 중인 파일을 잠그므로 작업 중에는 업데이트하지 않는다.
+- [설치]는 `conhost.exe`(시스템 폴더 절대 경로)로 연 창에서 `powershell.exe -NoExit -Command "… irm https://claude.ai/install.ps1 | iex …"`를 돌린다. 그런데 명령줄에 이 설치 명령이 담긴 PowerShell 실행을 보안 기능이 막는 PC 가 있다(Windows 11 두 대 실측, 2026-11-19: 창이 번쩍하고 닫히거나 "액세스할 수 없습니다", Windows 보안을 끄면 설치됨. 열린 PowerShell 에 직접 입력하면 막히지 않는다). 그래서 설치 창이 닫힌 뒤에도 Claude Code 가 없으면 시작 확인 창이 **직접 설치 안내**로 바뀐다: [PowerShell 열기](빈 창 + 명령 복사), [명령 복사], [다시 확인]. 원인을 따지지 않고 "설치를 시도했는데 없음"으로만 판단한다. 명령을 다른 형태(인코딩·임시 파일 등)로 감싸 차단을 피하지 않는다 — 그 PC 의 보안 정책을 몰래 우회하는 일이다.
 - 새로 받은 실행 파일(300 MB 넘음)은 처음 실행이 백신 검사로 몇 초 걸린다. 버전 확인 제한 시간은 60초이고, 업데이트 직후에는 몇 번 더 확인한다. 개발 모드(React StrictMode)는 마운트 효과를 두 번 돌리므로 시작 확인은 한 번만 시작한다.
 
 ## 앱 업데이트와 릴리스

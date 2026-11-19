@@ -2200,6 +2200,32 @@ a:hover {
   }
 }
 
+/* 자동 설치가 막혔을 때의 직접 설치 안내 — 단계 목록과 복사할 명령 */
+.gate-steps {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
+.gate-command {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.gate-command code {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
 /* 앱 업데이트 — 상태바 칩과 설정 카드의 진행 막대 */
 .app-update-chip button {
   font-size: var(--font-size-xs);

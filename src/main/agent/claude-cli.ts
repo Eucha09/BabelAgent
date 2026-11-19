@@ -4,7 +4,13 @@ import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { z } from 'zod'
 import { meetsVersion, parseClaudeVersion, pickClaudeExecutable, updateOutcome } from '@core/cli/claude'
-import type { ClaudeCliStatus, ClaudeExecutable, ClaudeInstallDone, ClaudeUpdateResult } from '@shared/schema/cli'
+import {
+  WINDOWS_INSTALL_COMMAND,
+  type ClaudeCliStatus,
+  type ClaudeExecutable,
+  type ClaudeInstallDone,
+  type ClaudeUpdateResult
+} from '@shared/schema/cli'
 import { fail, ok, type IpcResult } from '@shared/types'
 import { msg } from '../i18n'
 
@@ -24,11 +30,16 @@ const UPDATE_TIMEOUT_MS = 180_000
 const OUTPUT_TAIL = 2000
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g
 
-/** 공식 설치 스크립트(Windows PowerShell). docs: code.claude.com/docs/en/setup */
-const INSTALL_SCRIPT_URL = 'https://claude.ai/install.ps1'
-
 const isWindows = process.platform === 'win32'
 const exeName = isWindows ? 'claude.exe' : 'claude'
+
+/**
+ * 보이는 콘솔 창을 여는 conhost.exe. PATH 에 기대지 않고 시스템 폴더의 것을 쓴다.
+ * 설치·로그인·PowerShell 창이 같이 쓴다.
+ */
+export function conhostPath(): string {
+  return join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'conhost.exe')
+}
 
 /** 공식 설치 스크립트가 실행 파일을 두는 곳 */
 export function nativeClaudePath(): string {
@@ -219,6 +230,9 @@ let installProcess: ChildProcess | null = null
  * 공식 설치 스크립트를 **보이는 콘솔 창**에서 돌린다(사용자가 [설치]를 눌렀을 때만). 인터넷에서 받은 스크립트를 실행하므로
  * 숨기지 않는다. 끝나면 창이 Enter 를 기다리고, 창이 닫히면 onDone. 성공 여부는 화면이 상태를 다시 읽어 판단한다.
  * conhost.exe 가 새 창을 열고 그 안에서 PowerShell 을 실행한다 — 명령은 고정 문자열이고 사용자 입력이 들어가지 않는다.
+ * `-NoExit`: 명령이 시작되지 못해도 창이 오류를 보여 준 채 남는다. 정상이면 Enter 뒤 `exit` 로 닫힌다.
+ * 보안 프로그램이 이 명령줄의 PowerShell 실행 자체를 막으면 창이 곧바로 닫힌다. 그때 화면은 직접 설치 안내를 띄운다
+ * (`openPowerShellWindow`). 명령을 다른 형태로 감싸 차단을 피하지 않는다.
  */
 export function startClaudeInstall(onDone: (payload: ClaudeInstallDone) => void): IpcResult<null> {
   if (!isWindows) {
@@ -227,11 +241,12 @@ export function startClaudeInstall(onDone: (payload: ClaudeInstallDone) => void)
   if (installProcess) return fail('unknown', msg().errors.installAlreadyOpen)
   const script = [
     "$Host.UI.RawUI.WindowTitle = 'Claude Code install'",
-    `try { irm ${INSTALL_SCRIPT_URL} | iex } catch { Write-Host $_ -ForegroundColor Red }`,
+    `try { ${WINDOWS_INSTALL_COMMAND} } catch { Write-Host $_ -ForegroundColor Red }`,
     "Write-Host ''",
-    "Read-Host 'Done. Press Enter to close this window'"
+    "Read-Host 'Done. Press Enter to close this window'",
+    'exit'
   ].join('; ')
-  const child = spawn('conhost.exe', ['powershell.exe', '-NoProfile', '-Command', script], {
+  const child = spawn(conhostPath(), ['powershell.exe', '-NoExit', '-NoProfile', '-Command', script], {
     stdio: 'ignore',
     windowsHide: false
   })
@@ -252,4 +267,24 @@ export function cancelClaudeInstall(): boolean {
   installProcess.kill()
   installProcess = null
   return true
+}
+
+/**
+ * 명령 없이 빈 PowerShell 창을 연다(자동 설치가 막혔을 때 사용자가 설치 명령을 직접 붙여 넣는 창).
+ * 앱은 이 창에 아무것도 입력하지 않고 지켜보지도 않는다 — 설치는 사용자가 하고, 끝나면 화면에서 [다시 확인]을 누른다.
+ */
+export function openPowerShellWindow(): Promise<IpcResult<null>> {
+  if (!isWindows) return Promise.resolve(fail('unknown', msg().errors.installUnsupportedOs))
+  return new Promise((resolve) => {
+    const child = spawn(conhostPath(), ['powershell.exe', '-NoLogo', '-NoProfile'], {
+      cwd: homedir(),
+      stdio: 'ignore',
+      windowsHide: false
+    })
+    child.once('spawn', () => {
+      child.unref()
+      resolve(ok(null))
+    })
+    child.once('error', (error) => resolve(fail('unknown', msg().errors.powerShellOpenFailed, error.message)))
+  })
 }
