@@ -1,4 +1,4 @@
-import { clipboard, ipcMain, type WebContents } from 'electron'
+import { clipboard, ipcMain, shell, type WebContents } from 'electron'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import {
   WINDOWS_INSTALL_COMMAND,
@@ -7,13 +7,8 @@ import {
   type ClaudeUpdateResult
 } from '@shared/schema/cli'
 import { fail, ok, type IpcResult } from '@shared/types'
-import {
-  cancelClaudeInstall,
-  claudeStatus,
-  openPowerShellWindow,
-  startClaudeInstall,
-  updateClaude
-} from '../agent/claude-cli'
+import { cancelClaudeInstall, claudeStatus, startClaudeInstall, updateClaude } from '../agent/claude-cli'
+import { powerShellExe } from '../agent/console-window'
 import { ensureNoRunningJob } from '../jobs/runner'
 import { loadAppSettings } from '../store/app-settings'
 import { msg } from '../i18n'
@@ -49,5 +44,11 @@ export function registerCliIpc(): void {
     return ok(null)
   })
 
-  ipcMain.handle(IPC.cliPowerShellOpen, (): Promise<IpcResult<null>> => openPowerShellWindow())
+  // 빈 PowerShell 창. 탐색기에서 실행하듯 ShellExecute 로 연다 — spawn 은 표준 입력을 물려줘 Windows 11 에서 창이
+  // 바로 닫힌다(console-window.ts 주석). 지켜볼 필요가 없어 숨은 PowerShell 도 거치지 않는다
+  ipcMain.handle(IPC.cliPowerShellOpen, async (): Promise<IpcResult<null>> => {
+    if (process.platform !== 'win32') return fail('unknown', msg().errors.installUnsupportedOs)
+    const error = await shell.openPath(powerShellExe())
+    return error === '' ? ok(null) : fail('unknown', msg().errors.powerShellOpenFailed, error)
+  })
 }

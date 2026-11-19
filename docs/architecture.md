@@ -71,7 +71,7 @@
 | `job:current` | 진행 중이거나 마지막 작업의 상태. 화면을 다시 열 때 이어 보기용 |
 | `usage:read` | 구독 사용량 한도(`/usage`). 화면은 구독 로그인일 때만 부른다 |
 | `auth:status` | `claude auth status --json`. `null` 필드도 "없음"으로 받는다(Console 로그인의 `subscriptionType`) |
-| `auth:login:start` | `{ method: 'claudeai' \| 'console' }`. Claude Code 로그인을 자기 창(conhost)에서 연다. 앱은 코드·토큰을 받지 않는다 |
+| `auth:login:start` | `{ method: 'claudeai' \| 'console' }`. Claude Code 로그인을 자기 창(`openConsoleWindow`가 연 새 콘솔)에서 연다. 앱은 코드·토큰을 받지 않는다 |
 | `auth:login:cancel` / `auth:logout` | 로그인 창 닫기 / CLI 로 로그아웃 |
 | `cli:status` | 앱이 쓰는 Claude Code 실행 파일(경로·출처)·버전·실행 실패 이유·최소 버전 |
 | `cli:update` | `claude update` 후 앞뒤 버전 비교(updated / current / failed / skipped). 동시에 들어온 요청은 하나로 합친다. 작업이 도는 중에는 거부 |
@@ -181,7 +181,8 @@ Anthropic 문서로 확인한 규칙(2026-10-30, code.claude.com/docs/en/legal-a
 - 그래서 앱은 로그인·토큰·키를 만지지 않고, 로그인은 Claude Code 자기 창에서 끝나며, 구독과 Console 두 버튼을 모두 둔다. 사용자마다 자기 계정·키로 인증한다. 공개 배포 전에는 Anthropic 에 사용 사례를 확인한다.
 - Claude Code 실행 파일 선택·버전 확인·업데이트·설치는 `src/main/agent/claude-cli.ts`, 판정 로직은 `src/core/cli/claude.ts`(테스트). 시작 확인 창은 `ClaudeGate`.
 - 공식 설치판(native installer)은 스스로도 업데이트된다. 앱은 켤 때 `claude update`를 한 번 더 돌려 확인한다. Windows 는 실행 중인 파일을 잠그므로 작업 중에는 업데이트하지 않는다.
-- [설치]는 `conhost.exe`(시스템 폴더 절대 경로)로 연 창에서 `powershell.exe -NoExit -Command "… irm https://claude.ai/install.ps1 | iex …"`를 돌린다. 그런데 명령줄에 이 설치 명령이 담긴 PowerShell 실행을 보안 기능이 막는 PC 가 있다(Windows 11 두 대 실측, 2026-11-19: 창이 번쩍하고 닫히거나 "액세스할 수 없습니다", Windows 보안을 끄면 설치됨. 열린 PowerShell 에 직접 입력하면 막히지 않는다). 그래서 설치 창이 닫힌 뒤에도 Claude Code 가 없으면 시작 확인 창이 **직접 설치 안내**로 바뀐다: [PowerShell 열기](빈 창 + 명령 복사), [명령 복사], [다시 확인]. 원인을 따지지 않고 "설치를 시도했는데 없음"으로만 판단한다. 명령을 다른 형태(인코딩·임시 파일 등)로 감싸 차단을 피하지 않는다 — 그 PC 의 보안 정책을 몰래 우회하는 일이다.
+- 사용자가 보는 콘솔 창(설치·로그인)은 `src/main/agent/console-window.ts`의 `openConsoleWindow`로 연다. 숨은 PowerShell 이 `Start-Process -PassThru`(ShellExecute — 탐색기에서 실행하는 것과 같다)로 새 콘솔 창을 열고 그 프로세스 하나를 `WaitForExit`로 기다린다(`-Wait`는 자식까지 기다려 로그인 중 연 브라우저에 묶일 수 있다). 창 프로세스 id 를 받아 두었다가 [창 닫기]에서 함께 끝낸다. 실행 파일 경로와 인자는 환경 변수로 넘겨 명령줄에서 다시 해석되지 않게 한다. 예전에는 `conhost.exe`를 spawn 했는데, Node 는 자식에게 늘 표준 입출력(stdio 'ignore' 면 NUL)을 넘기고 Windows 11 conhost 는 이를 안의 프로그램에 그대로 넘겨 PowerShell 이 `0xc0000142`로 시작하지 못했다(실측: 설치·로그인 창이 뜨자마자 사라짐, `conhost.exe powershell.exe < NUL`로 재현. Windows 10 conhost 는 새 콘솔 입력을 줘서 드러나지 않았다). 이 PC(Windows 10)에서 확인: 공백과 `&`가 든 경로 실행, 종료 코드 전달, [창 닫기] 뒤 남는 창 없음, 새 창의 표준 입력이 진짜 콘솔(`[Console]::IsInputRedirected` 거짓).
+- [설치]는 그 창에서 `powershell.exe -NoExit -Command "… irm https://claude.ai/install.ps1 | iex …"`를 돌린다. 그런데 명령줄에 이 설치 명령이 담긴 PowerShell 실행을 보안 기능이 막는 PC 가 있다(Windows 11 두 대 실측, 2026-11-19: `Win+R` 로 같은 명령을 띄우면 "액세스할 수 없습니다", Windows 보안을 끄면 설치됨. 열린 PowerShell 에 직접 입력하면 막히지 않는다). 그래서 설치 창이 닫힌 뒤에도 Claude Code 가 없으면 시작 확인 창이 **직접 설치 안내**로 바뀐다: [PowerShell 열기](빈 창 + 명령 복사), [명령 복사], [다시 확인]. 원인을 따지지 않고 "설치를 시도했는데 없음"으로만 판단한다. 빈 PowerShell 창은 지켜볼 필요가 없어 `shell.openPath`(ShellExecute)로 바로 연다. 명령을 다른 형태(인코딩·임시 파일 등)로 감싸 차단을 피하지 않는다 — 그 PC 의 보안 정책을 몰래 우회하는 일이다.
 - 새로 받은 실행 파일(300 MB 넘음)은 처음 실행이 백신 검사로 몇 초 걸린다. 버전 확인 제한 시간은 60초이고, 업데이트 직후에는 몇 번 더 확인한다. 개발 모드(React StrictMode)는 마운트 효과를 두 번 돌리므로 시작 확인은 한 번만 시작한다.
 
 ## 앱 업데이트와 릴리스

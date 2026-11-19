@@ -1,8 +1,9 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { extname } from 'node:path'
 import { AuthStatusJson, type AuthLoginDone, type AuthStatus, type LoginMethod } from '@shared/schema/agent'
 import { fail, ok, type IpcResult } from '@shared/types'
-import { claudeEnv as authEnv, conhostPath, resolveClaudeExecutable } from './claude-cli'
+import { claudeEnv as authEnv, resolveClaudeExecutable } from './claude-cli'
+import { openConsoleWindow, type ConsoleWindow } from './console-window'
 import { effectiveConfigDir } from './session'
 import { msg } from '../i18n'
 
@@ -68,12 +69,13 @@ export async function readAuthStatus(
   })
 }
 
-let loginProcess: ChildProcess | null = null
+let loginWindow: ConsoleWindow | null = null
 
 /**
  * Claude Code 로그인을 **Claude Code 자기 창**에서 진행한다. 브라우저 로그인과 코드 입력은 그 창과 Anthropic 의 흐름에서
  * 끝나고, 앱은 코드·토큰을 만지지 않는다(Anthropic 인증 규정: 자격 증명을 모으거나 중계하지 않는다).
- * Windows 에서는 conhost.exe 가 새 콘솔 창을 열고 그 안에서 CLI 를 실행한다 — 셸을 거치지 않아 경로가 다시 해석되지 않는다.
+ * Windows 에서는 `openConsoleWindow` 가 ShellExecute 로 새 콘솔 창을 열어 CLI 를 실행한다 — 실행 파일 경로는 환경 변수로
+ * 넘겨 셸이 다시 해석하지 않는다. 창은 앱의 표준 입력을 물려받지 않아 코드 붙여 넣기도 그 창에서 받는다.
  * 창이 닫히면 onDone 을 부른다. 성공 여부는 화면이 로그인 상태를 다시 읽어 판단한다.
  */
 export function startLogin(
@@ -82,7 +84,7 @@ export function startLogin(
   method: LoginMethod,
   onDone: (payload: AuthLoginDone) => void
 ): IpcResult<null> {
-  if (loginProcess) return fail('unknown', msg().errors.loginAlreadyOpen)
+  if (loginWindow) return fail('unknown', msg().errors.loginAlreadyOpen)
 
   const executable = resolveClaudeExecutable(cliPath)
   if (!executable) return fail('cli-not-found', cliMissing())
@@ -103,28 +105,25 @@ export function startLogin(
     )
   }
 
-  const child = spawn(conhostPath(), [executable, 'auth', 'login', `--${method}`], {
+  // method 는 IPC 에서 zod 로 검증한 두 값(claudeai·console) 중 하나다 — 고정 문자열만 인자로 넘긴다
+  const window = openConsoleWindow({
+    file: executable,
+    args: `auth login --${method}`,
     env: authEnv(configDir),
-    stdio: 'ignore',
-    windowsHide: false
+    onClose: (exitCode) => {
+      if (loginWindow === window) loginWindow = null
+      onDone({ exitCode })
+    }
   })
-  loginProcess = child
-  child.on('error', () => {
-    if (loginProcess === child) loginProcess = null
-    onDone({ exitCode: null })
-  })
-  child.on('close', (code) => {
-    if (loginProcess === child) loginProcess = null
-    onDone({ exitCode: code })
-  })
+  loginWindow = window
   return ok(null)
 }
 
 /** 열어 둔 로그인 창을 닫는다. */
 export function cancelLogin(): IpcResult<boolean> {
-  if (!loginProcess) return ok(false)
-  loginProcess.kill()
-  loginProcess = null
+  if (!loginWindow) return ok(false)
+  loginWindow.close()
+  loginWindow = null
   return ok(true)
 }
 

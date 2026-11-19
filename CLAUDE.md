@@ -35,11 +35,12 @@
 - 모든 세션에 `settingSources`를 명시한다(기본 `[]`). 사용자 PC의 Claude Code 설정과 이 CLAUDE.md가 번역 세션에 섞이면 안 된다.
 - 권한은 최소로. `Bash`와 파일 쓰기 도구는 비허용하고, 커스텀 MCP 도구만 허용한다. `cwd`는 열린 프로젝트 폴더로 제한한다.
 - 인증은 Claude Code 에 로그인한 방식을 그대로 쓴다: Claude 구독 계정, Anthropic Console(API 과금), 환경 변수 `ANTHROPIC_API_KEY` 등. 앱은 방식을 고르지도 막지도 않는다 — Claude Code 의 인증 방법을 막지 않는 것이 Anthropic 의 조건이다(`docs/architecture.md` "인증과 Claude Code").
-- 앱은 로그인 코드·토큰·API 키를 받거나 저장하거나 중계하지 않는다. 로그인은 Claude Code 가 **자기 창**(Windows: `conhost.exe` 로 연 콘솔)에서 Anthropic 의 흐름으로 진행하고, 앱은 창이 닫히면 `claude auth status --json`으로 결과만 읽는다. 로그아웃도 CLI 에 맡긴다.
+- 앱은 로그인 코드·토큰·API 키를 받거나 저장하거나 중계하지 않는다. 로그인은 Claude Code 가 **자기 창**(Windows: `src/main/agent/console-window.ts`가 ShellExecute 로 연 새 콘솔)에서 Anthropic 의 흐름으로 진행하고, 앱은 창이 닫히면 `claude auth status --json`으로 결과만 읽는다. 로그아웃도 CLI 에 맡긴다.
 - 인증 방식은 `auth status`의 `apiKeySource`로 가린다(Console 로그인도 `authMethod`가 `claude.ai`로 온다). 구독 사용량 막대(`/usage`)는 구독일 때만 보여 준다.
 - 구독 사용량 한도는 `/usage` 로컬 슬래시 명령을 돌려 응답의 `usage_report.rate_limits.limits[]`에서 읽는다. 출력 문장을 파싱하지 않는다 — 문구와 날짜 형식은 로케일에 따라 바뀐다.
 - 사용량 행의 종류(`kind`)를 열거형으로 좁히지 않는다. 서버가 미터를 추가해도 그대로 렌더링하고, 모르는 종류는 서버 값을 그대로 보여준다.
 - CLI를 직접 실행할 때는 `shell: true`를 쓰지 않는다 — 경로의 공백·특수문자가 인자로 재해석되면 안 된다. `.cmd`·`.bat` 실행 파일은 셸이 필요하므로 쓰지 않는다.
+- 사용자가 보는 콘솔 창(설치·로그인)은 `conhost.exe`를 spawn 해 열지 않는다. Node 가 넘기는 표준 입출력을 Windows 11 conhost 가 안의 프로그램에 넘겨 시작에 실패한다(0xc0000142). `openConsoleWindow`(숨은 PowerShell 의 `Start-Process`, 경로·인자는 환경 변수로)로 연다.
 - Claude Code 실행 파일은 한 곳(`src/main/agent/claude-cli.ts`)에서 정하고, 로그인·상태 조회·에이전트 세션이 모두 같은 것을 쓴다. 순서: 설정한 경로 → 공식 설치(`%USERPROFILE%\.local\bin`) → PATH → Agent SDK 내장(개발 중에만). 세션에는 항상 `pathToClaudeCodeExecutable`로 넘긴다.
 - 설치판에는 Agent SDK 내장 Claude Code(플랫폼 패키지)를 넣지 않는다. 앱을 켤 때 확인 창이 Claude Code 를 찾아 `claude update`로 최신으로 맞추고, 끝날 때까지 앱을 가린다. 업데이트 결과는 출력 문장이 아니라 앞뒤 `--version`으로 판단한다. 최소 버전은 Agent SDK `package.json`의 `claudeCodeVersion`이다.
 - Claude Code 가 없으면 사용자가 [설치]를 눌렀을 때만 공식 설치 스크립트를 **보이는 창**에서 돌린다. 인터넷에서 받은 스크립트를 몰래 실행하지 않는다.
