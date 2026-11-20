@@ -278,7 +278,7 @@ Babel Agent의 에이전트는 PC에 설치된 **Claude Code**로 실행되고, 
 설치 순서는 위 [빠른 시작](#빠른-시작)이 전부입니다. 아래는 그 밖에 알아 두면 좋은 것들입니다.
 
 - **파일** — [최신 릴리스](https://github.com/Eucha09/BabelAgent/releases/latest)의 `BabelAgent-Setup-<버전>.exe`, 약 110 MB. 설치할 때 위치를 고를 수 있습니다.
-- **Claude Code** — 앱에 들어 있지 않습니다. 앱을 켤 때마다 PC의 Claude Code를 찾아 최신 버전으로 업데이트합니다. 없으면 [설치]를 눌렀을 때만, 보이는 창에서 Anthropic의 공식 설치 스크립트(`irm https://claude.ai/install.ps1 | iex`)를 실행합니다. 관리자 권한은 필요 없습니다. Windows 보안이나 백신이 이 자동 설치를 막으면, 앱이 PowerShell 창을 열고 설치 명령을 복사해 주니 붙여 넣고 Enter를 누르면 됩니다.
+- **Claude Code** — 앱에 들어 있지 않습니다. 앱을 켤 때마다 PC의 Claude Code를 찾아 최신 버전으로 업데이트합니다. 없으면 [설치]를 눌렀을 때만, 보이는 창에서 Anthropic의 공식 설치 스크립트(`irm https://claude.ai/install.ps1 | iex`)를 실행합니다. 관리자 권한은 필요 없습니다. 보안 프로그램 등으로 자동 설치가 끝나지 않으면, 앱이 PowerShell 창을 열고 설치 명령을 복사해 주니 붙여 넣고 Enter를 누르면 됩니다.
 - **업데이트** — 앱을 켤 때와 켜 둔 동안 6시간마다 새 버전을 확인해 하단 상태바에 알려 줍니다. [받기]를 눌러야 받고, [다시 시작해 설치]를 누르거나 앱을 끌 때 설치됩니다. 번역 작업이 도는 중에는 다시 시작하지 않습니다.
 - **제거** — Windows 설정 › 앱에서 Babel Agent를 제거합니다. 프로젝트 폴더는 그대로 남습니다.
 

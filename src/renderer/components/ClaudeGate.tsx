@@ -16,8 +16,8 @@ type Phase =
   | { kind: 'unresponsive'; status: ClaudeCliStatus }
   | { kind: 'installing' }
   /**
-   * 자동 설치 창이 닫혔는데 Claude Code 가 없다. 보안 프로그램이 명령줄에 설치 명령을 담은 PowerShell 실행을 막는 PC 가
-   * 있다(Windows 11 실측). 원인을 따지지 않고, 사용자가 PowerShell 에 직접 붙여 넣어 설치하도록 안내한다.
+   * 자동 설치 창이 닫혔는데 Claude Code 가 없다(네트워크 문제, 보안 프로그램의 차단 등).
+   * 원인을 따지지 않고, 사용자가 PowerShell 에 직접 붙여 넣어 설치하도록 안내한다.
    */
   | { kind: 'installFailed'; status: ClaudeCliStatus }
   | { kind: 'updating'; status: ClaudeCliStatus }

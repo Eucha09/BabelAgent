@@ -541,7 +541,7 @@ export const ko = {
     closeInstall: '설치 창 닫기',
     /** 자동 설치 창이 닫혔는데도 Claude Code 가 없을 때. 사용자가 PowerShell 에 직접 붙여 넣게 안내한다 */
     installFailed: '자동 설치를 마치지 못했습니다',
-    installFailedBody: 'Windows 보안이나 백신 프로그램이 앱에서 실행한 설치 명령을 막았을 수 있습니다. PowerShell 창에서 직접 설치해 주세요.',
+    installFailedBody: '네트워크 문제나 보안 프로그램(Windows 보안·백신) 때문에 자동 설치가 끝나지 않았을 수 있습니다. PowerShell 창에서 직접 설치해 주세요.',
     manualStep1: '[PowerShell 열기]를 누릅니다. 아래 설치 명령이 함께 복사됩니다.',
     manualStep2: '열린 창에 붙여 넣고(Ctrl+V) Enter 를 누릅니다.',
     manualStep3: '설치가 끝나면 [다시 확인]을 누릅니다.',

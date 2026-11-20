@@ -517,7 +517,7 @@ export const en: Messages = {
     installingHint: 'Installation runs in its own window. When it finishes, press Enter there to close it.',
     closeInstall: 'Close install window',
     installFailed: "The automatic install didn't finish",
-    installFailedBody: 'Windows Security or antivirus software may have blocked the install command the app ran. Please install from a PowerShell window yourself.',
+    installFailedBody: "A network problem or security software (Windows Security, antivirus) may have stopped the automatic install. Please install from a PowerShell window yourself.",
     manualStep1: 'Click [Open PowerShell]. The install command below is copied at the same time.',
     manualStep2: 'Paste it into the new window (Ctrl+V) and press Enter.',
     manualStep3: 'When the install finishes, click [Check again].',

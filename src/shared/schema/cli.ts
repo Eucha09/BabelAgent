@@ -46,6 +46,6 @@ export const WINDOWS_INSTALL_SCRIPT_URL = 'https://claude.ai/install.ps1'
 
 /**
  * 공식 문서의 Windows 설치 명령. 자동 설치 창이 쓰고, 자동 설치가 막혔을 때 사용자가 PowerShell 에 직접 붙여 넣도록
- * 화면에 보여 주고 복사해 준다. 보안 프로그램이 명령줄에 이 명령을 담은 PowerShell 실행을 막는 PC 가 있다(Windows 11 실측).
+ * 화면에 보여 주고 복사해 준다.
  */
 export const WINDOWS_INSTALL_COMMAND = `irm ${WINDOWS_INSTALL_SCRIPT_URL} | iex`
