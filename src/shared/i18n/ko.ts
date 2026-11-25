@@ -394,6 +394,7 @@ export const ko = {
   /** 그리드 공통(원문·컨텍스트·검토 그리드) */
   grid: {
     dragToReorder: '끌어서 순서 바꾸기',
+    reorderLocked: '검색을 지우면 순서를 바꿀 수 있습니다',
     translation: '번역',
     translationIn: (language: string) => `번역 (${language})`,
     status: '상태',
@@ -715,6 +716,8 @@ export const ko = {
     noFile: '원문 파일이 없습니다',
     createFile: '빈 원문 파일 만들기',
     rows: (count: number) => `${count}행`,
+    rowsFiltered: (shown: number, total: number) => `${shown} / ${total}행`,
+    search: '키·원문·컨텍스트·번역 검색',
     translationLanguage: (language: string) => ` · 번역 언어 ${language}`,
     noTargets: ' · 대상 언어 없음',
     pendingDelete: (count: number) => ` · 삭제 대기 ${count}`,

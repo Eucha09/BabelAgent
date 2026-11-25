@@ -10,6 +10,7 @@ import type {
 import type { IpcError } from '@shared/types'
 import { insertAfter, moveByOffset, moveRelative, type DropPosition } from '@core/strings/order'
 import type { SmartSyntax } from '@core/qa/smart'
+import { filterStringsRows, isSearching, sameSearch } from '@core/strings/search'
 import { formatSmartFlag, needsSmartSuggestion } from '@core/strings/smart'
 import { AddRowDialog, type NewRowInput } from '../AddRowDialog'
 import { ConfirmDialog } from '../ConfirmDialog'
@@ -73,6 +74,13 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
   const [deletedKeys, setDeletedKeys] = useState<ReadonlySet<string>>(new Set())
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [search, setSearch] = useState('')
+  /**
+   * 검색 중에 고치거나 추가한 행. 입력하다 검색어와 맞지 않게 돼도 그 자리에서 사라지지 않게
+   * 검색어를 바꿀 때까지 남긴다.
+   */
+  const [pinned, setPinned] = useState<ReadonlySet<string>>(new Set())
+  const searching = isSearching(search)
 
   useEffect(() => {
     onDirtyChange(dirty)
@@ -133,12 +141,23 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
 
   const onEdit = useCallback((key: string, field: EditableField, value: string) => {
     setRows((prev) => prev.map((row) => (row.key === key ? { ...row, [field]: value } : row)))
+    setPinned((prev) => (prev.has(key) ? prev : new Set([...prev, key])))
     setDirty(true)
   }, [])
 
+  const changeSearch = useCallback(
+    (value: string) => {
+      if (!sameSearch(search, value)) setPinned(new Set())
+      setSearch(value)
+    },
+    [search]
+  )
 
   const keySet = useMemo(() => new Set(rows.map((row) => row.key)), [rows])
-  const selectedIndex = selectedKey === null ? -1 : rows.findIndex((row) => row.key === selectedKey)
+  const visible = useMemo(() => filterStringsRows(rows, search, pinned), [pinned, rows, search])
+  // 검색으로 가려진 행은 선택하지 않은 것으로 본다. 검색을 지우면 다시 선택된 채로 보인다.
+  const activeKey = selectedKey !== null && visible.some((row) => row.key === selectedKey) ? selectedKey : null
+  const selectedIndex = activeKey === null ? -1 : rows.findIndex((row) => row.key === activeKey)
 
   const addRow = useCallback(
     (input: NewRowInput) => {
@@ -159,13 +178,15 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
         note: '',
         source_snapshot: ''
       }
-      setRows(insertAfter(rows, row, selectedIndex >= 0 ? selectedKey : null))
+      setRows(insertAfter(rows, row, activeKey))
       setNewKeys(new Set([...newKeys, input.key]))
+      // 검색 중에 추가한 행도 검색어와 상관없이 보이게 한다
+      setPinned((prev) => new Set([...prev, input.key]))
       setSelectedKey(input.key)
       setDirty(true)
       setAdding(false)
     },
-    [newKeys, rows, selectedIndex, selectedKey]
+    [activeKey, newKeys, rows]
   )
 
   const moveBy = useCallback(
@@ -189,15 +210,18 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
     [rows]
   )
 
-  /** 행을 목록에서 빼고 그 자리의 다음 행을 선택한다. 연달아 지우거나 옮기기 쉽게. */
+  /**
+   * 행을 목록에서 빼고 그 자리의 다음 행을 선택한다. 연달아 지우거나 옮기기 쉽게.
+   * 다음 행은 지금 보이는 행에서 고른다 — 검색 중에 가려진 행으로 선택이 넘어가지 않게.
+   */
   const dropRow = useCallback(
     (key: string) => {
-      const index = rows.findIndex((row) => row.key === key)
-      const remaining = rows.filter((row) => row.key !== key)
-      setRows(remaining)
-      setSelectedKey(remaining[Math.min(index, remaining.length - 1)]?.key ?? null)
+      const index = visible.findIndex((row) => row.key === key)
+      const remainingVisible = visible.filter((row) => row.key !== key)
+      setRows(rows.filter((row) => row.key !== key))
+      setSelectedKey(index < 0 ? null : (remainingVisible[Math.min(index, remainingVisible.length - 1)]?.key ?? null))
     },
-    [rows]
+    [rows, visible]
   )
 
   /**
@@ -330,6 +354,16 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
       <div className="strings-header">
         <h2 className="screen-title">{t.screens.strings.label}</h2>
         <div className="row">
+          {/* 그리드 위 도구 모음은 버튼과 개수 표시로 이미 차 있어 검색 칸은 머리에 둔다 */}
+          {rows.length > 0 ? (
+            <input
+              className="filter-search"
+              type="search"
+              value={search}
+              placeholder={t.stringsScreen.search}
+              onChange={(event) => changeSearch(event.target.value)}
+            />
+          ) : null}
           {view && view.languages.length > 0 ? (
             <select
               value={language ?? ''}
@@ -442,13 +476,13 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
         <>
           <div className="grid-toolbar">
             <div className="grid-meta">
-              {t.stringsScreen.rows(rows.length)}
+              {searching ? t.stringsScreen.rowsFiltered(visible.length, rows.length) : t.stringsScreen.rows(rows.length)}
               {language ? t.stringsScreen.translationLanguage(language) : t.stringsScreen.noTargets}
               {deletedKeys.size > 0 ? <span className="pending-delete">{t.stringsScreen.pendingDelete(deletedKeys.size)}</span> : null}
-              {selectedIndex >= 0 ? (
+              {activeKey !== null ? (
                 <>
                   {t.stringsScreen.selectedKey}
-                  <code>{selectedKey}</code>
+                  <code>{activeKey}</code>
                 </>
               ) : null}
             </div>
@@ -466,36 +500,37 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
               </button>
               <button
                 type="button"
-                title={t.stringsScreen.moveUpHint}
-                disabled={busy || selectedIndex <= 0}
-                onClick={() => selectedKey && moveBy(selectedKey, -1)}
+                title={searching ? t.grid.reorderLocked : t.stringsScreen.moveUpHint}
+                disabled={busy || searching || selectedIndex <= 0}
+                onClick={() => activeKey && moveBy(activeKey, -1)}
               >
                 {t.stringsScreen.moveUp}
               </button>
               <button
                 type="button"
-                title={t.stringsScreen.moveDownHint}
-                disabled={busy || selectedIndex < 0 || selectedIndex >= rows.length - 1}
-                onClick={() => selectedKey && moveBy(selectedKey, 1)}
+                title={searching ? t.grid.reorderLocked : t.stringsScreen.moveDownHint}
+                disabled={busy || searching || selectedIndex < 0 || selectedIndex >= rows.length - 1}
+                onClick={() => activeKey && moveBy(activeKey, 1)}
               >
                 {t.stringsScreen.moveDown}
               </button>
               <button
                 type="button"
                 title={t.stringsScreen.deleteRowHint}
-                disabled={busy || selectedIndex < 0}
-                onClick={() => selectedKey && deleteRow(selectedKey)}
+                disabled={busy || activeKey === null}
+                onClick={() => activeKey && deleteRow(activeKey)}
               >
                 {t.stringsScreen.deleteRow}
               </button>
             </div>
           </div>
           <StringsGrid
-            rows={rows}
+            rows={visible}
             language={language}
             syntax={syntax}
             newKeys={newKeys}
-            selectedKey={selectedKey}
+            selectedKey={activeKey}
+            reorderable={!searching}
             onSelect={setSelectedKey}
             onEdit={onEdit}
             onMove={moveTo}
@@ -545,7 +580,7 @@ export function Strings({ syntax, onMessage, onDirtyChange }: Props): React.JSX.
       {adding ? (
         <AddRowDialog
           existingKeys={keySet}
-          insertAfterKey={selectedIndex >= 0 ? selectedKey : null}
+          insertAfterKey={activeKey}
           onCancel={() => setAdding(false)}
           onAdd={addRow}
         />

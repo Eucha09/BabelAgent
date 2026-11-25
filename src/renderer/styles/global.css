@@ -967,6 +967,15 @@ select {
   cursor: grabbing;
 }
 
+/* 검색 중에는 순서를 바꿀 수 없다. 자리는 그대로 두고 흐리게만 한다 */
+.drag-handle.disabled,
+.drag-handle.disabled:hover,
+.drag-handle.disabled:active {
+  cursor: default;
+  color: var(--text-muted);
+  opacity: 0.35;
+}
+
 .grid-row.selected {
   background: var(--bg-active);
 }

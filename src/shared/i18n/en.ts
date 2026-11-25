@@ -373,6 +373,7 @@ export const en: Messages = {
 
   grid: {
     dragToReorder: 'Drag to reorder',
+    reorderLocked: 'Clear the search to reorder rows',
     translation: 'Translation',
     translationIn: (language) => `Translation (${language})`,
     status: 'Status',
@@ -692,6 +693,8 @@ export const en: Messages = {
     noFile: 'No source file',
     createFile: 'Create empty source file',
     rows: (count) => `${count} ${count === 1 ? 'row' : 'rows'}`,
+    rowsFiltered: (shown, total) => `${shown} / ${total} ${total === 1 ? 'row' : 'rows'}`,
+    search: 'Search key, text, context',
     translationLanguage: (language) => ` · translation ${language}`,
     noTargets: ' · no target languages',
     pendingDelete: (count) => ` · ${count} pending deletion`,

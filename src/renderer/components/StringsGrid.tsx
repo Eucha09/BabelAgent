@@ -31,6 +31,11 @@ type Props = {
   /** 아직 저장하지 않은 새 행. 상태 칸에 따로 표시한다. */
   newKeys: ReadonlySet<string>
   selectedKey: string | null
+  /**
+   * 순서를 바꿀 수 있는지. 검색으로 일부 행만 보일 때는 끄는데, 보이지 않는 행 너머로 옮겨져
+   * 어디로 갔는지 알 수 없게 되기 때문이다.
+   */
+  reorderable: boolean
   onSelect: (key: string) => void
   onEdit: (key: string, field: EditableField, value: string) => void
   onMove: (key: string, targetKey: string, position: DropPosition) => void
@@ -46,6 +51,7 @@ export function StringsGrid({
   syntax,
   newKeys,
   selectedKey,
+  reorderable,
   onSelect,
   onEdit,
   onMove,
@@ -83,23 +89,28 @@ export function StringsGrid({
         minSize: 28,
         maxSize: 28,
         enableResizing: false,
-        cell: (info) => (
-          <span
-            className="drag-handle"
-            draggable
-            title={t.grid.dragToReorder}
-            onDragStart={(event) => {
-              const key = info.row.original.key
-              event.dataTransfer.setData('text/plain', key)
-              event.dataTransfer.effectAllowed = 'move'
-              const rowElement = event.currentTarget.closest('.grid-row')
-              if (rowElement) event.dataTransfer.setDragImage(rowElement, 14, ROW_HEIGHT / 2)
-              setDragKey(key)
-            }}
-          >
-            ⠿
-          </span>
-        )
+        cell: (info) =>
+          reorderable ? (
+            <span
+              className="drag-handle"
+              draggable
+              title={t.grid.dragToReorder}
+              onDragStart={(event) => {
+                const key = info.row.original.key
+                event.dataTransfer.setData('text/plain', key)
+                event.dataTransfer.effectAllowed = 'move'
+                const rowElement = event.currentTarget.closest('.grid-row')
+                if (rowElement) event.dataTransfer.setDragImage(rowElement, 14, ROW_HEIGHT / 2)
+                setDragKey(key)
+              }}
+            >
+              ⠿
+            </span>
+          ) : (
+            <span className="drag-handle disabled" title={t.grid.reorderLocked}>
+              ⠿
+            </span>
+          )
       }),
       helper.accessor('key', {
         header: t.columns.key,
@@ -168,7 +179,7 @@ export function StringsGrid({
           )
       })
     ]
-  }, [language, newKeys, onEdit, syntax, t])
+  }, [language, newKeys, onEdit, reorderable, syntax, t])
 
   const table = useReactTable({
     data: rows,
@@ -233,7 +244,7 @@ export function StringsGrid({
       className={resizing ? 'grid-wrap resizing' : 'grid-wrap'}
       tabIndex={0}
       onKeyDown={(event) => {
-        if (!event.altKey || selectedKey === null) return
+        if (!event.altKey || selectedKey === null || !reorderable) return
         if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
           event.preventDefault()
           onMoveBy(selectedKey, event.key === 'ArrowUp' ? -1 : 1)
@@ -261,54 +272,58 @@ export function StringsGrid({
           ))}
         </div>
 
-        <div style={{ height: `${virtualizer.getTotalSize()}px`, width: totalWidth, position: 'relative' }}>
-          {virtualizer.getVirtualItems().map((item) => {
-            const row = modelRows[item.index]
-            if (!row) return null
-            const key = row.original.key
-            const classes = ['grid-row']
-            if (key === selectedKey) classes.push('selected')
-            if (key === dragKey) classes.push('dragging')
-            if (dropTarget?.key === key) classes.push(`drop-${dropTarget.position}`)
-
-            return (
-              <div
-                key={row.id}
-                ref={virtualizer.measureElement}
-                data-index={item.index}
-                className={classes.join(' ')}
-                style={{
-                  gridTemplateColumns: template,
-                  transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`
-                }}
-                onMouseDown={() => onSelect(key)}
-                onDragOver={(event) => {
-                  if (dragKey === null) return
-                  event.preventDefault()
-                  event.dataTransfer.dropEffect = 'move'
-                  const rect = event.currentTarget.getBoundingClientRect()
-                  const position: DropPosition =
-                    event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
-                  if (dropTarget?.key !== key || dropTarget.position !== position) {
-                    setDropTarget({ key, position })
-                  }
-                }}
-                onDrop={(event) => {
-                  event.preventDefault()
-                  if (dragKey !== null && dropTarget !== null) {
-                    onMove(dragKey, dropTarget.key, dropTarget.position)
-                  }
-                }}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <div key={cell.id} className="grid-cell">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </div>
-                ))}
-              </div>
-            )
-          })}
-        </div>
+        {rows.length === 0 ? (
+          <div className="grid-empty">{t.grid.noRows}</div>
+        ) : (
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, width: totalWidth, position: 'relative' }}>
+            {virtualizer.getVirtualItems().map((item) => {
+              const row = modelRows[item.index]
+              if (!row) return null
+              const key = row.original.key
+              const classes = ['grid-row']
+              if (key === selectedKey) classes.push('selected')
+              if (key === dragKey) classes.push('dragging')
+              if (dropTarget?.key === key) classes.push(`drop-${dropTarget.position}`)
+  
+              return (
+                <div
+                  key={row.id}
+                  ref={virtualizer.measureElement}
+                  data-index={item.index}
+                  className={classes.join(' ')}
+                  style={{
+                    gridTemplateColumns: template,
+                    transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`
+                  }}
+                  onMouseDown={() => onSelect(key)}
+                  onDragOver={(event) => {
+                    if (dragKey === null) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                    const rect = event.currentTarget.getBoundingClientRect()
+                    const position: DropPosition =
+                      event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+                    if (dropTarget?.key !== key || dropTarget.position !== position) {
+                      setDropTarget({ key, position })
+                    }
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault()
+                    if (dragKey !== null && dropTarget !== null) {
+                      onMove(dragKey, dropTarget.key, dropTarget.position)
+                    }
+                  }}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <div key={cell.id} className="grid-cell">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
